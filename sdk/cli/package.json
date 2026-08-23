@@ -1,0 +1,22 @@
+{
+  "name": "mosaic",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mosaic CLI",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/build.mjs",
+    "build:exe": "npm run build && node scripts/build-sea.mjs",
+    "start": "npm run build && node dist/mosaic.cjs"
+  },
+  "dependencies": {
+    "quicktype-core": "^23.0.171"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6",
+    "typescript": "^5.7.0"
+  }
+}

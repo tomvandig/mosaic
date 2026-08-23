@@ -1,0 +1,7 @@
+{
+  "main": "dist/mosaic.cjs",
+  "output": "build/mosaic.blob",
+  "disableExperimentalSEAWarning": true,
+  "useSnapshot": false,
+  "useCodeCache": true
+}
