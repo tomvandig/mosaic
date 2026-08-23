@@ -1,0 +1,201 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "MosaicIndexFile.json",
+    "type": "object",
+    "properties": {
+        "header": {
+            "$ref": "#/$defs/MosaicFileHeader"
+        },
+        "imports": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/ImportNode"
+            }
+        },
+        "componentTables": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/ComponentTableReference"
+            }
+        },
+        "sections": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/MosaicDataSection"
+            }
+        }
+    },
+    "required": [
+        "header",
+        "imports",
+        "componentTables",
+        "sections"
+    ],
+    "additionalProperties": false,
+    "$defs": {
+        "MosaicFileHeader": {
+            "type": "object",
+            "properties": {
+                "MosaicVersion": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "MosaicVersion"
+            ],
+            "additionalProperties": false
+        },
+        "ImportNode": {
+            "type": "object",
+            "properties": {
+                "uri": {
+                    "type": "string"
+                },
+                "integrity": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "uri"
+            ],
+            "additionalProperties": false
+        },
+        "ComponentTableReference": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "$ref": "#/$defs/component_file_name"
+                },
+                "type": {
+                    "$ref": "#/$defs/ComponentFileType"
+                },
+                "schema": {}
+            },
+            "required": [
+                "filename",
+                "type",
+                "schema"
+            ],
+            "additionalProperties": false
+        },
+        "MosaicDataSection": {
+            "type": "object",
+            "properties": {
+                "header": {
+                    "$ref": "#/$defs/MosaicProvenanceHeader"
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/MosaicNode"
+                    }
+                }
+            },
+            "required": [
+                "header",
+                "nodes"
+            ],
+            "additionalProperties": false
+        },
+        "component_file_name": {
+            "type": "string",
+            "pattern": "</[A-Za-z0-9.]+"
+        },
+        "ComponentFileType": {
+            "type": "string",
+            "enum": [
+                "NDJSON",
+                "PARQUET"
+            ]
+        },
+        "MosaicProvenanceHeader": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "dataVersion": {
+                    "type": "string"
+                },
+                "author": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "application": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "id",
+                "message",
+                "dataVersion",
+                "author",
+                "timestamp",
+                "application"
+            ],
+            "additionalProperties": false
+        },
+        "MosaicNode": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "$ref": "#/$defs/uuid"
+                },
+                "components": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/ComponentReference"
+                    }
+                }
+            },
+            "required": [
+                "id"
+            ],
+            "additionalProperties": false
+        },
+        "uuid": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+            "format": "uuid"
+        },
+        "ComponentReference": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "operation": {
+                    "$ref": "#/$defs/OperationType"
+                },
+                "typeID": {
+                    "type": "string"
+                },
+                "componentIndex": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 4294967295
+                }
+            },
+            "required": [
+                "name",
+                "operation",
+                "typeID",
+                "componentIndex"
+            ],
+            "additionalProperties": false
+        },
+        "OperationType": {
+            "type": "string",
+            "enum": [
+                "PASS_THROUGH",
+                "DELETE",
+                "VALUE"
+            ]
+        }
+    }
+}
