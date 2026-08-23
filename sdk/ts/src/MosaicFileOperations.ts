@@ -1,0 +1,227 @@
+import {
+    Operation,
+    type ComponentElement,
+    type NodeElement,
+    type SectionElement,
+    type SectionHeader,
+} from './MosaicIndexFile';
+import { MosaicFile } from './MosaicFile';
+
+// ---------------------------------------------------------------------------
+// Merge: applies newNode onto oldNode in-place (operation-aware)
+// ---------------------------------------------------------------------------
+
+function mergeComponents(oldList: ComponentElement[], newList: ComponentElement[]): ComponentElement[] {
+    for (const item of newList) {
+        const idx = oldList.findIndex(x => x.name === item.name);
+        if (idx === -1) {
+            if (item.operation === Operation.Value) {
+                oldList.push({ name: item.name, operation: item.operation, typeID: item.typeID, componentIndex: item.componentIndex });
+            }
+        } else {
+            if (item.operation === Operation.Delete) {
+                oldList.splice(idx, 1);
+            } else if (item.operation === Operation.Value) {
+                oldList[idx] = { name: item.name, operation: item.operation, typeID: item.typeID, componentIndex: item.componentIndex };
+            }
+        }
+    }
+    return oldList;
+}
+
+function merge(oldNode: NodeElement, newNode: NodeElement): void {
+    mergeComponents(oldNode.components ??= [], newNode.components ?? []);
+}
+
+// ---------------------------------------------------------------------------
+// CollapseNodesByPath
+// ---------------------------------------------------------------------------
+
+export function collapseNodesByPath(file: MosaicFile): Map<string, NodeElement> {
+    const nodes = new Map<string, NodeElement>();
+
+    for (const sec of file.index.sections) {
+        for (const node of sec.nodes) {
+            if (!nodes.has(node.id)) {
+                nodes.set(node.id, { id: node.id, components: [] });
+            }
+            merge(nodes.get(node.id)!, node);
+        }
+    }
+
+    return nodes;
+}
+
+// ---------------------------------------------------------------------------
+// DiffNodes / DiffFiles
+// ---------------------------------------------------------------------------
+
+function diffNodes(oldNode: NodeElement, newNode: NodeElement, markMissingFromNewAsDelete: boolean): NodeElement {
+    const result: NodeElement = {
+        id: oldNode.id ?? newNode.id,
+        components: [],
+    };
+
+    // components
+    for (const item of (newNode.components ?? [])) {
+        const match = (oldNode.components ?? []).find(x => x.name === item.name);
+        if (!match) {
+            result.components!.push(item);
+        } else if (match.componentIndex !== item.componentIndex || match.typeID !== item.typeID) {
+            result.components!.push(item);
+        }
+    }
+    if (markMissingFromNewAsDelete) {
+        for (const item of (oldNode.components ?? [])) {
+            if (!(newNode.components ?? []).find(x => x.name === item.name)) {
+                result.components!.push({ name: item.name, operation: Operation.Delete, typeID: "", componentIndex: 0 });
+            }
+        }
+    }
+
+    return result;
+}
+
+export function diffFiles(oldFile: MosaicFile, newFile: MosaicFile, markMissingFromNewAsDelete: boolean): SectionElement {
+    const oldNodes = collapseNodesByPath(oldFile);
+    const newNodes = collapseNodesByPath(newFile);
+
+    const emptyHeader: SectionHeader = { id: '', application: '', author: '', dataVersion: '', timestamp: '', message: '' };
+    const result: SectionElement = { header: emptyHeader, nodes: [] };
+
+    for (const [key, newNode] of newNodes) {
+        const oldNode = oldNodes.get(key);
+        result.nodes.push(diffNodes(oldNode ?? { id: key, components: [] }, newNode, markMissingFromNewAsDelete));
+    }
+
+    if (markMissingFromNewAsDelete) {
+        for (const [key, oldNode] of oldNodes) {
+            if (!newNodes.has(key)) {
+                result.nodes.push(diffNodes(oldNode, { id: key, components: [] }, markMissingFromNewAsDelete));
+            }
+        }
+    }
+
+    result.nodes = result.nodes.filter(n =>
+        (n.components?.length ?? 0) > 0
+    );
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// Federate
+// ---------------------------------------------------------------------------
+
+interface NodeLineage {
+    fromNew: boolean;
+    header: SectionHeader;
+    node: NodeElement;
+}
+
+export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: boolean): MosaicFile {
+    const result = new MosaicFile();
+    result.index.header = newFile.index.header;
+    result.index.imports = newFile.index.imports;
+    result.index.componentTables = [...oldFile.index.componentTables, ...newFile.index.componentTables];
+    // TODO: deduplicate component tables by filename
+
+    if (keepHistory) {
+        // Append change to old file, keeping all history
+
+        for (const sec of oldFile.index.sections) {
+            result.AddSection(sec);
+        }
+
+        for (const [typeID, components] of oldFile.serializedComponents) {
+            for (const component of components) {
+                result.addSerializedComponent(typeID, component);
+            }
+        }
+
+        for (const sec of newFile.index.sections) {
+            const newSection: SectionElement = { header: sec.header, nodes: [] };
+
+            for (const node of sec.nodes) {
+                const newNode: NodeElement = {
+                    id: node.id,
+                    components: [],
+                };
+
+                for (const componentRef of (node.components ?? [])) {
+                    const component = newFile.readRawComponent(componentRef.typeID, componentRef.componentIndex);
+                    const newIndex = result.addSerializedComponent(componentRef.typeID, component);
+                    newNode.components!.push({
+                        name: componentRef.name,
+                        operation: componentRef.operation,
+                        typeID: componentRef.typeID,
+                        componentIndex: newIndex
+                    });
+                }
+
+                newSection.nodes.push(newNode);
+            }
+
+            result.AddSection(newSection);
+        }
+    } else {
+        // Collapse: remove historical data that is no longer leading
+
+        const pathToNodes = new Map<string, NodeLineage[]>();
+
+        for (const sec of oldFile.index.sections) {
+            for (const node of sec.nodes) {
+                if (!pathToNodes.has(node.id)) pathToNodes.set(node.id, []);
+                pathToNodes.get(node.id)!.push({ fromNew: false, header: sec.header, node });
+            }
+        }
+        for (const sec of newFile.index.sections) {
+            for (const node of sec.nodes) {
+                if (!pathToNodes.has(node.id)) pathToNodes.set(node.id, []);
+                pathToNodes.get(node.id)!.push({ fromNew: true, header: sec.header, node });
+            }
+        }
+
+        const idToSection = new Map<string, SectionElement>();
+
+        for (const [, lineages] of pathToNodes) {
+            const allComponents: string[] = [];
+
+            // Walk backwards: newest first, so first-seen = winner
+            for (let i = lineages.length - 1; i >= 0; i--) {
+                const { fromNew, header, node } = lineages[i];
+                const resultNode: NodeElement = { id: node.id, components: [] };
+
+                for (const componentRef of (node.components ?? [])) {
+                    if (!allComponents.includes(componentRef.name)) {
+                        if (componentRef.operation !== Operation.PassThrough) {
+                            if (componentRef.operation === Operation.Value) {
+                                const sourceFile = fromNew ? newFile : oldFile;
+                                const component = sourceFile.readRawComponent(componentRef.typeID, componentRef.componentIndex);
+                                result.addSerializedComponent(componentRef.typeID, component);
+                            }
+                            resultNode.components!.push(componentRef);
+                        }
+                        allComponents.push(componentRef.name);
+                    }
+                }
+
+                if (!idToSection.has(header.id)) {
+                    idToSection.set(header.id, { header, nodes: [] });
+                }
+                idToSection.get(header.id)!.nodes.push(resultNode);
+            }
+        }
+
+        for (const [, sec] of idToSection) {
+            sec.nodes = sec.nodes.filter(n =>
+                (n.components?.length ?? 0) > 0
+            );
+            if (sec.nodes.length > 0) {
+                result.AddSection(sec);
+            }
+        }
+    }
+
+    return result;
+}
