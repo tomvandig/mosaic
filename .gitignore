@@ -1,0 +1,5 @@
+node_modules/
+
+# mosaic CLI build output
+sdk/cli/dist/
+sdk/cli/build/
