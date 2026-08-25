@@ -4,8 +4,8 @@ import {
     type NodeElement,
     type SectionElement,
     type SectionHeader,
-} from './MosaicIndexFile';
-import { MosaicFile } from './MosaicFile';
+} from './MosaicIndexFile.ts';
+import { MosaicFile } from './MosaicFile.ts';
 
 // ---------------------------------------------------------------------------
 // Merge: applies newNode onto oldNode in-place (operation-aware)
@@ -198,9 +198,13 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
                             if (componentRef.operation === Operation.Value) {
                                 const sourceFile = fromNew ? newFile : oldFile;
                                 const component = sourceFile.readRawComponent(componentRef.typeID, componentRef.componentIndex);
-                                result.addSerializedComponent(componentRef.typeID, component);
+                                // Collapsing drops superseded rows, so the reference has to
+                                // follow the row to its position in the new component table.
+                                const newIndex = result.addSerializedComponent(componentRef.typeID, component);
+                                resultNode.components!.push({ ...componentRef, componentIndex: newIndex });
+                            } else {
+                                resultNode.components!.push(componentRef);
                             }
-                            resultNode.components!.push(componentRef);
                         }
                         allComponents.push(componentRef.name);
                     }

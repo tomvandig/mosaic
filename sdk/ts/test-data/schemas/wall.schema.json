@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "acme::geometry::wall",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string" },
+    "height": { "type": "number" },
+    "loadBearing": { "type": "boolean" }
+  },
+  "required": ["name", "height"]
+}

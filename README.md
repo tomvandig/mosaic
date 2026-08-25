@@ -63,6 +63,21 @@ generator uses it to derive the class name (`Wall`), the C# namespace (`acme_geo
 `Identity` block it appends to each generated file — which bundles the type ID, the originating schema
 source, and the JSON conversion functions so a value can be round-tripped and identified at runtime.
 
+## Tests
+
+The TypeScript SDK is tested end to end: each case builds a real `.mosaic` archive from an example
+dataset, reads it back through `LoadMosaicFile`, and asserts on what a reader sees.
+
+```bash
+cd sdk/ts
+npm install
+npm test
+```
+
+The runner is Node's built-in `node:test` with native TypeScript execution, so there is no test
+framework or build step to configure. Example datasets live in [`sdk/ts/test-data/`](sdk/ts/test-data/)
+and are documented in the README there.
+
 ## Status
 
 Mosaic is pre-1.0. Expect breaking changes to

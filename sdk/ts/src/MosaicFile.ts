@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { MosaicIndexFile, Convert, SectionElement, ImportElement, Type } from "./MosaicIndexFile";
+import { Convert, Type, type MosaicIndexFile, type SectionElement, type ImportElement } from "./MosaicIndexFile.ts";
 
 interface TypeIdentity<T> {
     typeID: string;

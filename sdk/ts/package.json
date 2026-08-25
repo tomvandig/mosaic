@@ -1,14 +1,21 @@
 {
   "name": "mosaic-ts",
   "version": "0.1.0",
-  "main": "index.js",
+  "main": "src/MosaicFile.ts",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-transform-types --test \"test/**/*.test.ts\"",
+    "test:watch": "node --experimental-transform-types --test --watch \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
   }
 }
