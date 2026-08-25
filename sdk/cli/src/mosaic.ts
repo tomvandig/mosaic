@@ -1,4 +1,5 @@
 import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
+import { runPack, PACK_USAGE } from "./commands/pack.js";
 
 const VERSION = "0.1.0";
 
@@ -13,6 +14,11 @@ const COMMANDS: Record<string, Command> = {
         usage: CODEGEN_USAGE,
         summary: "Generate typed TypeScript or C# classes from *.schema.json files",
         run: runCodegen
+    },
+    pack: {
+        usage: PACK_USAGE,
+        summary: "Pack a Mosaic source document into a .tsr archive",
+        run: runPack
     }
 };
 

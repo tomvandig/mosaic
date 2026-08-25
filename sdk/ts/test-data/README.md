@@ -1,8 +1,9 @@
 # Example data
 
-Each `*.mosaic.json` file describes one Mosaic dataset in a form that is easy to read and diff.
-`test/fixtures.ts` turns it into a real `.mosaic` archive (via `WriteMosaicFile`) before the tests
-load it back, so the tests exercise the same zip/NDJSON path a real file takes.
+Each `*.mosaic.json` file describes one Mosaic dataset in a form that is easy to read and diff — a
+Mosaic *source document*, the input format of `mosaic pack` and of the SDK's `packMosaicSource`.
+The tests pack these examples into real archives and load them back, so they exercise the same
+zip/NDJSON path a real file takes.
 
 ```jsonc
 {
@@ -15,11 +16,18 @@ load it back, so the tests exercise the same zip/NDJSON path a real file takes.
 }
 ```
 
-Two conveniences the loader applies, so the files stay readable:
+Two conveniences packing applies, so the files stay readable:
 
-- `componentTables[].schema` is written as a path relative to this folder (e.g.
-  `schemas/wall.schema.json`); the loader inlines the schema document in its place.
-- Component rows are written as objects; the loader serializes them to NDJSON lines.
+- `componentTables[].schema` is written as a path relative to the source document (e.g.
+  `schemas/wall.schema.json`); packing inlines the schema document in its place.
+- Component rows are written as objects; packing serializes them to NDJSON lines. A row that is
+  already a serialized string is kept verbatim.
+
+To build an archive from one of these by hand:
+
+```bash
+mosaic pack sdk/ts/test-data/house-v1.mosaic.json
+```
 
 Component tables are not stored as `.ndjson` files on disk because a Mosaic `typeID` contains `::`,
 which is not a legal character in a Windows filename. Inside the zip archive it is fine.

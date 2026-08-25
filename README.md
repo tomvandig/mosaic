@@ -63,6 +63,25 @@ generator uses it to derive the class name (`Wall`), the C# namespace (`acme_geo
 `Identity` block it appends to each generated file — which bundles the type ID, the originating schema
 source, and the JSON conversion functions so a value can be round-tripped and identified at runtime.
 
+## Packing a dataset
+
+A Mosaic dataset is authored as one JSON document — the index plus the component rows — and packed
+into a `.tsr` archive for consumers:
+
+```bash
+mosaic pack <input.json> [output.tsr]
+```
+
+Packing resolves each `componentTables[].schema` reference (a path relative to the source document)
+into the schema document itself, writes one `<typeID>.ndjson` file per component table, and puts them
+alongside `index.json` in the archive. Without an output path the archive is written next to the
+source document, so `house-v1.mosaic.json` becomes `house-v1.tsr`.
+
+The source-document format is described in [`sdk/ts/test-data/README.md`](sdk/ts/test-data/README.md),
+and the packing itself lives in the TypeScript SDK (`buildMosaicFile`, `packMosaicSource`,
+`packMosaicSourceFile`), which the CLI depends on — so the same behaviour is available to any
+consumer of the SDK.
+
 ## Tests
 
 The TypeScript SDK is tested end to end: each case builds a real `.mosaic` archive from an example

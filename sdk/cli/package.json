@@ -11,6 +11,7 @@
     "start": "npm run build && node dist/mosaic.cjs"
   },
   "dependencies": {
+    "mosaic-ts": "file:../ts",
     "quicktype-core": "^23.0.171"
   },
   "devDependencies": {

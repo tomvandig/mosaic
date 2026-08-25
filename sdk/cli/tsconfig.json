@@ -7,6 +7,8 @@
     "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    // The linked mosaic-ts package is consumed as TypeScript source.
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true

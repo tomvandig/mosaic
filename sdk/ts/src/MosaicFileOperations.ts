@@ -189,7 +189,7 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
 
             // Walk backwards: newest first, so first-seen = winner
             for (let i = lineages.length - 1; i >= 0; i--) {
-                const { fromNew, header, node } = lineages[i];
+                const { fromNew, header, node } = lineages[i]!;
                 const resultNode: NodeElement = { id: node.id, components: [] };
 
                 for (const componentRef of (node.components ?? [])) {

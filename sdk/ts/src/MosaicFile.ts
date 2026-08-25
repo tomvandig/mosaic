@@ -16,6 +16,7 @@ export async function LoadMosaicFile(bytes: Uint8Array)
     let files: Map<string, Uint8Array> = new Map();
     for (let key in output.files) {
         let file = output.files[key];
+        if (!file) continue;
         let arr = await file.async("uint8array");
         let name = key;
         files.set(name, arr);
@@ -115,11 +116,12 @@ export class MosaicFile
     ReadComponent<T>(id: TypeIdentity<T>, index: number)
     {
         let arr = this.GetSerializedComponentsArray(id);
-        if (arr.length <= index)
+        let component = arr[index];
+        if (component === undefined)
         {
             throw new Error(`No component with index ${index}`);
         }
-        return id.fromJSONString(arr[index]);
+        return id.fromJSONString(component);
     }
 
     addSerializedComponent(typeID: string, data: string): number
@@ -136,11 +138,11 @@ export class MosaicFile
 
     readRawComponent(typeID: string, index: number): string
     {
-        const arr = this.serializedComponents.get(typeID);
-        if (!arr || arr.length <= index)
+        const component = this.serializedComponents.get(typeID)?.[index];
+        if (component === undefined)
         {
             throw new Error(`No component with index ${index}`);
         }
-        return arr[index];
+        return component;
     }
 }
