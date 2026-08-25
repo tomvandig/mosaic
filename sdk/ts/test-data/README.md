@@ -36,4 +36,5 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 | --- | --- |
 | `house-v1.mosaic.json` | Two walls in one section; the north wall is painted. |
 | `house-v2.mosaic.json` | The same dataset with a second section layered on top: the north wall is raised, its paint deleted, and an east wall added. |
+| `linked-house.mosaic.json` | A dataset that references other datasets through `imports` rather than restating them. Packing carries imports through untouched and never pulls the referenced data in. |
 | `schemas/*.schema.json` | Component schemas, referenced by the fixtures and used as `originSchemaSrc` in the typed round-trip test. |

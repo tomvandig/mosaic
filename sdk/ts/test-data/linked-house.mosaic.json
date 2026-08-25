@@ -1,0 +1,41 @@
+{
+  "description": "Layers a porch onto the house by importing the packed house-v1 archive rather than restating it. The imports are references only: packing leaves them as written and never pulls the referenced data in.",
+  "components": {
+    "acme::geometry::wall": [
+      { "name": "Porch wall", "height": 2.2, "loadBearing": false }
+    ]
+  },
+  "index": {
+    "header": { "MosaicVersion": "post-alpha" },
+    "imports": [
+      {
+        "uri": "house-v1.tsr",
+        "integrity": "sha384-dOTgzKC8YWZbCTLGYDMEHfF0appjjyTeoLfF0appjjyTeoLQ2i8sVe1ADhtFdgMt"
+      },
+      { "uri": "https://example.com/datasets/site-survey.tsr" }
+    ],
+    "componentTables": [
+      { "filename": "acme::geometry::wall.ndjson", "type": "NDJSON", "schema": "schemas/wall.schema.json" }
+    ],
+    "sections": [
+      {
+        "header": {
+          "id": "porch",
+          "message": "Add a porch to the imported house",
+          "dataVersion": "1.0.0",
+          "author": "linus@example.com",
+          "timestamp": "2026-03-02T11:15:00Z",
+          "application": "mosaic-tests"
+        },
+        "nodes": [
+          {
+            "id": "44444444-4444-4444-8444-444444444444",
+            "components": [
+              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 0, "operation": "VALUE" }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

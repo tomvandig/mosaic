@@ -128,3 +128,70 @@ test("a missing schema is reported with the reference and the resolved path", as
 
     await assert.rejects(() => packMosaicSourceFile(orphan), /Schema "schemas\/wall\.schema\.json".*does not exist/s);
 });
+
+// ---------------------------------------------------------------------------
+// Imports are references, not content: packing carries them through untouched
+// and never pulls the data they name into the archive.
+// ---------------------------------------------------------------------------
+
+test("imports survive packing exactly as written", async () => {
+    const source = readExample("linked-house");
+    const bytes = await packMosaicSource(source, resolveExampleSchema);
+    const zip = await new JSZip().loadAsync(bytes);
+    const packedIndex = JSON.parse(await zip.file("index.json")!.async("string"));
+
+    assert.deepEqual(packedIndex.imports, source.index.imports);
+    assert.equal(packedIndex.imports[0].uri, "house-v1.tsr");
+    assert.equal(packedIndex.imports[1].uri, "https://example.com/datasets/site-survey.tsr");
+});
+
+test("an import keeps its integrity hash, and one without stays without", async () => {
+    const bytes = await packMosaicSource(readExample("linked-house"), resolveExampleSchema);
+    const zip = await new JSZip().loadAsync(bytes);
+    const packedIndex = JSON.parse(await zip.file("index.json")!.async("string"));
+
+    // In the archive itself an unpinned import carries no integrity key at all.
+    assert.match(packedIndex.imports[0].integrity, /^sha384-/);
+    assert.equal(Object.hasOwn(packedIndex.imports[1], "integrity"), false);
+
+    // Reading it back, the optional field is simply undefined.
+    const [pinned, unpinned] = (await LoadMosaicFile(bytes)).index.imports;
+    assert.equal(pinned.integrity, packedIndex.imports[0].integrity);
+    assert.equal(unpinned.integrity, undefined);
+});
+
+test("packing does not pull imported files into the archive", async () => {
+    const bytes = await packMosaicSource(readExample("linked-house"), resolveExampleSchema);
+    const entries = Object.keys((await new JSZip().loadAsync(bytes)).files).sort();
+
+    // Only this dataset's own index and component table -- nothing from house-v1.tsr.
+    assert.deepEqual(entries, ["acme::geometry::wall.ndjson", "index.json"]);
+});
+
+test("imports are references, so packing does not require them to exist", async () => {
+    const out = tempDir();
+    const document = readExample("linked-house");
+    document.index.imports = [{ uri: "nowhere/missing.tsr" }];
+    fs.writeFileSync(path.join(out, "dangling.mosaic.json"), JSON.stringify(document));
+    fs.cpSync(path.join(DATA_DIR, "schemas"), path.join(out, "schemas"), { recursive: true });
+
+    const result = await packMosaicSourceFile(path.join(out, "dangling.mosaic.json"));
+    const reloaded = await LoadMosaicFile(fs.readFileSync(result.outputPath));
+
+    assert.deepEqual(reloaded.index.imports.map(i => i.uri), ["nowhere/missing.tsr"]);
+});
+
+test("imports pass through the CLI's own pack path onto disk", async () => {
+    const out = tempDir();
+    fs.cpSync(DATA_DIR, out, { recursive: true });
+
+    const result = await packMosaicSourceFile(path.join(out, "linked-house.mosaic.json"));
+    const reloaded = await LoadMosaicFile(fs.readFileSync(result.outputPath));
+
+    // Compare on the fields the format defines; absent optionals read back as undefined.
+    assert.deepEqual(
+        reloaded.index.imports.map(i => ({ uri: i.uri, integrity: i.integrity })),
+        readExample("linked-house").index.imports.map(i => ({ uri: i.uri, integrity: i.integrity })),
+    );
+    assert.deepEqual(reloaded.index.sections[0].nodes[0].components!.map(c => c.name), ["geometry"]);
+});
