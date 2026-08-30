@@ -2,6 +2,7 @@ import type { MosaicFile } from "../MosaicFile.ts";
 import type { ComponentElement, NodeElement } from "../MosaicIndexFile.ts";
 import { collapseNodesByPath } from "../MosaicFileOperations.ts";
 import { GLTF_TYPE } from "../gltf/schemas.ts";
+import { CORE_TYPE } from "../core/schemas.ts";
 import type { GltfDocument } from "../gltf/GltfDocument.ts";
 
 /** Carries the Mosaic components that have no native glTF form. */
@@ -61,8 +62,9 @@ interface Carried {
  *
  * Every Mosaic node becomes a glTF node. Components in the `khronos::gltf` namespace are
  * written natively -- meshes and transforms onto the node itself, buffers, bufferViews,
- * accessors and materials hoisted into the document's arrays -- and everything else rides
- * along in a `MOSAIC_components` extension, which a viewer is free to ignore.
+ * accessors, images, samplers, textures and materials hoisted into the document's arrays --
+ * and `core::child` becomes the glTF node hierarchy. Everything else rides along in a
+ * `MOSAIC_components` extension, which a viewer is free to ignore.
  */
 export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const warnings: string[] = [];
@@ -369,6 +371,54 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         return index;
     }
 
+    // --- hierarchy ---------------------------------------------------------
+    // A core::child component carries no value: the name of the reference is the id of
+    // the child node. glTF gives every node at most one parent, so where two nodes claim
+    // the same child the first in node order keeps it and the second is reported and
+    // dropped, rather than writing a file no viewer can read.
+    const nodeIndex = new Map(nodes.map((node, index) => [node.id, index]));
+    const childIds = new Map<string, string[]>();
+    const parentOf = new Map<string, string>();
+
+    for (const node of nodes) {
+        const links: string[] = [];
+
+        for (const { ref } of (carriedBy.get(node.id) ?? []).filter(c => c.ref.typeID === CORE_TYPE.child)) {
+            const childId = ref.name;
+
+            if (!nodeIndex.has(childId)) {
+                warnings.push(`node ${node.id} names ${childId} as a child, but no such node is present`);
+                continue;
+            }
+            if (childId === node.id) {
+                warnings.push(`node ${node.id} names itself as a child; the link was dropped`);
+                continue;
+            }
+
+            const existing = parentOf.get(childId);
+            if (existing !== undefined) {
+                warnings.push(`node ${childId} is named as a child by both ${existing} and ${node.id}; the second link was dropped`);
+                continue;
+            }
+
+            parentOf.set(childId, node.id);
+            links.push(childId);
+        }
+
+        if (links.length > 0) childIds.set(node.id, links);
+    }
+
+    // A cycle would leave the affected nodes out of the scene entirely, so say so.
+    for (const start of parentOf.keys()) {
+        const seen = new Set<string>([start]);
+        let current = parentOf.get(start);
+        while (current !== undefined) {
+            if (seen.has(current)) throw new Error(`Child links form a cycle through node ${current}`);
+            seen.add(current);
+            current = parentOf.get(current);
+        }
+    }
+
     // --- nodes ------------------------------------------------------------
     /** Where a component of each type ended up, for the MOSAIC_element pointer. */
     const hoistedInto: Record<string, Map<string, number> | undefined> = {
@@ -387,6 +437,9 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     for (const node of nodes) {
         const carried = carriedBy.get(node.id) ?? [];
         const gltfNode: Row = { name: node.id };
+
+        const children = childIds.get(node.id);
+        if (children) gltfNode.children = children.map(id => nodeIndex.get(id)!);
 
         const primitives = carried.filter(c => c.ref.typeID === GLTF_TYPE.meshPrimitive);
         if (primitives.length > 0) gltfNode.mesh = meshFor(primitives);
@@ -413,7 +466,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         }
 
         // Anything outside the glTF namespace travels as extension data.
-        const foreign = carried.filter(c => !GLTF_TYPES.has(c.ref.typeID));
+        const foreign = carried.filter(c => !GLTF_TYPES.has(c.ref.typeID) && c.ref.typeID !== CORE_TYPE.child);
         if (foreign.length > 0) {
             gltfNode.extensions = {
                 ...(gltfNode.extensions as object | undefined),
@@ -447,7 +500,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const document: GltfDocument = {
         asset: { version: "2.0", generator: "mosaic compose" },
         scene: 0,
-        scenes: [{ nodes: gltfNodes.map((_, index) => index) }],
+        scenes: [{ nodes: nodes.flatMap((node, index) => (parentOf.has(node.id) ? [] : [index])) }],
         nodes: gltfNodes,
         ...(meshes.length > 0 ? { meshes } : {}),
         ...(accessors.length > 0 ? { accessors } : {}),

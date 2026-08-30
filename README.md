@@ -127,6 +127,10 @@ components are written one of two ways:
   buffers, bufferViews, accessors, images, samplers, textures and materials are hoisted into the
   document's arrays, and node ids become the array indices glTF expects. Nodes sharing a primitive
   share a mesh.
+- **As hierarchy**, for `core::child`. That component carries no value: the *name* of the reference
+  is the id of the child node, so one node can hold many children and a later section can drop a
+  single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
+  node that is someone's child is left out of the scene's root list.
 - **As an extension**, for everything else. The components ride along under `MOSAIC_components` on
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
   know Mosaic still renders the file.

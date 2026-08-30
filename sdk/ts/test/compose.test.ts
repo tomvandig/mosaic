@@ -9,6 +9,7 @@ import { packMosaicSourceFile } from "../src/MosaicPackFs.ts";
 import { parseGlb } from "../src/gltf/GltfDocument.ts";
 import { convertGltfFile } from "../src/gltf/GltfConvertFs.ts";
 import { GLTF_TYPE } from "../src/gltf/schemas.ts";
+import { CORE_TYPE } from "../src/core/schemas.ts";
 import { mosaicToGltf, MOSAIC_COMPONENTS_EXTENSION, MOSAIC_ELEMENT_EXTENSION } from "../src/composition/MosaicToGltf.ts";
 import { writeGlb } from "../src/composition/GlbWriter.ts";
 import { composeArchive, composeArchiveToGlb, loadWithImports, glbOutputPath } from "../src/composition/ComposeFs.ts";
@@ -372,6 +373,134 @@ test("an image held as a data URI is moved into the binary chunk", async () => {
     // Geometry came first, so the image sits past it, on a 4-byte boundary.
     assert.ok(at >= 232);
     assert.equal(at % 4, 0);
+});
+
+// ---------------------------------------------------------------------------
+// core::child: the link lives in the name of the reference
+// ---------------------------------------------------------------------------
+
+const GROUP = "a0a0a0a0-a0a0-4a0a-8a0a-a0a0a0a0a0a0";
+const WALL_FRONT = "55555555-5555-4555-8555-555555555555";
+const WALL_SIDE = "66666666-6666-4666-8666-666666666666";
+
+/** Composes the hierarchy example, after any edits, without touching the repository. */
+async function composeHierarchy(edit?: (document: any) => void) {
+    const document = readExample("gltf-box-hierarchy");
+    edit?.(document);
+
+    const out = tempDir();
+    const archive = path.join(out, "hierarchy.tsr");
+    fs.writeFileSync(archive, await packMosaicSource(document, resolveExampleSchema));
+
+    return await composeArchive(archive);
+}
+
+/** A section that adds one component reference to a node. */
+function section(id: string, nodeId: string, component: any) {
+    return {
+        header: { id, message: "", dataVersion: "1.0.0", author: "", timestamp: "", application: "" },
+        nodes: [{ id: nodeId, components: [component] }],
+    };
+}
+
+test("a core::child link becomes a glTF child, named by the reference not the value", async () => {
+    const { document } = await composeHierarchy();
+
+    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
+    const group = document.nodes![byName.get(GROUP)!]!;
+
+    assert.deepEqual(group.children, [byName.get(WALL_FRONT), byName.get(WALL_SIDE)]);
+    // The component itself carries nothing; the id is in the name of the reference.
+    assert.deepEqual(readExample("gltf-box-hierarchy").components[CORE_TYPE.child], [{}]);
+});
+
+test("a node that is someone's child is not also a root of the scene", async () => {
+    const { document } = await composeHierarchy();
+
+    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
+    const roots = document.scenes![0]!.nodes!;
+
+    assert.ok(roots.includes(byName.get(GROUP)!), "the group should be a root");
+    assert.ok(!roots.includes(byName.get(WALL_FRONT)!), "a child must not also be a root");
+    assert.ok(!roots.includes(byName.get(WALL_SIDE)!), "a child must not also be a root");
+    // Every node is still reachable: roots plus the children of the roots.
+    assert.equal(roots.length + 2, document.nodes!.length);
+});
+
+test("a DELETE on the child name removes just that link", async () => {
+    const { document } = await composeHierarchy(doc => {
+        doc.index.sections.push(section("unparent", GROUP, {
+            name: WALL_SIDE, typeID: CORE_TYPE.child, componentIndex: 0, operation: "DELETE",
+        }));
+    });
+
+    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
+    const group = document.nodes![byName.get(GROUP)!]!;
+
+    assert.deepEqual(group.children, [byName.get(WALL_FRONT)], "only the front wall should still be a child");
+    assert.ok(document.scenes![0]!.nodes!.includes(byName.get(WALL_SIDE)!), "the freed node becomes a root again");
+});
+
+test("core::child is consumed as hierarchy, not carried as extension data", async () => {
+    const { document } = await composeHierarchy();
+
+    const group = document.nodes!.find(n => n.name === GROUP)! as any;
+    const carried = group.extensions?.[MOSAIC_COMPONENTS_EXTENSION]?.components ?? [];
+
+    assert.equal(carried.length, 0, "the child links should not be repeated in the extension");
+});
+
+test("a child link naming a node that is not present is reported and skipped", async () => {
+    const { document, warnings } = await composeHierarchy(doc => {
+        doc.index.sections[0].nodes.at(-1).components.push({
+            name: "00000000-0000-4000-8000-000000000000", typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
+        });
+    });
+
+    assert.ok(warnings.some(w => w.includes("no such node is present")), warnings.join("; "));
+    assert.equal(document.nodes!.find(n => n.name === GROUP)!.children?.length, 2);
+});
+
+test("a node naming itself as a child is reported and skipped", async () => {
+    const { document, warnings } = await composeHierarchy(doc => {
+        doc.index.sections.push(section("self", GROUP, {
+            name: GROUP, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
+        }));
+    });
+
+    assert.ok(warnings.some(w => w.includes("names itself as a child")), warnings.join("; "));
+    assert.equal(document.nodes!.find(n => n.name === GROUP)!.children?.length, 2);
+});
+
+test("a second parent for the same child is reported and dropped", async () => {
+    // glTF gives a node at most one parent, so the second claim cannot be honoured.
+    const { document, warnings } = await composeHierarchy(doc => {
+        doc.index.sections.push(section("second-parent", WALL_FRONT, {
+            name: WALL_SIDE, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
+        }));
+    });
+
+    assert.ok(warnings.some(w => w.includes("is named as a child by both")), warnings.join("; "));
+
+    // The first claim in node order wins, and the front wall comes before the group.
+    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
+    assert.deepEqual(document.nodes![byName.get(WALL_FRONT)!]!.children, [byName.get(WALL_SIDE)]);
+    assert.deepEqual(document.nodes![byName.get(GROUP)!]!.children, [byName.get(WALL_FRONT)]);
+    // Whichever way it resolves, the child appears exactly once in the hierarchy.
+    const asChild = document.nodes!.flatMap(n => n.children ?? []).filter(i => i === byName.get(WALL_SIDE));
+    assert.equal(asChild.length, 1);
+});
+
+test("child links that form a cycle are refused", async () => {
+    await assert.rejects(
+        () => composeHierarchy(doc => {
+            // The front wall adopts the group that already parents it.
+            doc.index.sections.push(section("cycle", WALL_FRONT, {
+                name: GROUP, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
+            }));
+        }),
+        /Child links form a cycle/,
+    );
 });
 
 test("a missing input archive is reported by name", async () => {

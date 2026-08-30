@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "core::child",
+  "title": "Child",
+  "description": "A parent-child link. The component carries no value: the reference's name is the id of the child node, so one node can hold many children and a later section can remove one with a DELETE on that name.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {}
+}
