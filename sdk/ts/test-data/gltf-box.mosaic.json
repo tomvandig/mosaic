@@ -126,32 +126,32 @@
       {
         "filename": "khronos::gltf::buffer.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/buffer.schema.json"
+        "schema": "../src/gltf/schemas/buffer.schema.json"
       },
       {
         "filename": "khronos::gltf::bufferView.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/bufferView.schema.json"
+        "schema": "../src/gltf/schemas/bufferView.schema.json"
       },
       {
         "filename": "khronos::gltf::accessor.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/accessor.schema.json"
+        "schema": "../src/gltf/schemas/accessor.schema.json"
       },
       {
         "filename": "khronos::gltf::meshPrimitive.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/meshPrimitive.schema.json"
+        "schema": "../src/gltf/schemas/meshPrimitive.schema.json"
       },
       {
         "filename": "khronos::gltf::material.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/material.schema.json"
+        "schema": "../src/gltf/schemas/material.schema.json"
       },
       {
         "filename": "khronos::gltf::nodeTransform.ndjson",
         "type": "NDJSON",
-        "schema": "schemas/gltf/nodeTransform.schema.json"
+        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
       }
     ],
     "sections": [

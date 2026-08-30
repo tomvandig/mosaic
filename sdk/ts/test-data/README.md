@@ -42,7 +42,7 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 
 ## glTF-derived geometry
 
-`schemas/gltf/` holds component schemas modelled on the [glTF 2.0 schemas](https://github.com/KhronosGroup/glTF/tree/main/specification/2.0/schema):
+[`sdk/ts/src/gltf/schemas/`](../src/gltf/schemas/) holds component schemas modelled on the [glTF 2.0 schemas](https://github.com/KhronosGroup/glTF/tree/main/specification/2.0/schema):
 `buffer`, `bufferView`, `accessor`, `meshPrimitive`, `material` and `nodeTransform`. Property names,
 types, enum values and defaults follow glTF, with three deliberate adaptations:
 
@@ -54,6 +54,10 @@ types, enum values and defaults follow glTF, with three deliberate adaptations:
   enum instead of a bare number.
 - **Subset.** `sparse`, morph `targets`, textures, `extensions` and `extras` are left out, and the
   schemas are sealed with `additionalProperties: false`.
+
+`gltf/` holds the glTF inputs the conversion tests read: the same box as a `.glb` container, as a
+`.gltf` with its buffer inlined in a `data:` URI, as a `.gltf` with a sibling `.bin`, and as a
+`.gltf` whose walls sit under a translated group node (which conversion folds into world space).
 
 `gltf-box.mosaic.json` carries a real unit box: 8 `VEC3` positions and 36 `UNSIGNED_SHORT` indices in
 a 168-byte buffer, inlined as a base64 `data:` URI the way glTF allows. The tests decode that buffer

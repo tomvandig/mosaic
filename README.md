@@ -82,6 +82,31 @@ and the packing itself lives in the TypeScript SDK (`buildMosaicFile`, `packMosa
 `packMosaicSourceFile`), which the CLI depends on — so the same behaviour is available to any
 consumer of the SDK.
 
+## Importing glTF
+
+`mosaic` converts a glTF 2.0 model into Mosaic, reading either a `.gltf` document or a `.glb`
+container:
+
+```bash
+mosaic gltf      <input.gltf|input.glb> [output.mosaic.json]   # to a source document
+mosaic gltf-pack <input.gltf|input.glb> [output.tsr]           # straight to an archive
+```
+
+Both read the same conversion; the first stops at the editable JSON document, the second packs it in
+one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
+input, and inlined as `data:` URIs so the result stands alone. The component schemas are inlined too,
+so a converted `.mosaic.json` packs anywhere without needing the schema files.
+
+Every glTF id becomes the id of the Mosaic node carrying the referenced component, so later edits to
+the component tables cannot silently repoint a reference. Each buffer, bufferView, accessor and
+material gets a node of its own; each glTF node with a mesh becomes a node carrying that mesh and its
+transform. glTF data outside the component subset — textures, morph targets, `alphaMode` and the
+like — is reported as a warning rather than dropped in silence, and a sparse accessor is refused
+outright rather than converted into something wrong.
+
+The conversion lives in the SDK under [`sdk/ts/src/gltf/`](sdk/ts/src/gltf/), which also owns the
+glTF-derived component schemas; the CLI commands are a thin wrapper over it.
+
 ## Tests
 
 The TypeScript SDK is tested end to end: each case builds a real `.mosaic` archive from an example

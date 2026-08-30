@@ -5,7 +5,7 @@ import { LoadMosaicFile, type MosaicFile } from "../src/MosaicFile.ts";
 import { collapseNodesByPath } from "../src/MosaicFileOperations.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
 import { Operation } from "../src/MosaicIndexFile.ts";
-import { readExample, resolveExampleSchema, resolve } from "./fixtures.ts";
+import { readExample, resolveExampleSchema, resolve, follow, componentsOf, decodeBuffer, type Row } from "./fixtures.ts";
 
 // The glTF-derived component schemas mirror the glTF 2.0 schemas, except that every glTF
 // id is the id of the Mosaic node carrying the referenced component. A reference therefore
@@ -22,40 +22,6 @@ const GLTF = {
 
 const WALLS = ["55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666"];
 const POSITION_NODE = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-
-type Row = Record<string, any>;
-
-/** Follows a glTF reference: a node id, to the single component that node carries. */
-function follow(file: MosaicFile, nodeId: unknown): Row {
-    assert.equal(typeof nodeId, "string", `expected a node id, got ${JSON.stringify(nodeId)}`);
-
-    const node = collapseNodesByPath(file).get(nodeId as string);
-    assert.ok(node, `no node ${nodeId}`);
-
-    const [ref, ...rest] = node.components ?? [];
-    assert.ok(ref, `node ${nodeId} carries no component`);
-    assert.equal(rest.length, 0, `node ${nodeId} carries more than one component`);
-
-    return resolve(file, ref.typeID, ref.componentIndex) as Row;
-}
-
-/** The components a node carries, keyed by reference name. */
-function componentsOf(file: MosaicFile, nodeId: string): Record<string, Row> {
-    const node = collapseNodesByPath(file).get(nodeId);
-    assert.ok(node, `no node ${nodeId}`);
-
-    return Object.fromEntries(
-        (node.components ?? []).map(ref => [ref.name, resolve(file, ref.typeID, ref.componentIndex) as Row]),
-    );
-}
-
-/** Reads a glTF buffer component's data: URI back into bytes. */
-function decodeBuffer(uri: string): Buffer {
-    const marker = ";base64,";
-    const at = uri.indexOf(marker);
-    assert.notEqual(at, -1, "buffer uri is not a base64 data URI");
-    return Buffer.from(uri.slice(at + marker.length), "base64");
-}
 
 async function loadBox(): Promise<MosaicFile> {
     return await LoadMosaicFile(await packMosaicSource(readExample("gltf-box"), resolveExampleSchema));

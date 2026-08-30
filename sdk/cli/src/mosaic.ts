@@ -1,5 +1,6 @@
 import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE } from "./commands/pack.js";
+import { runGltf, runGltfPack, GLTF_USAGE, GLTF_PACK_USAGE } from "./commands/gltf.js";
 
 const VERSION = "0.1.0";
 
@@ -19,6 +20,16 @@ const COMMANDS: Record<string, Command> = {
         usage: PACK_USAGE,
         summary: "Pack a Mosaic source document into a .tsr archive",
         run: runPack
+    },
+    gltf: {
+        usage: GLTF_USAGE,
+        summary: "Convert a glTF or GLB file into a Mosaic source document",
+        run: runGltf
+    },
+    "gltf-pack": {
+        usage: GLTF_PACK_USAGE,
+        summary: "Convert a glTF or GLB file straight into a .tsr archive",
+        run: runGltfPack
     }
 };
 
