@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::accessor",
+  "title": "Accessor",
+  "description": "A typed view into a bufferView that contains raw binary data. Derived from the glTF 2.0 accessor schema, except that glTF's integer ids are replaced by the id of the Mosaic node carrying the referenced component, so a reference survives any change to component ordering.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "bufferView": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "The id of the Mosaic node carrying the bufferView component."
+    },
+    "byteOffset": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "componentType": {
+      "type": "integer",
+      "enum": [
+        5120,
+        5121,
+        5122,
+        5123,
+        5125,
+        5126
+      ],
+      "description": "The datatype of the accessor's components: 5120 BYTE, 5121 UNSIGNED_BYTE, 5122 SHORT, 5123 UNSIGNED_SHORT, 5125 UNSIGNED_INT, 5126 FLOAT."
+    },
+    "normalized": {
+      "type": "boolean",
+      "default": false
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The number of elements referenced by this accessor."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "SCALAR",
+        "VEC2",
+        "VEC3",
+        "VEC4",
+        "MAT2",
+        "MAT3",
+        "MAT4"
+      ],
+      "description": "Specifies if the accessor's elements are scalars, vectors, or matrices."
+    },
+    "max": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 1,
+      "maxItems": 16
+    },
+    "min": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 1,
+      "maxItems": 16
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "componentType",
+    "count",
+    "type"
+  ]
+}

@@ -1,0 +1,272 @@
+{
+  "description": "A box with glTF geometry: buffer, bufferView, accessor, mesh primitive, material and node transform components, each validated by a schema derived from the glTF 2.0 schemas. Every glTF id is the id of the Mosaic node holding the referenced component rather than an array index, so editing the component tables cannot silently repoint a reference. Two nodes share the same mesh primitive and differ only in their transform, which is the case Mosaic's component tables are built for.",
+  "components": {
+    "khronos::gltf::buffer": [
+      {
+        "name": "box",
+        "byteLength": 168,
+        "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAA/AAAAPwAAAL8AAAA/AAAAPwAAAD8AAAA/AAAAvwAAAD8AAAA/AAAAvwAAAL8AAAC/AAAAPwAAAL8AAAC/AAAAPwAAAD8AAAC/AAAAvwAAAD8AAAC/AAABAAIAAAACAAMAAQAFAAYAAQAGAAIABQAEAAcABQAHAAYABAAAAAMABAADAAcAAwACAAYAAwAGAAcABAAFAAEABAABAAAA"
+      }
+    ],
+    "khronos::gltf::bufferView": [
+      {
+        "name": "positions",
+        "buffer": "77777777-7777-4777-8777-777777777777",
+        "byteOffset": 0,
+        "byteLength": 96,
+        "target": 34962
+      },
+      {
+        "name": "indices",
+        "buffer": "77777777-7777-4777-8777-777777777777",
+        "byteOffset": 96,
+        "byteLength": 72,
+        "target": 34963
+      }
+    ],
+    "khronos::gltf::accessor": [
+      {
+        "name": "POSITION",
+        "bufferView": "88888888-8888-4888-8888-888888888888",
+        "byteOffset": 0,
+        "componentType": 5126,
+        "count": 8,
+        "type": "VEC3",
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "name": "indices",
+        "bufferView": "99999999-9999-4999-8999-999999999999",
+        "byteOffset": 0,
+        "componentType": 5123,
+        "count": 36,
+        "type": "SCALAR"
+      }
+    ],
+    "khronos::gltf::meshPrimitive": [
+      {
+        "attributes": {
+          "POSITION": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        },
+        "indices": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "material": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "mode": 4
+      }
+    ],
+    "khronos::gltf::material": [
+      {
+        "name": "Painted brick",
+        "pbrMetallicRoughness": {
+          "baseColorFactor": [
+            0.8,
+            0.78,
+            0.74,
+            1.0
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.9
+        },
+        "doubleSided": false
+      }
+    ],
+    "khronos::gltf::nodeTransform": [
+      {
+        "translation": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          4,
+          2.4,
+          0.2
+        ]
+      },
+      {
+        "translation": [
+          0,
+          0,
+          3.5
+        ],
+        "rotation": [
+          0,
+          0.7071068,
+          0,
+          0.7071068
+        ],
+        "scale": [
+          4,
+          2.4,
+          0.2
+        ]
+      }
+    ]
+  },
+  "index": {
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
+    "imports": [],
+    "componentTables": [
+      {
+        "filename": "khronos::gltf::buffer.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/buffer.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::bufferView.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/bufferView.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::accessor.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/accessor.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::meshPrimitive.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/meshPrimitive.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::material.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/material.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/gltf/nodeTransform.schema.json"
+      }
+    ],
+    "sections": [
+      {
+        "header": {
+          "id": "box-geometry",
+          "message": "Two walls sharing one box mesh, referenced by node id",
+          "dataVersion": "1.0.0",
+          "author": "ada@example.com",
+          "timestamp": "2026-04-08T08:45:00Z",
+          "application": "mosaic-tests"
+        },
+        "nodes": [
+          {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "components": [
+              {
+                "name": "buffer",
+                "typeID": "khronos::gltf::buffer",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "88888888-8888-4888-8888-888888888888",
+            "components": [
+              {
+                "name": "bufferView",
+                "typeID": "khronos::gltf::bufferView",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "99999999-9999-4999-8999-999999999999",
+            "components": [
+              {
+                "name": "bufferView",
+                "typeID": "khronos::gltf::bufferView",
+                "componentIndex": 1,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "components": [
+              {
+                "name": "accessor",
+                "typeID": "khronos::gltf::accessor",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "components": [
+              {
+                "name": "accessor",
+                "typeID": "khronos::gltf::accessor",
+                "componentIndex": 1,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "components": [
+              {
+                "name": "material",
+                "typeID": "khronos::gltf::material",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "55555555-5555-4555-8555-555555555555",
+            "components": [
+              {
+                "name": "mesh",
+                "typeID": "khronos::gltf::meshPrimitive",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              },
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "66666666-6666-4666-8666-666666666666",
+            "components": [
+              {
+                "name": "mesh",
+                "typeID": "khronos::gltf::meshPrimitive",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              },
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 1,
+                "operation": "VALUE"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::material",
+  "title": "Material",
+  "description": "The material appearance of a primitive. Derived from the glTF 2.0 material schema. Indices refer to component rows in the matching Mosaic component table rather than to a glTF array.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "pbrMetallicRoughness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "A set of parameter values used to light a material with the metallic-roughness model.",
+      "properties": {
+        "baseColorFactor": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "default": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "metallicFactor": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0
+        },
+        "roughnessFactor": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0
+        }
+      }
+    },
+    "doubleSided": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::meshPrimitive",
+  "title": "MeshPrimitive",
+  "description": "Geometry to be rendered with the given material. Derived from the glTF 2.0 mesh.primitive schema, except that glTF's integer ids are replaced by the id of the Mosaic node carrying the referenced component, so a reference survives any change to component ordering.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "attributes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        "description": "The id of the Mosaic node carrying the accessor component for this attribute."
+      },
+      "description": "Each key is a mesh attribute semantic (POSITION, NORMAL, ...) and each value the id of the Mosaic node carrying the accessor component holding it."
+    },
+    "indices": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "The id of the Mosaic node carrying the accessor component with the vertex indices."
+    },
+    "material": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "The id of the Mosaic node carrying the material component to apply when rendering."
+    },
+    "mode": {
+      "type": "integer",
+      "enum": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "default": 4,
+      "description": "The topology type: 0 POINTS, 1 LINES, 2 LINE_LOOP, 3 LINE_STRIP, 4 TRIANGLES, 5 TRIANGLE_STRIP, 6 TRIANGLE_FAN."
+    }
+  },
+  "required": [
+    "attributes"
+  ]
+}

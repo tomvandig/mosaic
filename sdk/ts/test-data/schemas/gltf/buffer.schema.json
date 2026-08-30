@@ -1,0 +1,25 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::buffer",
+  "title": "Buffer",
+  "description": "A buffer points to binary geometry, animation, or skins. Derived from the glTF 2.0 buffer schema. Indices refer to component rows in the matching Mosaic component table rather than to a glTF array.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uri": {
+      "type": "string",
+      "description": "The URI of the buffer, or a data: URI holding it inline."
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The length of the buffer in bytes."
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "byteLength"
+  ]
+}

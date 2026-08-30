@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::bufferView",
+  "title": "BufferView",
+  "description": "A view into a buffer, generally representing a subset of the buffer. Derived from the glTF 2.0 bufferView schema, except that glTF's integer ids are replaced by the id of the Mosaic node carrying the referenced component, so a reference survives any change to component ordering.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "buffer": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+      "description": "The id of the Mosaic node carrying the buffer component."
+    },
+    "byteOffset": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "byteStride": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 252,
+      "multipleOf": 4
+    },
+    "target": {
+      "type": "integer",
+      "enum": [
+        34962,
+        34963
+      ],
+      "description": "The hint representing the intended GPU buffer type: 34962 ARRAY_BUFFER, 34963 ELEMENT_ARRAY_BUFFER."
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "buffer",
+    "byteLength"
+  ]
+}
