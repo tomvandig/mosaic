@@ -41,12 +41,166 @@
           "minimum": 0.0,
           "maximum": 1.0,
           "default": 1.0
+        },
+        "baseColorTexture": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The base color texture, whose RGB is encoded with the sRGB transfer function.",
+          "properties": {
+            "index": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+              "description": "The id of the Mosaic node carrying the texture component."
+            },
+            "texCoord": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "description": "The set index of the TEXCOORD attribute used for this texture."
+            }
+          },
+          "required": [
+            "index"
+          ]
+        },
+        "metallicRoughnessTexture": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Metalness sampled from the B channel and roughness from the G channel.",
+          "properties": {
+            "index": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+              "description": "The id of the Mosaic node carrying the texture component."
+            },
+            "texCoord": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "description": "The set index of the TEXCOORD attribute used for this texture."
+            }
+          },
+          "required": [
+            "index"
+          ]
         }
       }
     },
     "doubleSided": {
       "type": "boolean",
       "default": false
+    },
+    "normalTexture": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The tangent space normal texture.",
+      "properties": {
+        "index": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "The id of the Mosaic node carrying the texture component."
+        },
+        "texCoord": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "The set index of the TEXCOORD attribute used for this texture."
+        },
+        "scale": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Scales the X and Y of the sampled normal."
+        }
+      },
+      "required": [
+        "index"
+      ]
+    },
+    "occlusionTexture": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The occlusion texture.",
+      "properties": {
+        "index": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "The id of the Mosaic node carrying the texture component."
+        },
+        "texCoord": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "The set index of the TEXCOORD attribute used for this texture."
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 1.0,
+          "description": "Scales the occlusion sampled from the R channel."
+        }
+      },
+      "required": [
+        "index"
+      ]
+    },
+    "emissiveTexture": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The emissive texture, whose RGB is encoded with the sRGB transfer function.",
+      "properties": {
+        "index": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+          "description": "The id of the Mosaic node carrying the texture component."
+        },
+        "texCoord": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "The set index of the TEXCOORD attribute used for this texture."
+        }
+      },
+      "required": [
+        "index"
+      ]
+    },
+    "emissiveFactor": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "default": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "description": "The factors for the emissive colour of the material."
+    },
+    "alphaMode": {
+      "type": "string",
+      "enum": [
+        "OPAQUE",
+        "MASK",
+        "BLEND"
+      ],
+      "default": "OPAQUE",
+      "description": "How the alpha value is interpreted."
+    },
+    "alphaCutoff": {
+      "type": "number",
+      "minimum": 0.0,
+      "default": 0.5,
+      "description": "The alpha cutoff value, used when alphaMode is MASK."
     }
   }
 }

@@ -131,17 +131,14 @@
           1.0
         ],
         "metallicFactor": 0.0,
-        "roughnessFactor": 0.9,
-        "baseColorTexture": {
-          "index": 0
-        }
+        "roughnessFactor": 0.9
       },
-      "emissiveFactor": [
-        0,
-        0,
-        0
-      ],
-      "alphaMode": "OPAQUE"
+      "extras": {
+        "note": "carried by neither the schema nor the converter"
+      },
+      "extensions": {
+        "KHR_materials_unlit": {}
+      }
     }
   ]
 }

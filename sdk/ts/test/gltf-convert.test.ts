@@ -184,8 +184,39 @@ test("group nodes that carry no mesh are reported as folded away", () => {
 test("glTF fields the component subset cannot carry are reported, not dropped silently", () => {
     const { warnings } = convertGltfFile(input("box.glb"), { newId: counter() });
 
-    assert.ok(warnings.some(w => w.includes("emissiveFactor") && w.includes("alphaMode")), warnings.join("; "));
-    assert.ok(warnings.some(w => w.includes("baseColorTexture")), warnings.join("; "));
+    // extras and extensions have no place in the component schemas.
+    assert.ok(warnings.some(w => w.includes("extras") && w.includes("extensions")), warnings.join("; "));
+});
+
+test("a textured model converts its images, samplers and textures", async () => {
+    const file = await convert("box-textured.gltf");
+    const primitive = meshNodes(file)[0]!.mesh!;
+
+    const material = follow(file, primitive.material);
+    assert.equal(material.name, "Brick");
+    assert.deepEqual(material.emissiveFactor, [0.1, 0.05, 0]);
+    assert.equal(material.alphaMode, "OPAQUE");
+
+    // The texture reference is a node id, like every other glTF reference.
+    const info = material.pbrMetallicRoughness.baseColorTexture;
+    assert.equal(info.texCoord, 0);
+    assert.match(info.index, /^[0-9a-f-]{36}$/);
+
+    const texture = follow(file, info.index);
+    assert.equal(texture.name, "brick");
+
+    const image = follow(file, texture.source);
+    assert.ok(String(image.uri).startsWith("data:image/png;base64,"));
+
+    const sampler = follow(file, texture.sampler);
+    assert.equal(sampler.magFilter, 9729);
+    assert.equal(sampler.wrapS, 10497);
+});
+
+test("a textured model converts without losing anything to a warning", () => {
+    const { warnings } = convertGltfFile(input("box-textured.gltf"), { newId: counter() });
+
+    assert.deepEqual(warnings, []);
 });
 
 test("a sparse accessor is refused rather than converted into something wrong", () => {

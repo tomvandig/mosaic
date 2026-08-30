@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "khronos::gltf::sampler",
+  "title": "Sampler",
+  "description": "Texture sampler properties for filtering and wrapping modes. Derived from the glTF 2.0 sampler schema, except that glTF's integer ids are replaced by the id of the Mosaic node carrying the referenced component, so a reference survives any change to component ordering.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "magFilter": {
+      "type": "integer",
+      "enum": [
+        9728,
+        9729
+      ],
+      "description": "Magnification filter: 9728 NEAREST, 9729 LINEAR."
+    },
+    "minFilter": {
+      "type": "integer",
+      "enum": [
+        9728,
+        9729,
+        9984,
+        9985,
+        9986,
+        9987
+      ],
+      "description": "Minification filter: 9728 NEAREST, 9729 LINEAR, 9984 NEAREST_MIPMAP_NEAREST, 9985 LINEAR_MIPMAP_NEAREST, 9986 NEAREST_MIPMAP_LINEAR, 9987 LINEAR_MIPMAP_LINEAR."
+    },
+    "wrapS": {
+      "type": "integer",
+      "enum": [
+        33071,
+        33648,
+        10497
+      ],
+      "default": 10497,
+      "description": "S (U) wrapping mode: 33071 CLAMP_TO_EDGE, 33648 MIRRORED_REPEAT, 10497 REPEAT."
+    },
+    "wrapT": {
+      "type": "integer",
+      "enum": [
+        33071,
+        33648,
+        10497
+      ],
+      "default": 10497,
+      "description": "T (V) wrapping mode: 33071 CLAMP_TO_EDGE, 33648 MIRRORED_REPEAT, 10497 REPEAT."
+    }
+  }
+}

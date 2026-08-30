@@ -15,8 +15,29 @@ const exePath = path.join(buildDir, exeName);
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, stdio: "inherit" });
 
-fs.rmSync(buildDir, { recursive: true, force: true });
+/**
+ * Replaces just the files this script produces, rather than the whole directory.
+ * On Windows a virus scanner or an open handle can hold a freshly written binary for a
+ * moment, and removing the directory then fails outright; retrying the individual file
+ * rides that out and leaves anything else in the directory alone.
+ */
+function removeWithRetries(file) {
+    for (let attempt = 0; ; attempt++) {
+        try {
+            fs.rmSync(file, { force: true });
+            return;
+        } catch (err) {
+            if (attempt >= 20) throw err;
+            // A short spin, rather than a sleep, so the build stays synchronous.
+            const until = Date.now() + 100;
+            while (Date.now() < until);
+        }
+    }
+}
+
 fs.mkdirSync(buildDir, { recursive: true });
+removeWithRetries(exePath);
+removeWithRetries(path.join(buildDir, "mosaic.blob"));
 
 console.log("Generating SEA blob...");
 run(process.execPath, ["--experimental-sea-config", "sea-config.json"]);

@@ -38,6 +38,7 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 | `house-v2.mosaic.json` | The same dataset with a second section layered on top: the north wall is raised, its paint deleted, and an east wall added. |
 | `linked-house.mosaic.json` | A dataset that references other datasets through `imports` rather than restating them. Packing carries imports through untouched and never pulls the referenced data in. |
 | `gltf-box.mosaic.json` | Geometry: a box mesh described with glTF-derived components, shared by two nodes that differ only in transform. |
+| `composed-house.mosaic.json` | Imports the packed glTF box and adds a wall of non-glTF components, so composing it exercises geometry, imports and the extension path together. |
 | `schemas/*.schema.json` | Component schemas, referenced by the fixtures and used as `originSchemaSrc` in the typed round-trip test. |
 
 ## glTF-derived geometry
@@ -56,8 +57,10 @@ types, enum values and defaults follow glTF, with three deliberate adaptations:
   schemas are sealed with `additionalProperties: false`.
 
 `gltf/` holds the glTF inputs the conversion tests read: the same box as a `.glb` container, as a
-`.gltf` with its buffer inlined in a `data:` URI, as a `.gltf` with a sibling `.bin`, and as a
-`.gltf` whose walls sit under a translated group node (which conversion folds into world space).
+`.gltf` with its buffer inlined in a `data:` URI, as a `.gltf` with a sibling `.bin`, as a `.gltf`
+whose walls sit under a translated group node (which conversion folds into world space), and
+`box-textured.gltf`, which adds TEXCOORD_0, a PNG image inlined as a data URI, a sampler and a
+texture, so the texture path is exercised both ways.
 
 `gltf-box.mosaic.json` carries a real unit box: 8 `VEC3` positions and 36 `UNSIGNED_SHORT` indices in
 a 168-byte buffer, inlined as a base64 `data:` URI the way glTF allows. The tests decode that buffer

@@ -1,6 +1,7 @@
 import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE } from "./commands/pack.js";
 import { runGltf, runGltfPack, GLTF_USAGE, GLTF_PACK_USAGE } from "./commands/gltf.js";
+import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 
 const VERSION = "0.1.0";
 
@@ -30,6 +31,11 @@ const COMMANDS: Record<string, Command> = {
         usage: GLTF_PACK_USAGE,
         summary: "Convert a glTF or GLB file straight into a .tsr archive",
         run: runGltfPack
+    },
+    compose: {
+        usage: COMPOSE_USAGE,
+        summary: "Compose an archive and its imports into a renderable .glb",
+        run: runCompose
     }
 };
 

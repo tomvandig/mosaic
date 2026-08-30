@@ -4,6 +4,9 @@ import accessor from "./schemas/accessor.schema.json" with { type: "json" };
 import meshPrimitive from "./schemas/meshPrimitive.schema.json" with { type: "json" };
 import material from "./schemas/material.schema.json" with { type: "json" };
 import nodeTransform from "./schemas/nodeTransform.schema.json" with { type: "json" };
+import image from "./schemas/image.schema.json" with { type: "json" };
+import sampler from "./schemas/sampler.schema.json" with { type: "json" };
+import texture from "./schemas/texture.schema.json" with { type: "json" };
 
 /** The component type each glTF element becomes. */
 export const GLTF_TYPE = {
@@ -11,6 +14,9 @@ export const GLTF_TYPE = {
     bufferView: "khronos::gltf::bufferView",
     accessor: "khronos::gltf::accessor",
     meshPrimitive: "khronos::gltf::meshPrimitive",
+    image: "khronos::gltf::image",
+    sampler: "khronos::gltf::sampler",
+    texture: "khronos::gltf::texture",
     material: "khronos::gltf::material",
     nodeTransform: "khronos::gltf::nodeTransform",
 } as const;
@@ -26,6 +32,9 @@ export const GLTF_SCHEMAS: Record<GltfComponentType, unknown> = {
     [GLTF_TYPE.bufferView]: bufferView,
     [GLTF_TYPE.accessor]: accessor,
     [GLTF_TYPE.meshPrimitive]: meshPrimitive,
+    [GLTF_TYPE.image]: image,
+    [GLTF_TYPE.sampler]: sampler,
+    [GLTF_TYPE.texture]: texture,
     [GLTF_TYPE.material]: material,
     [GLTF_TYPE.nodeTransform]: nodeTransform,
 };

@@ -2,12 +2,14 @@ import type { MosaicSourceDocument } from "../MosaicPack.ts";
 import type { ComponentElement, NodeElement, SectionElement } from "../MosaicIndexFile.ts";
 import { Operation, Type } from "../MosaicIndexFile.ts";
 import { GLTF_TYPE, GLTF_SCHEMAS, type GltfComponentType } from "./schemas.ts";
-import type { GltfDocument, GltfNode } from "./GltfDocument.ts";
+import type { GltfDocument, GltfNode, GltfImage, GltfTextureInfo } from "./GltfDocument.ts";
 import { composeTrs, multiply, IDENTITY } from "./matrix.ts";
 
 export interface ConvertOptions {
     /** Resolves a glTF buffer to its bytes. Called once per buffer, in document order. */
     resolveBuffer: (buffer: { uri?: string; byteLength: number }, index: number) => Uint8Array;
+    /** Resolves the uri of an image that lives beside the file, normally to a data: URI. */
+    resolveImage?: (image: GltfImage, index: number) => string;
     /** Mints the node ids references are built from. Defaults to random UUIDs. */
     newId?: () => string;
     /** Goes into the section header of the produced document. */
@@ -91,6 +93,9 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         [GLTF_TYPE.bufferView]: [],
         [GLTF_TYPE.accessor]: [],
         [GLTF_TYPE.meshPrimitive]: [],
+        [GLTF_TYPE.image]: [],
+        [GLTF_TYPE.sampler]: [],
+        [GLTF_TYPE.texture]: [],
         [GLTF_TYPE.material]: [],
         [GLTF_TYPE.nodeTransform]: [],
     };
@@ -153,19 +158,96 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         return addOwnNode(GLTF_TYPE.accessor, "accessor", component);
     });
 
+    // --- images ------------------------------------------------------------
+    const imageIds = (gltf.images ?? []).map((image, index) => {
+        const component: Record<string, unknown> = {};
+        if (image.name !== undefined) component.name = image.name;
+        if (image.mimeType !== undefined) component.mimeType = image.mimeType;
+
+        if (image.bufferView !== undefined) {
+            const bufferView = bufferViewIds[image.bufferView];
+            if (bufferView === undefined) throw new Error(`Image ${index} references bufferView ${image.bufferView}, which does not exist`);
+            component.bufferView = bufferView;
+        } else if (image.uri !== undefined) {
+            // An image sitting beside the file is inlined, so the result stands alone.
+            component.uri = options.resolveImage ? options.resolveImage(image, index) : image.uri;
+        } else {
+            throw new Error(`Image ${index} has neither a uri nor a bufferView`);
+        }
+
+        return addOwnNode(GLTF_TYPE.image, "image", component);
+    });
+
+    // --- samplers ----------------------------------------------------------
+    const samplerIds = (gltf.samplers ?? []).map(sampler => {
+        const component: Record<string, unknown> = {};
+        for (const key of ["name", "magFilter", "minFilter", "wrapS", "wrapT"] as const) {
+            if (sampler[key] !== undefined) component[key] = sampler[key];
+        }
+        return addOwnNode(GLTF_TYPE.sampler, "sampler", component);
+    });
+
+    // --- textures ----------------------------------------------------------
+    const textureIds = (gltf.textures ?? []).map((texture, index) => {
+        const component: Record<string, unknown> = {};
+        if (texture.name !== undefined) component.name = texture.name;
+
+        if (texture.source !== undefined) {
+            const source = imageIds[texture.source];
+            if (source === undefined) throw new Error(`Texture ${index} references image ${texture.source}, which does not exist`);
+            component.source = source;
+        }
+        if (texture.sampler !== undefined) {
+            const sampler = samplerIds[texture.sampler];
+            if (sampler === undefined) throw new Error(`Texture ${index} references sampler ${texture.sampler}, which does not exist`);
+            component.sampler = sampler;
+        }
+
+        return addOwnNode(GLTF_TYPE.texture, "texture", component);
+    });
+
+    /** A glTF textureInfo, with its texture index swapped for the node id. */
+    function textureInfo(info: GltfTextureInfo | undefined, where: string): Record<string, unknown> | undefined {
+        if (info === undefined) return undefined;
+
+        const id = textureIds[info.index];
+        if (id === undefined) throw new Error(`${where} references texture ${info.index}, which does not exist`);
+
+        const out: Record<string, unknown> = { index: id };
+        if (info.texCoord !== undefined) out.texCoord = info.texCoord;
+        if (info.scale !== undefined) out.scale = info.scale;
+        if (info.strength !== undefined) out.strength = info.strength;
+        return out;
+    }
+
     // --- materials ---------------------------------------------------------
     const materialIds = (gltf.materials ?? []).map((material, index) => {
-        const carried = new Set(["name", "doubleSided", "pbrMetallicRoughness"]);
+        const carried = new Set([
+            "name", "doubleSided", "pbrMetallicRoughness",
+            "normalTexture", "occlusionTexture", "emissiveTexture", "emissiveFactor", "alphaMode", "alphaCutoff",
+        ]);
         const dropped = Object.keys(material).filter(key => !carried.has(key));
         if (dropped.length > 0) warnings.push(`material ${index}: dropped ${dropped.join(", ")}`);
 
         const component: Record<string, unknown> = {};
         if (material.name !== undefined) component.name = material.name;
         if (material.doubleSided !== undefined) component.doubleSided = material.doubleSided;
+        if (material.emissiveFactor !== undefined) component.emissiveFactor = material.emissiveFactor;
+        if (material.alphaMode !== undefined) component.alphaMode = material.alphaMode;
+        if (material.alphaCutoff !== undefined) component.alphaCutoff = material.alphaCutoff;
+
+        const normal = textureInfo(material.normalTexture, `material ${index} normalTexture`);
+        if (normal) component.normalTexture = normal;
+        const occlusion = textureInfo(material.occlusionTexture, `material ${index} occlusionTexture`);
+        if (occlusion) component.occlusionTexture = occlusion;
+        const emissive = textureInfo(material.emissiveTexture, `material ${index} emissiveTexture`);
+        if (emissive) component.emissiveTexture = emissive;
 
         const pbr = material.pbrMetallicRoughness;
         if (pbr) {
-            const carriedPbr = new Set(["baseColorFactor", "metallicFactor", "roughnessFactor"]);
+            const carriedPbr = new Set([
+                "baseColorFactor", "metallicFactor", "roughnessFactor", "baseColorTexture", "metallicRoughnessTexture",
+            ]);
             const droppedPbr = Object.keys(pbr).filter(key => !carriedPbr.has(key));
             if (droppedPbr.length > 0) warnings.push(`material ${index} pbrMetallicRoughness: dropped ${droppedPbr.join(", ")}`);
 
@@ -173,6 +255,12 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
             if (pbr.baseColorFactor !== undefined) projected.baseColorFactor = pbr.baseColorFactor;
             if (pbr.metallicFactor !== undefined) projected.metallicFactor = pbr.metallicFactor;
             if (pbr.roughnessFactor !== undefined) projected.roughnessFactor = pbr.roughnessFactor;
+
+            const baseColor = textureInfo(pbr.baseColorTexture, `material ${index} baseColorTexture`);
+            if (baseColor) projected.baseColorTexture = baseColor;
+            const metallicRoughness = textureInfo(pbr.metallicRoughnessTexture, `material ${index} metallicRoughnessTexture`);
+            if (metallicRoughness) projected.metallicRoughnessTexture = metallicRoughness;
+
             component.pbrMetallicRoughness = projected;
         }
 
@@ -196,6 +284,9 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
             }
 
             const component: Record<string, unknown> = { attributes };
+            // glTF names the mesh, not the primitive; the name rides along so composing
+            // back can regroup these primitives under it.
+            if (mesh.name !== undefined) component.name = mesh.name;
             if (primitive.indices !== undefined) {
                 const id = accessorIds[primitive.indices];
                 if (id === undefined) throw new Error(`mesh ${meshIndex} primitive ${primitiveIndex} references index accessor ${primitive.indices}, which does not exist`);

@@ -1,0 +1,54 @@
+{
+  "description": "Imports the packed glTF box and adds a wall described with non-glTF components. Composing it produces a GLB whose geometry comes from the import and whose wall data rides in a MOSAIC_components extension.",
+  "components": {
+    "acme::geometry::wall": [
+      {
+        "name": "Annotated wall",
+        "height": 2.4,
+        "loadBearing": true
+      }
+    ]
+  },
+  "index": {
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
+    "imports": [
+      {
+        "uri": "gltf-box.tsr"
+      }
+    ],
+    "componentTables": [
+      {
+        "filename": "acme::geometry::wall.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/wall.schema.json"
+      }
+    ],
+    "sections": [
+      {
+        "header": {
+          "id": "annotations",
+          "message": "Annotate the imported box",
+          "dataVersion": "1.0.0",
+          "author": "ada@example.com",
+          "timestamp": "2026-06-01T09:00:00Z",
+          "application": "mosaic-tests"
+        },
+        "nodes": [
+          {
+            "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "components": [
+              {
+                "name": "geometry",
+                "typeID": "acme::geometry::wall",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

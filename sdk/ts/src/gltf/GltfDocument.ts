@@ -4,6 +4,8 @@
  */
 export interface GltfDocument {
     asset?: { version?: string; generator?: string };
+    extensionsUsed?: string[];
+    extensionsRequired?: string[];
     scene?: number;
     scenes?: Array<{ nodes?: number[]; name?: string }>;
     nodes?: GltfNode[];
@@ -12,6 +14,9 @@ export interface GltfDocument {
     bufferViews?: GltfBufferView[];
     buffers?: GltfBuffer[];
     materials?: GltfMaterial[];
+    images?: GltfImage[];
+    samplers?: GltfSampler[];
+    textures?: GltfTexture[];
 }
 
 export interface GltfNode {
@@ -65,6 +70,15 @@ export interface GltfBuffer {
     byteLength: number;
 }
 
+export interface GltfTextureInfo {
+    index: number;
+    texCoord?: number;
+    /** normalTexture only. */
+    scale?: number;
+    /** occlusionTexture only. */
+    strength?: number;
+}
+
 export interface GltfMaterial {
     name?: string;
     doubleSided?: boolean;
@@ -72,7 +86,36 @@ export interface GltfMaterial {
         baseColorFactor?: number[];
         metallicFactor?: number;
         roughnessFactor?: number;
+        baseColorTexture?: GltfTextureInfo;
+        metallicRoughnessTexture?: GltfTextureInfo;
     };
+    normalTexture?: GltfTextureInfo;
+    occlusionTexture?: GltfTextureInfo;
+    emissiveTexture?: GltfTextureInfo;
+    emissiveFactor?: number[];
+    alphaMode?: string;
+    alphaCutoff?: number;
+}
+
+export interface GltfImage {
+    name?: string;
+    uri?: string;
+    mimeType?: string;
+    bufferView?: number;
+}
+
+export interface GltfSampler {
+    name?: string;
+    magFilter?: number;
+    minFilter?: number;
+    wrapS?: number;
+    wrapT?: number;
+}
+
+export interface GltfTexture {
+    name?: string;
+    sampler?: number;
+    source?: number;
 }
 
 const GLB_MAGIC = 0x46546c67; // "glTF"

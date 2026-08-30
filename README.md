@@ -98,14 +98,51 @@ input, and inlined as `data:` URIs so the result stands alone. The component sch
 so a converted `.mosaic.json` packs anywhere without needing the schema files.
 
 Every glTF id becomes the id of the Mosaic node carrying the referenced component, so later edits to
-the component tables cannot silently repoint a reference. Each buffer, bufferView, accessor and
-material gets a node of its own; each glTF node with a mesh becomes a node carrying that mesh and its
-transform. glTF data outside the component subset — textures, morph targets, `alphaMode` and the
-like — is reported as a warning rather than dropped in silence, and a sparse accessor is refused
-outright rather than converted into something wrong.
+the component tables cannot silently repoint a reference. Each buffer, bufferView, accessor, image,
+sampler, texture and material gets a node of its own; each glTF node with a mesh becomes a node
+carrying that mesh and its transform. The metallic-roughness surface travels whole — base colour,
+metallic-roughness, normal, occlusion and emissive textures, along with `emissiveFactor`,
+`alphaMode`, `alphaCutoff` and `doubleSided` — so a textured model keeps its appearance. glTF data
+outside the component subset (morph targets, `extensions`, `extras`) is reported as a warning rather
+than dropped in silence, and a sparse accessor is refused outright rather than converted into
+something wrong.
 
 The conversion lives in the SDK under [`sdk/ts/src/gltf/`](sdk/ts/src/gltf/), which also owns the
 glTF-derived component schemas; the CLI commands are a thin wrapper over it.
+
+## Composing a renderable GLB
+
+`mosaic compose` reads an archive together with everything it imports and writes a binary glTF:
+
+```bash
+mosaic compose <input.tsr> [output.glb]
+```
+
+Imports are resolved relative to the archive that names them, recursively, and merged underneath it
+so a later section still wins; an import naming a URI that is not on disk is skipped and reported.
+Every Mosaic node in the result becomes a glTF node keeping its id as the node name, and its
+components are written one of two ways:
+
+- **Natively**, for the `khronos::gltf` namespace. Meshes and transforms go onto the node itself;
+  buffers, bufferViews, accessors, images, samplers, textures and materials are hoisted into the
+  document's arrays, and node ids become the array indices glTF expects. Nodes sharing a primitive
+  share a mesh.
+- **As an extension**, for everything else. The components ride along under `MOSAIC_components` on
+  the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
+  know Mosaic still renders the file.
+
+Buffers are written as a real binary chunk, not data URIs: every buffer is decoded and laid end to
+end into the GLB's BIN chunk on 4-byte boundaries, with each bufferView shifted to match. An image
+held inline as a data URI is moved into that chunk too, and given a bufferView of its own, so the
+textures ship as bytes rather than as base64 text in the JSON.
+
+Round-tripping `DamagedHelmet.glb` through `gltf-pack` and `compose` returns a file whose materials,
+textures, images, samplers, accessors, bufferViews and meshes are all identical to the original, with
+byte-identical geometry and texture payloads. The output passes the Khronos glTF validator with no
+errors, reporting only the tangent-space warning the original itself carries.
+
+The composition lives in the SDK under [`sdk/ts/src/composition/`](sdk/ts/src/composition/); the CLI
+command is a thin wrapper over it.
 
 ## Tests
 
