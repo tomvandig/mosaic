@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "x-mosaic-id": "core::child",
   "title": "Child",
-  "description": "A parent-child link. The component carries no value: the reference's name is the id of the child node, so one node can hold many children and a later section can remove one with a DELETE on that name.",
+  "description": "A parent-child link. The component carries no value: the name of the reference is a selector naming the child -- a node id such as #11111111-1111-4111-8111-111111111111, or a CSS-flavoured selector such as '.mesh', '[name=\"Brick\"]' or 'DamagedHelmet.glb|.mesh'. A selector may match several nodes, and each match becomes a child, so one node can hold many children and a later section can drop a single link with a DELETE on that name.",
   "type": "object",
   "additionalProperties": false,
   "properties": {}

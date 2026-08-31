@@ -128,8 +128,8 @@ components are written one of two ways:
   document's arrays, and node ids become the array indices glTF expects. Nodes sharing a primitive
   share a mesh.
 - **As hierarchy**, for `core::child`. That component carries no value: the *name* of the reference
-  is the id of the child node, so one node can hold many children and a later section can drop a
-  single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
+  is a **selector** naming the child, so one node can hold many children and a later section can drop
+  a single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
   node that is someone's child is left out of the scene's root list.
 - **As an extension**, for everything else. The components ride along under `MOSAIC_components` on
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
@@ -145,8 +145,42 @@ textures, images, samplers, accessors, bufferViews and meshes are all identical 
 byte-identical geometry and texture payloads. The output passes the Khronos glTF validator with no
 errors, reporting only the tangent-space warning the original itself carries.
 
-The composition lives in the SDK under [`sdk/ts/src/composition/`](sdk/ts/src/composition/); the CLI
-command is a thin wrapper over it.
+### Naming a child
+
+A `core::child` reference is written as a small CSS-flavoured selector, so a link can name something
+a human chose rather than a uuid a converter happened to mint:
+
+| Selector | Matches |
+| --- | --- |
+| `#11111111-…` | the node with that id (a bare uuid means the same thing) |
+| `.mesh` | every node carrying a component named `mesh` |
+| `khronos::gltf::meshPrimitive` | every node carrying a component of that type |
+| `[name="Painted brick"]` | a node one of whose components has `name: "Painted brick"` |
+| `[name^="mesh_helmet"]` | ...starting with; `$=` ends with, `*=` contains |
+| `DamagedHelmet.glb\|.mesh` | scoped to one section, the way `ns\|E` scopes in CSS |
+| `*` | every node |
+
+Simple selectors written together must all hold, so `.mesh[name="Brick"]` is a node carrying a
+component named `mesh` that also has a component named Brick. Escape a dot inside a name the way CSS
+does: `.mesh\.0`. There are deliberately no combinators — the hierarchy a `>` would walk is the very
+thing these selectors build.
+
+Selectors resolve against the whole merged import graph, which is what makes them useful across
+files: an archive that imports `helmet.tsr` can adopt its geometry with
+`DamagedHelmet.glb|.mesh` and never mention a uuid. A selector that matches several nodes adopts
+each of them; one that matches nothing is reported as a warning.
+
+### Placing one thing more than once
+
+Composing writes **a glTF node per child relation**, so naming the same node from three parents
+places it three times. The copies share their mesh, so the geometry is stored once no matter how
+often it appears — three helmets come to 32 nodes, one mesh, and the same 3.7 MB binary chunk as a
+single one. Links that would expand forever are refused: a cycle is reported with the path that
+closes it.
+
+The composition lives in the SDK under [`sdk/ts/src/composition/`](sdk/ts/src/composition/), the
+selector language in [`sdk/ts/src/core/Selector.ts`](sdk/ts/src/core/Selector.ts); the CLI command is
+a thin wrapper over them.
 
 ## Tests
 
