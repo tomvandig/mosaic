@@ -9,7 +9,10 @@ export const CORE_TYPE = {
      * section drop a single link with a DELETE on that name.
      */
     child: "core::child",
-    /** A human-readable name for a node, such as the one its source file gave it. */
+    /**
+     * A human-readable name for a node, such as the one its source file gave it. Like
+     * core::child, the component has no value; the *name* of the reference is the name.
+     */
     name: "core::name",
 } as const;
 
@@ -20,5 +23,6 @@ export const CORE_SCHEMAS: Record<CoreComponentType, unknown> = {
     [CORE_TYPE.name]: name,
 };
 
-/** The value every core::child component carries: nothing. */
+/** The value every core::child and core::name component carries: nothing. */
 export const CHILD_COMPONENT = {} as const;
+export const NAME_COMPONENT = {} as const;

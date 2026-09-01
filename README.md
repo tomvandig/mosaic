@@ -102,7 +102,8 @@ converting the same model twice yields the same ids. That is what lets another d
 *inside* an import and keep naming it after the import is rebuilt; without it, re-converting orphans
 every reference. Leave it off for a one-off import.
 
-Node names come across as `core::name` components, so the name a person would recognise survives
+Node names come across as `core::name` components — value-less like `core::child`, with the name
+itself in the reference — so the name a person would recognise survives
 alongside the uuid a node is identified by. Every glTF id becomes the id of the Mosaic node carrying
 the referenced component, so later edits to the component tables cannot silently repoint a
 reference. Each buffer, bufferView, accessor, image,

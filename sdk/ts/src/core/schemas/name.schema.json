@@ -2,14 +2,8 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "x-mosaic-id": "core::name",
   "title": "Name",
-  "description": "A human-readable name for the node, carried over from whatever the source file called it. Nothing depends on it being unique.",
+  "description": "A human-readable name for the node. The component carries no value: the name of the reference is the name, the way a core::child reference names its child. A node may carry several, and a later section can drop one with a DELETE on that name.",
   "type": "object",
   "additionalProperties": false,
-  "properties": {
-    "name": {
-      "type": "string",
-      "description": "The name itself."
-    }
-  },
-  "required": ["name"]
+  "properties": {}
 }

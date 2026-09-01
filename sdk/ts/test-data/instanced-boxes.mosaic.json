@@ -119,24 +119,7 @@
       {}
     ],
     "core::name": [
-      {
-        "name": "Box"
-      },
-      {
-        "name": "Left"
-      },
-      {
-        "name": "Right"
-      },
-      {
-        "name": "Pair"
-      },
-      {
-        "name": "Near row"
-      },
-      {
-        "name": "Far row"
-      }
+      {}
     ]
   },
   "index": {
@@ -279,7 +262,7 @@
                 "operation": "VALUE"
               },
               {
-                "name": "name",
+                "name": "Box",
                 "typeID": "core::name",
                 "componentIndex": 0,
                 "operation": "VALUE"
@@ -296,9 +279,9 @@
                 "operation": "VALUE"
               },
               {
-                "name": "name",
+                "name": "Left",
                 "typeID": "core::name",
-                "componentIndex": 1,
+                "componentIndex": 0,
                 "operation": "VALUE"
               },
               {
@@ -319,9 +302,9 @@
                 "operation": "VALUE"
               },
               {
-                "name": "name",
+                "name": "Right",
                 "typeID": "core::name",
-                "componentIndex": 2,
+                "componentIndex": 0,
                 "operation": "VALUE"
               },
               {
@@ -336,9 +319,9 @@
             "id": "40404040-4040-4040-8040-404040404040",
             "components": [
               {
-                "name": "name",
+                "name": "Pair",
                 "typeID": "core::name",
-                "componentIndex": 3,
+                "componentIndex": 0,
                 "operation": "VALUE"
               },
               {
@@ -365,9 +348,9 @@
                 "operation": "VALUE"
               },
               {
-                "name": "name",
+                "name": "Near row",
                 "typeID": "core::name",
-                "componentIndex": 4,
+                "componentIndex": 0,
                 "operation": "VALUE"
               },
               {
@@ -388,9 +371,9 @@
                 "operation": "VALUE"
               },
               {
-                "name": "name",
+                "name": "Far row",
                 "typeID": "core::name",
-                "componentIndex": 5,
+                "componentIndex": 0,
                 "operation": "VALUE"
               },
               {

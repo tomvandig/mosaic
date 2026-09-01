@@ -341,14 +341,22 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         });
 
         // Whatever the source file called this node, keep it: the node id is a uuid, and
-        // the name is the only handle a person would recognise.
+        // the name is the only handle a person would recognise. The name lives in the
+        // reference, as a child link does, so every name shares one empty component row.
         if (node.name !== undefined) {
-            refs.push({
-                name: "name",
-                typeID: CORE_TYPE.name,
-                componentIndex: components[CORE_TYPE.name]!.push({ name: node.name }) - 1,
-                operation: Operation.Value,
-            });
+            if (refs.some(ref => ref.name === node.name)) {
+                // Reference names have to be unique within a node, so a model whose node
+                // is called "mesh" or "transform" would otherwise collide with its own parts.
+                warnings.push(`node ${index} is named "${node.name}", which its ${node.name} component already uses; the name was left off`);
+            } else {
+                if (components[CORE_TYPE.name]!.length === 0) components[CORE_TYPE.name]!.push({});
+                refs.push({
+                    name: node.name,
+                    typeID: CORE_TYPE.name,
+                    componentIndex: 0,
+                    operation: Operation.Value,
+                });
+            }
         }
 
         nodes.push({ id: newId(), components: refs });

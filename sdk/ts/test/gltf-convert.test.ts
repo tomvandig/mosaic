@@ -107,8 +107,8 @@ test("converting produces a node per referenced element plus one per mesh node",
         [
             [GLTF_TYPE.buffer, 1], [GLTF_TYPE.bufferView, 2], [GLTF_TYPE.accessor, 2],
             [GLTF_TYPE.meshPrimitive, 1], [GLTF_TYPE.material, 1], [GLTF_TYPE.nodeTransform, 2],
-            // Both walls are named in the glTF, so both keep their name.
-            [CORE_TYPE.name, 2],
+            // Both walls are named, and every name shares the one empty row.
+            [CORE_TYPE.name, 1],
         ],
     );
 });
@@ -191,24 +191,40 @@ test("glTF fields the component subset cannot carry are reported, not dropped si
     assert.ok(warnings.some(w => w.includes("extras") && w.includes("extensions")), warnings.join("; "));
 });
 
-test("a node keeps the name its source file gave it", async () => {
-    const file = await convert("box.glb");
+/** The names a converted document gives its nodes, in node order. */
+function namesOf(document: { index: { sections: Array<{ nodes: Array<{ components?: Array<{ name: string; typeID: string }> }> }> } }): string[] {
+    return document.index.sections[0]!.nodes.flatMap(node =>
+        (node.components ?? []).filter(c => c.typeID === CORE_TYPE.name).map(c => c.name));
+}
 
-    const named = meshNodes(file).map(node => node.name!.name);
-    assert.deepEqual(named, ["Front wall", "Side wall"]);
+test("a node keeps the name its source file gave it", () => {
+    const { document } = convertGltfFile(input("box.glb"), { newId: counter() });
+
+    assert.deepEqual(namesOf(document), ["Front wall", "Side wall"]);
 });
 
-test("the name is a component of its own, so a later section can change it", async () => {
+test("the name lives in the reference, so every name shares one empty row", () => {
     const { document } = convertGltfFile(input("box.glb"), { newId: counter() });
     const file = buildMosaicFile(document);
 
-    const rows = [...file.serializedComponents.get(CORE_TYPE.name)!];
-    assert.deepEqual(rows.map(r => JSON.parse(r)), [{ name: "Front wall" }, { name: "Side wall" }]);
+    // One value-less row, however many nodes are named -- as with core::child.
+    assert.deepEqual([...file.serializedComponents.get(CORE_TYPE.name)!], ["{}"]);
 
-    // It hangs off the node under the reference name "name", beside mesh and transform.
-    const node = document.index.sections[0]!.nodes.find(n => n.components!.some(c => c.typeID === CORE_TYPE.name))!;
-    const ref = node.components!.find(c => c.typeID === CORE_TYPE.name)!;
-    assert.equal(ref.name, "name");
+    const refs = document.index.sections[0]!.nodes
+        .flatMap(n => n.components ?? [])
+        .filter(c => c.typeID === CORE_TYPE.name);
+    assert.deepEqual(refs.map(r => r.componentIndex), [0, 0]);
+});
+
+test("a name that would clash with another component on the node is reported", () => {
+    const gltf = JSON.parse(fs.readFileSync(input("box-embedded.gltf"), "utf-8"));
+    // Reference names are unique within a node, and this node already has a "transform".
+    gltf.nodes[0].name = "transform";
+
+    const { document, warnings } = gltfToMosaic(gltf, { resolveBuffer: () => new Uint8Array(168), newId: counter() });
+
+    assert.ok(warnings.some(w => w.includes('is named "transform"')), warnings.join("; "));
+    assert.deepEqual(namesOf(document), ["Side wall"], "the other node is unaffected");
 });
 
 test("the name schema travels with the document, like every other component", async () => {
@@ -219,15 +235,13 @@ test("the name schema travels with the document, like every other component", as
     assert.equal(table.schema["x-mosaic-id"], CORE_TYPE.name);
 });
 
-test("a node with no name in the glTF gets no name component", async () => {
+test("a node with no name in the glTF gets no name component", () => {
     const gltf = JSON.parse(fs.readFileSync(input("box-embedded.gltf"), "utf-8"));
     delete gltf.nodes[0].name;
 
     const { document } = gltfToMosaic(gltf, { resolveBuffer: () => new Uint8Array(168), newId: counter() });
-    const withNames = document.index.sections[0]!.nodes.filter(n => n.components!.some(c => c.typeID === CORE_TYPE.name));
 
-    assert.equal(withNames.length, 1, "only the node that still has a name");
-    assert.deepEqual(document.components[CORE_TYPE.name], [{ name: "Side wall" }]);
+    assert.deepEqual(namesOf(document), ["Side wall"], "only the node that still has a name");
 });
 
 test("stable ids make a conversion repeat exactly", () => {
@@ -311,7 +325,8 @@ test("a mesh with several primitives numbers the components it puts on one node"
     const file = buildMosaicFile(document);
     const wall = file.index.sections[0]!.nodes.at(-2)!;
 
-    assert.deepEqual(wall.components!.map(c => c.name), ["mesh.0", "mesh.1", "transform", "name"]);
+    // The last reference is the node's name, which is what a core::name reference is called.
+    assert.deepEqual(wall.components!.map(c => c.name), ["mesh.0", "mesh.1", "transform", "Front wall"]);
 });
 
 // ---------------------------------------------------------------------------

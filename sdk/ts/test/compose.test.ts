@@ -544,10 +544,13 @@ test("child links that form a cycle are refused", async () => {
 // The instancing example: one mesh, placed four times through two levels of links
 // ---------------------------------------------------------------------------
 
-/** The core::name a composed node carries, which is how the example labels its nodes. */
+/**
+ * The core::name a composed node carries. The component has no value: the name of the
+ * reference is the name, so that is what the extension entry is called.
+ */
 function labelOf(node: any): string | undefined {
     const carried = node.extensions?.[MOSAIC_COMPONENTS_EXTENSION]?.components ?? [];
-    return carried.find((c: any) => c.typeID === CORE_TYPE.name)?.value?.name;
+    return carried.find((c: any) => c.typeID === CORE_TYPE.name)?.name;
 }
 
 async function composeInstancedBoxes() {
