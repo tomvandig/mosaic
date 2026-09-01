@@ -472,23 +472,60 @@ test("a node naming itself as a child is reported and skipped", async () => {
     assert.equal(document.nodes!.find(n => n.name === GROUP)!.children?.length, 2);
 });
 
-test("a second parent for the same child is reported and dropped", async () => {
-    // glTF gives a node at most one parent, so the second claim cannot be honoured.
+test("a node named by two parents is placed under each of them", async () => {
+    // glTF gives a node one parent, so placing one thing twice means two nodes. They
+    // share a mesh, so the geometry is stored once however often it is placed.
     const { document, warnings } = await composeHierarchy(doc => {
         doc.index.sections.push(section("second-parent", WALL_FRONT, {
             name: WALL_SIDE, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
         }));
     });
 
-    assert.ok(warnings.some(w => w.includes("is named as a child by both")), warnings.join("; "));
+    assert.deepEqual(warnings, []);
 
-    // The first claim in node order wins, and the front wall comes before the group.
-    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
-    assert.deepEqual(document.nodes![byName.get(WALL_FRONT)!]!.children, [byName.get(WALL_SIDE)]);
-    assert.deepEqual(document.nodes![byName.get(GROUP)!]!.children, [byName.get(WALL_FRONT)]);
-    // Whichever way it resolves, the child appears exactly once in the hierarchy.
-    const asChild = document.nodes!.flatMap(n => n.children ?? []).filter(i => i === byName.get(WALL_SIDE));
-    assert.equal(asChild.length, 1);
+    const copies = document.nodes!.filter(n => n.name === WALL_SIDE);
+    assert.equal(copies.length, 2, "the side wall is placed twice, so it is written twice");
+    assert.equal(new Set(copies.map(n => n.mesh)).size, 1, "both copies should share one mesh");
+    assert.equal(document.meshes?.length, 1, "so the geometry is stored once");
+
+    // One copy hangs off the group, the other off the front wall.
+    const parents = document.nodes!.filter(n => (n.children ?? []).some(i => document.nodes![i]!.name === WALL_SIDE));
+    assert.deepEqual(parents.map(n => n.name).sort(), [GROUP, WALL_FRONT].sort());
+});
+
+test("the same node placed three times keeps one copy of its geometry", async () => {
+    const { document } = await composeHierarchy(doc => {
+        const nodes = doc.index.sections[0].nodes;
+        for (const id of ["d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1", "d2d2d2d2-d2d2-4d2d-8d2d-d2d2d2d2d2d2"]) {
+            nodes.push({
+                id,
+                components: [{ name: WALL_FRONT, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" }],
+            });
+        }
+    });
+
+    // Once under the group, and once under each of the two new parents.
+    assert.equal(document.nodes!.filter(n => n.name === WALL_FRONT).length, 3);
+    assert.equal(document.meshes?.length, 1);
+    assert.equal(document.accessors?.length, 2, "the placements share one set of accessors");
+});
+
+test("a node placed twice carries its own subtree each time", async () => {
+    // The group is placed twice, so its children are written twice too.
+    const { document } = await composeHierarchy(doc => {
+        doc.index.sections[0].nodes.push({
+            id: "d3d3d3d3-d3d3-4d3d-8d3d-d3d3d3d3d3d3",
+            components: [{ name: GROUP, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" }],
+        });
+    });
+
+    assert.equal(document.nodes!.filter(n => n.name === GROUP).length, 1, "the group has one parent");
+    assert.equal(document.nodes!.filter(n => n.name === WALL_FRONT).length, 1);
+
+    const outer = document.nodes!.find(n => n.name === "d3d3d3d3-d3d3-4d3d-8d3d-d3d3d3d3d3d3")!;
+    const group = document.nodes![outer.children![0]!]!;
+    assert.equal(group.name, GROUP);
+    assert.equal(group.children?.length, 2, "the walls came along under it");
 });
 
 test("child links that form a cycle are refused", async () => {

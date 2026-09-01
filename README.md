@@ -135,6 +135,12 @@ components are written one of two ways:
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
   know Mosaic still renders the file.
 
+Composing writes **a glTF node per child relation**, so naming the same node from three parents
+places it three times. The copies share their mesh, so the geometry is stored once no matter how
+often it appears — three helmets come to 32 nodes, one mesh, and the same 3.7 MB binary chunk as one
+helmet would. A node placed twice brings its whole subtree along each time. Links that would expand
+forever are refused: a cycle is reported with the path that closes it.
+
 Buffers are written as a real binary chunk, not data URIs: every buffer is decoded and laid end to
 end into the GLB's BIN chunk on 4-byte boundaries, with each bufferView shifted to match. An image
 held inline as a data URI is moved into that chunk too, and given a bufferView of its own, so the
