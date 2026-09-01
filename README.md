@@ -88,14 +88,19 @@ consumer of the SDK.
 container:
 
 ```bash
-mosaic gltf      <input.gltf|input.glb> [output.mosaic.json]   # to a source document
-mosaic gltf-pack <input.gltf|input.glb> [output.tsr]           # straight to an archive
+mosaic gltf      <input.gltf|input.glb> [output.mosaic.json] [--stable-ids]   # to a source document
+mosaic gltf-pack <input.gltf|input.glb> [output.tsr]         [--stable-ids]   # straight to an archive
 ```
 
 Both read the same conversion; the first stops at the editable JSON document, the second packs it in
 one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
 input, and inlined as `data:` URIs so the result stands alone. The component schemas are inlined too,
 so a converted `.mosaic.json` packs anywhere without needing the schema files.
+
+`--stable-ids` seeds the node ids from the file name rather than drawing them at random, so
+converting the same model twice yields the same ids. That is what lets another document name a node
+*inside* an import and keep naming it after the import is rebuilt; without it, re-converting orphans
+every reference. Leave it off for a one-off import.
 
 Node names come across as `core::name` components, so the name a person would recognise survives
 alongside the uuid a node is identified by. Every glTF id becomes the id of the Mosaic node carrying

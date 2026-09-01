@@ -1,5 +1,6 @@
 export { GLTF_TYPE, GLTF_SCHEMAS, type GltfComponentType } from "./schemas.ts";
 export { parseGltf, parseGlb, isGlb, type GltfDocument, type ParsedGltf } from "./GltfDocument.ts";
+export { stableIds } from "./stableIds.ts";
 export { gltfToMosaic, type ConvertOptions, type ConvertResult } from "./GltfToMosaic.ts";
 export {
     convertGltfFile,
@@ -9,4 +10,5 @@ export {
     archiveOutputPath,
     MOSAIC_SOURCE_EXTENSION,
     type ConvertFileResult,
+    type ConvertFileOptions,
 } from "./GltfConvertFs.ts";

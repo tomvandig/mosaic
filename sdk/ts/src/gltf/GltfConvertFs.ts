@@ -4,6 +4,7 @@ import { packMosaicSource } from "../MosaicPack.ts";
 import { MOSAIC_ARCHIVE_EXTENSION } from "../MosaicPackFs.ts";
 import { parseGltf } from "./GltfDocument.ts";
 import { gltfToMosaic, type ConvertOptions, type ConvertResult } from "./GltfToMosaic.ts";
+import { stableIds } from "./stableIds.ts";
 
 /** The extension a Mosaic source document carries. */
 export const MOSAIC_SOURCE_EXTENSION = ".mosaic.json";
@@ -31,11 +32,20 @@ function decodeDataUri(uri: string): Uint8Array {
     return new Uint8Array(Buffer.from(payload, "base64"));
 }
 
+export interface ConvertFileOptions extends Partial<ConvertOptions> {
+    /**
+     * Give every node an id derived from the file name instead of a random one, so that
+     * converting the same file again produces the same ids and another document can go on
+     * referencing them. Ignored when `newId` is given.
+     */
+    stableIds?: boolean;
+}
+
 /**
  * Reads a .gltf or .glb file and converts it, resolving buffers from the GLB binary
  * chunk, from data URIs, or from files sitting beside the input.
  */
-export function convertGltfFile(inputPath: string, options: Partial<ConvertOptions> = {}): ConvertResult {
+export function convertGltfFile(inputPath: string, options: ConvertFileOptions = {}): ConvertResult {
     if (!fs.existsSync(inputPath)) throw new Error(`File ${inputPath} does not exist`);
 
     const source = path.resolve(inputPath);
@@ -61,7 +71,9 @@ export function convertGltfFile(inputPath: string, options: Partial<ConvertOptio
     return gltfToMosaic(document, {
         resolveBuffer,
         provenance: { id: path.basename(source), message: `Imported from ${path.basename(source)}`, ...options.provenance },
-        ...(options.newId ? { newId: options.newId } : {}),
+        ...(options.newId ? { newId: options.newId }
+            : options.stableIds ? { newId: stableIds(path.basename(source)) }
+            : {}),
     });
 }
 
@@ -94,7 +106,7 @@ function write(target: string, data: string | Uint8Array): number {
 }
 
 /** Converts a .gltf or .glb file into a Mosaic source document on disk. */
-export function convertGltfToSourceFile(inputPath: string, outputPath?: string, options?: Partial<ConvertOptions>): ConvertFileResult {
+export function convertGltfToSourceFile(inputPath: string, outputPath?: string, options?: ConvertFileOptions): ConvertFileResult {
     const result = convertGltfFile(inputPath, options);
     const target = path.resolve(outputPath ?? sourceOutputPath(path.resolve(inputPath)));
 
@@ -103,7 +115,7 @@ export function convertGltfToSourceFile(inputPath: string, outputPath?: string, 
 }
 
 /** Converts a .gltf or .glb file straight into a packed Mosaic archive. */
-export async function convertGltfToArchiveFile(inputPath: string, outputPath?: string, options?: Partial<ConvertOptions>): Promise<ConvertFileResult> {
+export async function convertGltfToArchiveFile(inputPath: string, outputPath?: string, options?: ConvertFileOptions): Promise<ConvertFileResult> {
     const result = convertGltfFile(inputPath, options);
     const target = path.resolve(outputPath ?? archiveOutputPath(path.resolve(inputPath)));
 

@@ -39,6 +39,7 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 | `linked-house.mosaic.json` | A dataset that references other datasets through `imports` rather than restating them. Packing carries imports through untouched and never pulls the referenced data in. |
 | `gltf-box.mosaic.json` | Geometry: a box mesh described with glTF-derived components, shared by two nodes that differ only in transform. |
 | `gltf-box-hierarchy.mosaic.json` | The glTF box with its walls hung off a group node using `core::child` links, whose ids live in the reference names. |
+| `helmet-plaza.mosaic.json` | Five Damaged Helmets from one import and one copy of its geometry and textures, placed through two levels of `core::child` links. Needs `helmet.tsr`, built with the command below. |
 | `instanced-boxes.mosaic.json` | One box mesh placed four times through two levels of `core::child` links, so composing writes the whole `Pair → Left/Right → Box` subtree once per row. |
 | `composed-house.mosaic.json` | Imports the packed glTF box and adds a wall of non-glTF components, so composing it exercises geometry, imports and the extension path together. |
 | `schemas/*.schema.json` | Component schemas, referenced by the fixtures and used as `originSchemaSrc` in the typed round-trip test. |
@@ -67,3 +68,18 @@ texture, so the texture path is exercised both ways.
 `gltf-box.mosaic.json` carries a real unit box: 8 `VEC3` positions and 36 `UNSIGNED_SHORT` indices in
 a 168-byte buffer, inlined as a base64 `data:` URI the way glTF allows. The tests decode that buffer
 and check it against what the accessors declare, so the geometry cannot drift from its description.
+
+## The helmet plaza
+
+`helmet-plaza.mosaic.json` names a node *inside* an imported archive, which only works if that
+archive converts to the same ids every time. Build it with:
+
+```bash
+mosaic gltf-pack gltf/DamagedHelmet.glb helmet.tsr --stable-ids
+mosaic pack helmet-plaza.mosaic.json
+mosaic compose helmet-plaza.tsr
+```
+
+`--stable-ids` seeds the node ids from the file name instead of drawing them at random, so
+`DamagedHelmet.glb` always yields the same ids and the plaza can go on naming one of them. Without
+it, re-converting the helmet would silently orphan every reference to it.

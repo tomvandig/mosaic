@@ -1,0 +1,255 @@
+{
+  "description": "Five copies of the Damaged Helmet, from one import and one copy of its 3.7 MB of geometry and textures. The helmet is imported, never restated: each plinth names it with a core::child reference, and composing writes a glTF node per relation, so the helmet is written once per placement while its mesh, images and buffer stay single. Two plinths make a pair, two rows each hold that pair -- so the pair, both plinths and the helmet beneath them are written once per row -- and a fifth placement stands on its own, turned a quarter turn. Regenerate the import it needs with:  mosaic gltf-pack gltf/DamagedHelmet.glb helmet.tsr --stable-ids  -- the stable ids are what let this file name a node inside it.",
+  "components": {
+    "khronos::gltf::nodeTransform": [
+      {
+        "translation": [
+          -1.5,
+          0,
+          0
+        ]
+      },
+      {
+        "translation": [
+          1.5,
+          0,
+          0
+        ]
+      },
+      {
+        "translation": [
+          0,
+          0,
+          -2
+        ]
+      },
+      {
+        "translation": [
+          0,
+          0,
+          2
+        ]
+      },
+      {
+        "translation": [
+          0,
+          1.5,
+          0
+        ],
+        "rotation": [
+          0,
+          0.7071068,
+          0,
+          0.7071068
+        ],
+        "scale": [
+          0.6,
+          0.6,
+          0.6
+        ]
+      }
+    ],
+    "core::child": [
+      {}
+    ],
+    "core::name": [
+      {
+        "name": "Left plinth"
+      },
+      {
+        "name": "Right plinth"
+      },
+      {
+        "name": "Pair"
+      },
+      {
+        "name": "Near row"
+      },
+      {
+        "name": "Far row"
+      },
+      {
+        "name": "Spinner"
+      }
+    ]
+  },
+  "index": {
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
+    "imports": [
+      {
+        "uri": "helmet.tsr"
+      }
+    ],
+    "componentTables": [
+      {
+        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
+      },
+      {
+        "filename": "core::child.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/core/schemas/child.schema.json"
+      },
+      {
+        "filename": "core::name.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/core/schemas/name.schema.json"
+      }
+    ],
+    "sections": [
+      {
+        "header": {
+          "id": "helmet-plaza",
+          "message": "Five helmets from one imported model",
+          "dataVersion": "1.0.0",
+          "author": "ada@example.com",
+          "timestamp": "2026-09-01T11:00:00Z",
+          "application": "mosaic-tests"
+        },
+        "nodes": [
+          {
+            "id": "11110000-1111-4111-8111-111100001111",
+            "components": [
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              },
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              },
+              {
+                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "22220000-2222-4222-8222-222200002222",
+            "components": [
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 1,
+                "operation": "VALUE"
+              },
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 1,
+                "operation": "VALUE"
+              },
+              {
+                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "33330000-3333-4333-8333-333300003333",
+            "components": [
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 2,
+                "operation": "VALUE"
+              },
+              {
+                "name": "11110000-1111-4111-8111-111100001111",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              },
+              {
+                "name": "22220000-2222-4222-8222-222200002222",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "44440000-4444-4444-8444-444400004444",
+            "components": [
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 2,
+                "operation": "VALUE"
+              },
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 3,
+                "operation": "VALUE"
+              },
+              {
+                "name": "33330000-3333-4333-8333-333300003333",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "55550000-5555-4555-8555-555500005555",
+            "components": [
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 3,
+                "operation": "VALUE"
+              },
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 4,
+                "operation": "VALUE"
+              },
+              {
+                "name": "33330000-3333-4333-8333-333300003333",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          },
+          {
+            "id": "66660000-6666-4666-8666-666600006666",
+            "components": [
+              {
+                "name": "transform",
+                "typeID": "khronos::gltf::nodeTransform",
+                "componentIndex": 4,
+                "operation": "VALUE"
+              },
+              {
+                "name": "name",
+                "typeID": "core::name",
+                "componentIndex": 5,
+                "operation": "VALUE"
+              },
+              {
+                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "typeID": "core::child",
+                "componentIndex": 0,
+                "operation": "VALUE"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

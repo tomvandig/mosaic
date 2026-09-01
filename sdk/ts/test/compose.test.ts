@@ -604,6 +604,58 @@ test("the geometry is stored once however often it is placed", async () => {
     assert.equal(document.bufferViews?.length, 2);
 });
 
+// ---------------------------------------------------------------------------
+// The helmet plaza: one imported model, placed five times
+// ---------------------------------------------------------------------------
+
+const HELMET_GLB = path.join(DATA_DIR, "gltf", "DamagedHelmet.glb");
+
+/** Builds the plaza and the import it needs, in a scratch directory. */
+async function composePlaza() {
+    const out = tempDir();
+
+    // The example names a node inside the import, which only holds because the import was
+    // converted with stable ids. Regenerating it here is exactly what the README documents.
+    const helmet = convertGltfFile(HELMET_GLB, { stableIds: true });
+    fs.writeFileSync(path.join(out, "helmet.tsr"), await packMosaicSource(helmet.document));
+    fs.writeFileSync(path.join(out, "plaza.tsr"), await packMosaicSource(readExample("helmet-plaza"), resolveExampleSchema));
+
+    return await composeArchive(path.join(out, "plaza.tsr"));
+}
+
+test("the helmet plaza places one imported model five times", { skip: !fs.existsSync(HELMET_GLB) && "DamagedHelmet.glb is not present" }, async () => {
+    const { document, warnings, sources } = await composePlaza();
+
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(sources.map(s => path.basename(s)), ["helmet.tsr", "plaza.tsr"]);
+    assert.equal(document.nodes!.filter(n => n.mesh !== undefined).length, 5);
+});
+
+test("the plaza stores the helmet once however often it appears", { skip: !fs.existsSync(HELMET_GLB) && "DamagedHelmet.glb is not present" }, async () => {
+    const { document, binary } = await composePlaza();
+
+    assert.equal(document.meshes?.length, 1, "one mesh");
+    assert.equal(document.images?.length, 5, "one set of textures");
+    assert.equal(document.materials?.length, 1);
+    // The same binary chunk a single helmet needs: five placements cost no more bytes.
+    assert.equal(binary.byteLength, 3771740);
+});
+
+test("the plaza repeats a whole subtree under each row", { skip: !fs.existsSync(HELMET_GLB) && "DamagedHelmet.glb is not present" }, async () => {
+    const { document } = await composePlaza();
+
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Pair").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Left plinth").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Right plinth").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Spinner").length, 1);
+
+    // Every placement hangs off something: none of them is loose in the scene.
+    const roots = document.scenes![0]!.nodes!;
+    for (const [index, node] of document.nodes!.entries()) {
+        if (node.mesh !== undefined) assert.ok(!roots.includes(index), "a placed helmet is not a root");
+    }
+});
+
 test("a missing input archive is reported by name", async () => {
     await assert.rejects(() => composeArchiveToGlb("no-such.tsr"), /no-such\.tsr does not exist/);
 });

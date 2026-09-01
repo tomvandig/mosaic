@@ -230,6 +230,28 @@ test("a node with no name in the glTF gets no name component", async () => {
     assert.deepEqual(document.components[CORE_TYPE.name], [{ name: "Side wall" }]);
 });
 
+test("stable ids make a conversion repeat exactly", () => {
+    const once = convertGltfFile(input("box.glb"), { stableIds: true });
+    const again = convertGltfFile(input("box.glb"), { stableIds: true });
+
+    const ids = (result: typeof once) => result.document.index.sections[0]!.nodes.map(n => n.id);
+    assert.deepEqual(ids(again), ids(once), "the same file should convert to the same ids");
+    // And they still look like the uuids everything else expects.
+    for (const id of ids(once)) {
+        assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-8[0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+});
+
+test("stable ids differ between files, and from the random default", () => {
+    const box = convertGltfFile(input("box.glb"), { stableIds: true });
+    const other = convertGltfFile(input("box-textured.gltf"), { stableIds: true });
+    const random = convertGltfFile(input("box.glb"));
+
+    const first = (result: typeof box) => result.document.index.sections[0]!.nodes[0]!.id;
+    assert.notEqual(first(other), first(box), "a different file should not reuse the ids");
+    assert.notEqual(first(random), first(box), "the default stays random");
+});
+
 test("a textured model converts its images, samplers and textures", async () => {
     const file = await convert("box-textured.gltf");
     const primitive = meshNodes(file)[0]!.mesh!;
