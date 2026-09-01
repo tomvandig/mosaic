@@ -540,6 +540,70 @@ test("child links that form a cycle are refused", async () => {
     );
 });
 
+// ---------------------------------------------------------------------------
+// The instancing example: one mesh, placed four times through two levels of links
+// ---------------------------------------------------------------------------
+
+/** The core::name a composed node carries, which is how the example labels its nodes. */
+function labelOf(node: any): string | undefined {
+    const carried = node.extensions?.[MOSAIC_COMPONENTS_EXTENSION]?.components ?? [];
+    return carried.find((c: any) => c.typeID === CORE_TYPE.name)?.value?.name;
+}
+
+async function composeInstancedBoxes() {
+    const out = tempDir();
+    const document = readExample("instanced-boxes");
+    fs.writeFileSync(path.join(out, "boxes.tsr"), await packMosaicSource(document, resolveExampleSchema));
+
+    return await composeArchive(path.join(out, "boxes.tsr"));
+}
+
+test("the instancing example places one mesh four times", async () => {
+    const { document, warnings } = await composeInstancedBoxes();
+
+    assert.deepEqual(warnings, []);
+    assert.equal(document.meshes?.length, 1, "one mesh...");
+    assert.equal(document.accessors?.length, 2, "...and one set of accessors");
+    assert.equal(document.nodes!.filter(n => n.mesh !== undefined).length, 4, "placed four times");
+});
+
+test("a subtree named by two parents is written out under each of them", async () => {
+    const { document } = await composeInstancedBoxes();
+
+    // Two rows, each holding a pair, each holding two placements of the one box.
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Pair").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Left").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Right").length, 2);
+    assert.equal(document.nodes!.filter(n => labelOf(n) === "Box").length, 4);
+});
+
+test("each placement of the example sits where its parents put it", async () => {
+    const { document } = await composeInstancedBoxes();
+
+    // A box's world position is its row plus its side; the four differ.
+    const placements = document.nodes!
+        .filter(n => n.children?.some(i => labelOf(document.nodes![i]!) === "Box"))
+        .map(n => n.translation);
+
+    assert.equal(placements.length, 4);
+    assert.deepEqual(
+        [...new Set(placements.map(p => JSON.stringify(p)))].sort(),
+        ["[-1,0,0]", "[1,0,0]"].sort(),
+        "two sides, each appearing under both rows",
+    );
+
+    const rows = document.nodes!.filter(n => labelOf(n)?.endsWith("row")).map(n => n.translation);
+    assert.deepEqual(rows.sort(), [[0, 0, -2], [0, 0, 2]].sort());
+});
+
+test("the geometry is stored once however often it is placed", async () => {
+    const { document, binary } = await composeInstancedBoxes();
+
+    // 8 VEC3 positions and 36 UNSIGNED_SHORT indices: the same 168 bytes as one box.
+    assert.equal(binary.byteLength, 168);
+    assert.equal(document.bufferViews?.length, 2);
+});
+
 test("a missing input archive is reported by name", async () => {
     await assert.rejects(() => composeArchiveToGlb("no-such.tsr"), /no-such\.tsr does not exist/);
 });

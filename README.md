@@ -97,8 +97,10 @@ one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or 
 input, and inlined as `data:` URIs so the result stands alone. The component schemas are inlined too,
 so a converted `.mosaic.json` packs anywhere without needing the schema files.
 
-Every glTF id becomes the id of the Mosaic node carrying the referenced component, so later edits to
-the component tables cannot silently repoint a reference. Each buffer, bufferView, accessor, image,
+Node names come across as `core::name` components, so the name a person would recognise survives
+alongside the uuid a node is identified by. Every glTF id becomes the id of the Mosaic node carrying
+the referenced component, so later edits to the component tables cannot silently repoint a
+reference. Each buffer, bufferView, accessor, image,
 sampler, texture and material gets a node of its own; each glTF node with a mesh becomes a node
 carrying that mesh and its transform. The metallic-roughness surface travels whole — base colour,
 metallic-roughness, normal, occlusion and emissive textures, along with `emissiveFactor`,
@@ -131,7 +133,7 @@ components are written one of two ways:
   is the id of the child node, so one node can hold many children and a later section can drop a
   single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
   node that is someone's child is left out of the scene's root list.
-- **As an extension**, for everything else. The components ride along under `MOSAIC_components` on
+- **As an extension**, for everything else, including `core::name`. The components ride along under `MOSAIC_components` on
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
   know Mosaic still renders the file.
 

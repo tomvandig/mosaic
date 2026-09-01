@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "core::name",
+  "title": "Name",
+  "description": "A human-readable name for the node, carried over from whatever the source file called it. Nothing depends on it being unique.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "The name itself."
+    }
+  },
+  "required": ["name"]
+}

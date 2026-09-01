@@ -2,6 +2,7 @@ import type { MosaicSourceDocument } from "../MosaicPack.ts";
 import type { ComponentElement, NodeElement, SectionElement } from "../MosaicIndexFile.ts";
 import { Operation, Type } from "../MosaicIndexFile.ts";
 import { GLTF_TYPE, GLTF_SCHEMAS, type GltfComponentType } from "./schemas.ts";
+import { CORE_TYPE, CORE_SCHEMAS } from "../core/schemas.ts";
 import type { GltfDocument, GltfNode, GltfImage, GltfTextureInfo } from "./GltfDocument.ts";
 import { composeTrs, multiply, IDENTITY } from "./matrix.ts";
 
@@ -88,7 +89,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
     const newId = options.newId ?? (() => globalThis.crypto.randomUUID());
     const warnings: string[] = [];
 
-    const components: Record<GltfComponentType, unknown[]> = {
+    const components: Record<string, unknown[]> = {
         [GLTF_TYPE.buffer]: [],
         [GLTF_TYPE.bufferView]: [],
         [GLTF_TYPE.accessor]: [],
@@ -98,12 +99,13 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         [GLTF_TYPE.texture]: [],
         [GLTF_TYPE.material]: [],
         [GLTF_TYPE.nodeTransform]: [],
+        [CORE_TYPE.name]: [],
     };
     const nodes: NodeElement[] = [];
 
     /** Adds a component, puts it on a node of its own, and returns that node's id. */
-    function addOwnNode(typeID: GltfComponentType, name: string, component: unknown): string {
-        const componentIndex = components[typeID].push(component) - 1;
+    function addOwnNode(typeID: string, name: string, component: unknown): string {
+        const componentIndex = components[typeID]!.push(component) - 1;
         const id = newId();
         nodes.push({ id, components: [{ name, typeID, componentIndex, operation: Operation.Value }] });
         return id;
@@ -299,7 +301,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
             }
             if (primitive.mode !== undefined) component.mode = primitive.mode;
 
-            return components[GLTF_TYPE.meshPrimitive].push(component) - 1;
+            return components[GLTF_TYPE.meshPrimitive]!.push(component) - 1;
         }),
     );
 
@@ -320,7 +322,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         if (rows === undefined) throw new Error(`Node ${index} references mesh ${node.mesh}, which does not exist`);
 
         const transform = transformOf(index, gltfNodes, parents);
-        const transformIndex = components[GLTF_TYPE.nodeTransform].push(transform) - 1;
+        const transformIndex = components[GLTF_TYPE.nodeTransform]!.push(transform) - 1;
 
         const refs: ComponentElement[] = rows.map((componentIndex, primitiveIndex) => ({
             // A mesh with one primitive keeps the plain name; several are numbered, since
@@ -338,6 +340,17 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
             operation: Operation.Value,
         });
 
+        // Whatever the source file called this node, keep it: the node id is a uuid, and
+        // the name is the only handle a person would recognise.
+        if (node.name !== undefined) {
+            refs.push({
+                name: "name",
+                typeID: CORE_TYPE.name,
+                componentIndex: components[CORE_TYPE.name]!.push({ name: node.name }) - 1,
+                operation: Operation.Value,
+            });
+        }
+
         nodes.push({ id: newId(), components: refs });
     });
 
@@ -346,7 +359,8 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
     }
 
     // --- assemble ----------------------------------------------------------
-    const used = (Object.keys(components) as GltfComponentType[]).filter(typeID => components[typeID].length > 0);
+    const schemas: Record<string, unknown> = { ...GLTF_SCHEMAS, ...CORE_SCHEMAS };
+    const used = Object.keys(components).filter(typeID => components[typeID]!.length > 0);
 
     const header: SectionElement["header"] = {
         id: "gltf-import",
@@ -360,14 +374,14 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
 
     const document: MosaicSourceDocument = {
         description: `Converted from a glTF ${gltf.asset?.version ?? "2.0"} document.`,
-        components: Object.fromEntries(used.map(typeID => [typeID, components[typeID]])),
+        components: Object.fromEntries(used.map(typeID => [typeID, components[typeID]!])),
         index: {
             header: { MosaicVersion: "post-alpha" },
             imports: [],
             componentTables: used.map(typeID => ({
                 filename: `${typeID}.ndjson`,
                 type: Type.Ndjson,
-                schema: GLTF_SCHEMAS[typeID],
+                schema: schemas[typeID],
             })),
             sections: [{ header, nodes }],
         },
