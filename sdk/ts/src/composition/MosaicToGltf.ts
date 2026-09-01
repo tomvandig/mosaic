@@ -3,7 +3,6 @@ import type { ComponentElement, NodeElement } from "../MosaicIndexFile.ts";
 import { collapseNodesByPath } from "../MosaicFileOperations.ts";
 import { GLTF_TYPE } from "../gltf/schemas.ts";
 import { CORE_TYPE } from "../core/schemas.ts";
-import { buildNodeFacts, selectNodes } from "../core/Selector.ts";
 import type { GltfDocument } from "../gltf/GltfDocument.ts";
 
 /** Carries the Mosaic components that have no native glTF form. */
@@ -23,9 +22,6 @@ type Row = Record<string, any>;
 const DATA_URI_BASE64 = /^data:[^;,]*;base64,/;
 
 const GLTF_TYPES: ReadonlySet<string> = new Set(Object.values(GLTF_TYPE));
-
-/** Expansion is bounded, so a runaway set of links fails loudly instead of hanging. */
-const MAX_NODES = 100_000;
 
 function decodeDataUri(uri: unknown, what: string): Uint8Array {
     if (typeof uri !== "string") throw new Error(`${what} has no uri to read its bytes from`);
@@ -69,9 +65,6 @@ interface Carried {
  * accessors, images, samplers, textures and materials hoisted into the document's arrays --
  * and `core::child` becomes the glTF node hierarchy. Everything else rides along in a
  * `MOSAIC_components` extension, which a viewer is free to ignore.
- *
- * Each child relation produces its own glTF node, so naming one node from two places
- * places it twice. The copies share their mesh, so the geometry is stored once.
  */
 export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const warnings: string[] = [];
@@ -379,44 +372,51 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     }
 
     // --- hierarchy ---------------------------------------------------------
-    // A core::child component carries no value: the *name* of the reference is a selector
-    // naming the child, so a link can be written against something a human chose rather
-    // than a uuid a converter minted. A selector may match several nodes, and each match
-    // becomes a child.
-    const facts = buildNodeFacts(file);
+    // A core::child component carries no value: the name of the reference is the id of
+    // the child node. glTF gives every node at most one parent, so where two nodes claim
+    // the same child the first in node order keeps it and the second is reported and
+    // dropped, rather than writing a file no viewer can read.
+    const nodeIndex = new Map(nodes.map((node, index) => [node.id, index]));
     const childIds = new Map<string, string[]>();
-    const referenced = new Set<string>();
+    const parentOf = new Map<string, string>();
 
     for (const node of nodes) {
         const links: string[] = [];
 
         for (const { ref } of (carriedBy.get(node.id) ?? []).filter(c => c.ref.typeID === CORE_TYPE.child)) {
-            let matched;
-            try {
-                matched = selectNodes(ref.name, facts);
-            } catch (err) {
-                warnings.push(`node ${node.id}: ${err instanceof Error ? err.message : String(err)}`);
+            const childId = ref.name;
+
+            if (!nodeIndex.has(childId)) {
+                warnings.push(`node ${node.id} names ${childId} as a child, but no such node is present`);
+                continue;
+            }
+            if (childId === node.id) {
+                warnings.push(`node ${node.id} names itself as a child; the link was dropped`);
                 continue;
             }
 
-            const targets = matched.map(m => m.id).filter(id => {
-                if (id !== node.id) return true;
-                warnings.push(`selector "${ref.name}" on node ${node.id} matches that node itself; it was left out`);
-                return false;
-            });
-
-            if (targets.length === 0) {
-                warnings.push(`selector "${ref.name}" on node ${node.id} matches no node`);
+            const existing = parentOf.get(childId);
+            if (existing !== undefined) {
+                warnings.push(`node ${childId} is named as a child by both ${existing} and ${node.id}; the second link was dropped`);
                 continue;
             }
 
-            for (const id of targets) {
-                links.push(id);
-                referenced.add(id);
-            }
+            parentOf.set(childId, node.id);
+            links.push(childId);
         }
 
         if (links.length > 0) childIds.set(node.id, links);
+    }
+
+    // A cycle would leave the affected nodes out of the scene entirely, so say so.
+    for (const start of parentOf.keys()) {
+        const seen = new Set<string>([start]);
+        let current = parentOf.get(start);
+        while (current !== undefined) {
+            if (seen.has(current)) throw new Error(`Child links form a cycle through node ${current}`);
+            seen.add(current);
+            current = parentOf.get(current);
+        }
     }
 
     // --- nodes ------------------------------------------------------------
@@ -434,10 +434,12 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const gltfNodes: NonNullable<GltfDocument["nodes"]> = [];
     const extensionsUsed = new Set<string>();
 
-    /** Everything about a node except its children, which differ per occurrence. */
-    function templateFor(node: NodeElement): Row {
+    for (const node of nodes) {
         const carried = carriedBy.get(node.id) ?? [];
         const gltfNode: Row = { name: node.id };
+
+        const children = childIds.get(node.id);
+        if (children) gltfNode.children = children.map(id => nodeIndex.get(id)!);
 
         const primitives = carried.filter(c => c.ref.typeID === GLTF_TYPE.meshPrimitive);
         if (primitives.length > 0) gltfNode.mesh = meshFor(primitives);
@@ -475,45 +477,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
             extensionsUsed.add(MOSAIC_COMPONENTS_EXTENSION);
         }
 
-        return gltfNode;
-    }
-
-    const templates = new Map(nodes.map(node => [node.id, templateFor(node)]));
-
-    /**
-     * Writes a node and, beneath it, a fresh node for every child relation. A node named
-     * by two parents is emitted twice: glTF gives a node one parent, so the way to place
-     * one thing in two places is two nodes sharing the mesh, which costs no geometry.
-     */
-    function emit(id: string, ancestors: string[]): number {
-        if (ancestors.includes(id)) {
-            throw new Error(`Child links form a cycle: ${[...ancestors.slice(ancestors.indexOf(id)), id].join(" -> ")}`);
-        }
-        if (gltfNodes.length >= MAX_NODES) {
-            throw new Error(`Child links expand to more than ${MAX_NODES} nodes; check for a reference that repeats without end`);
-        }
-
-        const gltfNode: Row = { ...templates.get(id)! };
-        const index = gltfNodes.length;
         gltfNodes.push(gltfNode as NonNullable<GltfDocument["nodes"]>[number]);
-        emitted.add(id);
-
-        const children = childIds.get(id);
-        if (children) {
-            const beneath = [...ancestors, id];
-            gltfNode.children = children.map(child => emit(child, beneath));
-        }
-
-        return index;
-    }
-
-    // A node nobody names is a root; everything else appears beneath its parent.
-    const emitted = new Set<string>();
-    const roots = nodes.filter(node => !referenced.has(node.id)).map(node => emit(node.id, []));
-
-    const unreachable = nodes.filter(node => !emitted.has(node.id));
-    if (unreachable.length > 0) {
-        throw new Error(`Child links form a cycle among nodes that nothing else names: ${unreachable.map(n => n.id).join(", ")}`);
     }
 
     // Buffers first, then the image bytes appended after them.
@@ -536,7 +500,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const document: GltfDocument = {
         asset: { version: "2.0", generator: "mosaic compose" },
         scene: 0,
-        scenes: [{ nodes: roots }],
+        scenes: [{ nodes: nodes.flatMap((node, index) => (parentOf.has(node.id) ? [] : [index])) }],
         nodes: gltfNodes,
         ...(meshes.length > 0 ? { meshes } : {}),
         ...(accessors.length > 0 ? { accessors } : {}),

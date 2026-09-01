@@ -224,36 +224,6 @@ test("a reference to a node carrying no such component is reported", async () =>
 // Imports
 // ---------------------------------------------------------------------------
 
-test("a selector reaches nodes that came in through an import", async () => {
-    const out = await stageBox();
-    fs.writeFileSync(path.join(out, "row.mosaic.json"), JSON.stringify({
-        components: { "core::child": [{}] },
-        index: {
-            header: { MosaicVersion: "post-alpha" },
-            imports: [{ uri: "box.tsr" }],
-            componentTables: [{ filename: "core::child.ndjson", type: "NDJSON", schema: { "x-mosaic-id": "core::child", type: "object" } }],
-            sections: [{
-                header: { id: "row", message: "", dataVersion: "1.0.0", author: "", timestamp: "", application: "" },
-                nodes: [{
-                    id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1",
-                    // Nothing here names a uuid: the walls come from the imported archive.
-                    components: [{ name: ".mesh", typeID: "core::child", componentIndex: 0, operation: "VALUE" }],
-                }],
-            }],
-        },
-    }));
-    await packMosaicSourceFile(path.join(out, "row.mosaic.json"), path.join(out, "row.tsr"));
-
-    const { document, warnings } = await composeArchive(path.join(out, "row.tsr"));
-
-    assert.deepEqual(warnings, []);
-    const parent = document.nodes!.find(n => n.name === "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1")!;
-    assert.equal(parent.children?.length, 2, "both imported walls were adopted");
-    for (const index of parent.children!) {
-        assert.equal(document.nodes![index]!.mesh, 0);
-    }
-});
-
 test("composing follows imports and merges them underneath the importing file", async () => {
     const out = await stageBox();
     fs.writeFileSync(path.join(out, "annotations.mosaic.json"), JSON.stringify({
@@ -487,7 +457,7 @@ test("a child link naming a node that is not present is reported and skipped", a
         });
     });
 
-    assert.ok(warnings.some(w => w.includes("matches no node")), warnings.join("; "));
+    assert.ok(warnings.some(w => w.includes("no such node is present")), warnings.join("; "));
     assert.equal(document.nodes!.find(n => n.name === GROUP)!.children?.length, 2);
 });
 
@@ -498,108 +468,27 @@ test("a node naming itself as a child is reported and skipped", async () => {
         }));
     });
 
-    assert.ok(warnings.some(w => w.includes("matches that node itself")), warnings.join("; "));
+    assert.ok(warnings.some(w => w.includes("names itself as a child")), warnings.join("; "));
     assert.equal(document.nodes!.find(n => n.name === GROUP)!.children?.length, 2);
 });
 
-test("a node named by two parents is placed under each of them", async () => {
-    // glTF gives a node one parent, so placing one thing twice means two nodes. They
-    // share a mesh, so the geometry is stored once however often it is placed.
+test("a second parent for the same child is reported and dropped", async () => {
+    // glTF gives a node at most one parent, so the second claim cannot be honoured.
     const { document, warnings } = await composeHierarchy(doc => {
         doc.index.sections.push(section("second-parent", WALL_FRONT, {
             name: WALL_SIDE, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
         }));
     });
 
-    assert.deepEqual(warnings, []);
+    assert.ok(warnings.some(w => w.includes("is named as a child by both")), warnings.join("; "));
 
-    const copies = document.nodes!.filter(n => n.name === WALL_SIDE);
-    assert.equal(copies.length, 2, "the side wall is placed twice, so it is written twice");
-    assert.equal(new Set(copies.map(n => n.mesh)).size, 1, "both copies should share one mesh");
-
-    // One copy hangs off the group, the other off the front wall.
-    const parents = document.nodes!.filter(n => (n.children ?? []).some(i => document.nodes![i]!.name === WALL_SIDE));
-    assert.deepEqual(parents.map(n => n.name).sort(), [GROUP, WALL_FRONT].sort());
-});
-
-test("a selector matching several nodes adds each of them as a child", async () => {
-    const { document, warnings } = await composeHierarchy(doc => {
-        const group = doc.index.sections[0].nodes.at(-1);
-        // Replace the two id links with one selector that names both walls.
-        group.components = [
-            group.components[0],
-            { name: ".mesh", typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" },
-        ];
-    });
-
-    assert.deepEqual(warnings, []);
-
-    const group = document.nodes!.find(n => n.name === GROUP)!;
-    assert.equal(group.children?.length, 2);
-    assert.deepEqual(
-        group.children!.map(i => document.nodes![i]!.name).sort(),
-        [WALL_FRONT, WALL_SIDE].sort(),
-    );
-});
-
-test("a selector can name a child by something a human wrote", async () => {
-    const { document, warnings } = await composeHierarchy(doc => {
-        const group = doc.index.sections[0].nodes.at(-1);
-        group.components = [
-            group.components[0],
-            // The box example gives its material the name "Painted brick".
-            { name: '[name="Painted brick"]', typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" },
-        ];
-    });
-
-    assert.deepEqual(warnings, []);
-
-    const group = document.nodes!.find(n => n.name === GROUP)!;
-    assert.equal(group.children?.length, 1);
-    assert.ok((document.nodes![group.children![0]!] as any).extensions, "the material node was adopted");
-});
-
-test("a scope limits a selector to one section", async () => {
-    const { warnings } = await composeHierarchy(doc => {
-        const group = doc.index.sections[0].nodes.at(-1);
-        group.components = [
-            group.components[0],
-            { name: "not-a-section|.mesh", typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" },
-        ];
-    });
-
-    assert.ok(warnings.some(w => w.includes("matches no node")), warnings.join("; "));
-});
-
-test("a malformed selector is reported rather than throwing the compose away", async () => {
-    const { warnings } = await composeHierarchy(doc => {
-        doc.index.sections.push(section("bad", GROUP, {
-            name: "[name]", typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE",
-        }));
-    });
-
-    assert.ok(warnings.some(w => w.includes("Invalid selector")), warnings.join("; "));
-});
-
-test("one node referenced from several parents is written once per placement", async () => {
-    // The point of a node per relation: the same geometry placed in three spots.
-    const { document } = await composeHierarchy(doc => {
-        const nodes = doc.index.sections[0].nodes;
-        const group = nodes.at(-1);
-        group.components = [group.components[0]];
-
-        for (const id of ["d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1", "d2d2d2d2-d2d2-4d2d-8d2d-d2d2d2d2d2d2"]) {
-            nodes.push({
-                id,
-                components: [{ name: `#${WALL_FRONT}`, typeID: CORE_TYPE.child, componentIndex: 0, operation: "VALUE" }],
-            });
-        }
-    });
-
-    const copies = document.nodes!.filter(n => n.name === WALL_FRONT);
-    assert.equal(copies.length, 2, "placed twice, so written twice");
-    assert.equal(new Set(copies.map(n => n.mesh)).size, 1, "and sharing one mesh");
-    assert.equal(document.meshes?.length, 1, "so the geometry is stored once");
+    // The first claim in node order wins, and the front wall comes before the group.
+    const byName = new Map(document.nodes!.map((n, i) => [n.name!, i]));
+    assert.deepEqual(document.nodes![byName.get(WALL_FRONT)!]!.children, [byName.get(WALL_SIDE)]);
+    assert.deepEqual(document.nodes![byName.get(GROUP)!]!.children, [byName.get(WALL_FRONT)]);
+    // Whichever way it resolves, the child appears exactly once in the hierarchy.
+    const asChild = document.nodes!.flatMap(n => n.children ?? []).filter(i => i === byName.get(WALL_SIDE));
+    assert.equal(asChild.length, 1);
 });
 
 test("child links that form a cycle are refused", async () => {
