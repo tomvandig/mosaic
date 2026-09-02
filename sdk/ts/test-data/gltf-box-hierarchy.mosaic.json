@@ -78,7 +78,7 @@
         "doubleSided": false
       }
     ],
-    "khronos::gltf::nodeTransform": [
+    "core::transform": [
       {
         "translation": [
           0,
@@ -164,9 +164,9 @@
         "schema": "../src/gltf/schemas/material.schema.json"
       },
       {
-        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "filename": "core::transform.ndjson",
         "type": "NDJSON",
-        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
+        "schema": "../src/core/schemas/transform.schema.json"
       },
       {
         "filename": "core::child.ndjson",
@@ -261,7 +261,7 @@
                 "operation": "VALUE"
               },
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 0,
                 "operation": "VALUE"
@@ -278,7 +278,7 @@
                 "operation": "VALUE"
               },
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 1,
                 "operation": "VALUE"
@@ -289,7 +289,7 @@
             "id": "a0a0a0a0-a0a0-4a0a-8a0a-a0a0a0a0a0a0",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 2,
                 "operation": "VALUE"

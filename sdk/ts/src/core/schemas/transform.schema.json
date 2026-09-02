@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "x-mosaic-id": "khronos::gltf::nodeTransform",
-  "title": "NodeTransform",
-  "description": "The local transform of a node, as trs or as a matrix. Derived from the glTF 2.0 node schema. Indices refer to component rows in the matching Mosaic component table rather than to a glTF array.",
+  "x-mosaic-id": "core::transform",
+  "title": "Transform",
+  "description": "The local transform of a node, as a translation/rotation/scale or as a matrix. The field names and defaults follow the glTF 2.0 node schema, but a transform is not specific to glTF, so it lives in the core namespace.",
   "type": "object",
   "additionalProperties": false,
   "properties": {

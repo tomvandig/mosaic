@@ -78,7 +78,7 @@
         "mode": 4
       }
     ],
-    "khronos::gltf::nodeTransform": [
+    "core::transform": [
       {
         "scale": [
           0.5,
@@ -154,9 +154,9 @@
         "schema": "../src/gltf/schemas/material.schema.json"
       },
       {
-        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "filename": "core::transform.ndjson",
         "type": "NDJSON",
-        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
+        "schema": "../src/core/schemas/transform.schema.json"
       },
       {
         "filename": "core::child.ndjson",
@@ -256,7 +256,7 @@
                 "operation": "VALUE"
               },
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 0,
                 "operation": "VALUE"
@@ -273,7 +273,7 @@
             "id": "20202020-2020-4020-8020-202020202020",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 1,
                 "operation": "VALUE"
@@ -296,7 +296,7 @@
             "id": "30303030-3030-4030-8030-303030303030",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 2,
                 "operation": "VALUE"
@@ -342,7 +342,7 @@
             "id": "50505050-5050-4050-8050-505050505050",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 3,
                 "operation": "VALUE"
@@ -365,7 +365,7 @@
             "id": "60606060-6060-4060-8060-606060606060",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 4,
                 "operation": "VALUE"

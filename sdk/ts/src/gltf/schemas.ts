@@ -3,7 +3,6 @@ import bufferView from "./schemas/bufferView.schema.json" with { type: "json" };
 import accessor from "./schemas/accessor.schema.json" with { type: "json" };
 import meshPrimitive from "./schemas/meshPrimitive.schema.json" with { type: "json" };
 import material from "./schemas/material.schema.json" with { type: "json" };
-import nodeTransform from "./schemas/nodeTransform.schema.json" with { type: "json" };
 import image from "./schemas/image.schema.json" with { type: "json" };
 import sampler from "./schemas/sampler.schema.json" with { type: "json" };
 import texture from "./schemas/texture.schema.json" with { type: "json" };
@@ -18,7 +17,6 @@ export const GLTF_TYPE = {
     sampler: "khronos::gltf::sampler",
     texture: "khronos::gltf::texture",
     material: "khronos::gltf::material",
-    nodeTransform: "khronos::gltf::nodeTransform",
 } as const;
 
 export type GltfComponentType = (typeof GLTF_TYPE)[keyof typeof GLTF_TYPE];
@@ -36,5 +34,4 @@ export const GLTF_SCHEMAS: Record<GltfComponentType, unknown> = {
     [GLTF_TYPE.sampler]: sampler,
     [GLTF_TYPE.texture]: texture,
     [GLTF_TYPE.material]: material,
-    [GLTF_TYPE.nodeTransform]: nodeTransform,
 };

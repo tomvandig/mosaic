@@ -106,7 +106,7 @@ test("converting produces a node per referenced element plus one per mesh node",
         [...file.serializedComponents].map(([typeID, rows]) => [typeID, rows.length]),
         [
             [GLTF_TYPE.buffer, 1], [GLTF_TYPE.bufferView, 2], [GLTF_TYPE.accessor, 2],
-            [GLTF_TYPE.meshPrimitive, 1], [GLTF_TYPE.material, 1], [GLTF_TYPE.nodeTransform, 2],
+            [GLTF_TYPE.meshPrimitive, 1], [GLTF_TYPE.material, 1], [CORE_TYPE.transform, 2],
             // Both walls are named, and every name shares the one empty row.
             [CORE_TYPE.name, 1],
         ],

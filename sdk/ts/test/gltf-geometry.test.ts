@@ -17,7 +17,6 @@ const GLTF = {
     accessor: "khronos::gltf::accessor",
     primitive: "khronos::gltf::meshPrimitive",
     material: "khronos::gltf::material",
-    transform: "khronos::gltf::nodeTransform",
 } as const;
 
 const WALLS = ["55555555-5555-4555-8555-555555555555", "66666666-6666-4666-8666-666666666666"];

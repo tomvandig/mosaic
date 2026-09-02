@@ -78,7 +78,7 @@
         "doubleSided": false
       }
     ],
-    "khronos::gltf::nodeTransform": [
+    "core::transform": [
       {
         "translation": [
           0,
@@ -149,9 +149,9 @@
         "schema": "../src/gltf/schemas/material.schema.json"
       },
       {
-        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "filename": "core::transform.ndjson",
         "type": "NDJSON",
-        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
+        "schema": "../src/core/schemas/transform.schema.json"
       }
     ],
     "sections": [
@@ -241,7 +241,7 @@
                 "operation": "VALUE"
               },
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 0,
                 "operation": "VALUE"
@@ -258,7 +258,7 @@
                 "operation": "VALUE"
               },
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 1,
                 "operation": "VALUE"

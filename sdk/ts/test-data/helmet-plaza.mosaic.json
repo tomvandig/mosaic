@@ -1,7 +1,7 @@
 {
   "description": "Five copies of the Damaged Helmet, from one import and one copy of its 3.7 MB of geometry and textures. The helmet is imported, never restated: each plinth names it with a core::child reference, and composing writes a glTF node per relation, so the helmet is written once per placement while its mesh, images and buffer stay single. Two plinths make a pair, two rows each hold that pair -- so the pair, both plinths and the helmet beneath them are written once per row -- and a fifth placement stands on its own, turned a quarter turn. Regenerate the import it needs with:  mosaic gltf-pack gltf/DamagedHelmet.glb helmet.tsr --stable-ids  -- the stable ids are what let this file name a node inside it.",
   "components": {
-    "khronos::gltf::nodeTransform": [
+    "core::transform": [
       {
         "translation": [
           -1.5,
@@ -67,9 +67,9 @@
     ],
     "componentTables": [
       {
-        "filename": "khronos::gltf::nodeTransform.ndjson",
+        "filename": "core::transform.ndjson",
         "type": "NDJSON",
-        "schema": "../src/gltf/schemas/nodeTransform.schema.json"
+        "schema": "../src/core/schemas/transform.schema.json"
       },
       {
         "filename": "core::child.ndjson",
@@ -97,7 +97,7 @@
             "id": "11110000-1111-4111-8111-111100001111",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 0,
                 "operation": "VALUE"
@@ -120,7 +120,7 @@
             "id": "22220000-2222-4222-8222-222200002222",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 1,
                 "operation": "VALUE"
@@ -166,7 +166,7 @@
             "id": "44440000-4444-4444-8444-444400004444",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 2,
                 "operation": "VALUE"
@@ -189,7 +189,7 @@
             "id": "55550000-5555-4555-8555-555500005555",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 3,
                 "operation": "VALUE"
@@ -212,7 +212,7 @@
             "id": "66660000-6666-4666-8666-666600006666",
             "components": [
               {
-                "type": "khronos::gltf::nodeTransform",
+                "type": "core::transform",
                 "id": "transform",
                 "index": 4,
                 "operation": "VALUE"

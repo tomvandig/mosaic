@@ -23,6 +23,13 @@ const DATA_URI_BASE64 = /^data:[^;,]*;base64,/;
 
 const GLTF_TYPES: ReadonlySet<string> = new Set(Object.values(GLTF_TYPE));
 
+/**
+ * Component types this writes into the glTF itself rather than into the extension: the
+ * glTF namespace, plus the core types that have a native counterpart -- a transform on
+ * the node, and a child link in its hierarchy.
+ */
+const NATIVE_TYPES: ReadonlySet<string> = new Set([...GLTF_TYPES, CORE_TYPE.transform, CORE_TYPE.child]);
+
 /** Expansion is bounded, so a runaway set of links fails loudly instead of hanging. */
 const MAX_NODES = 100_000;
 
@@ -430,7 +437,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         const primitives = carried.filter(c => c.ref.type === GLTF_TYPE.meshPrimitive);
         if (primitives.length > 0) gltfNode.mesh = meshFor(primitives);
 
-        const transforms = carried.filter(c => c.ref.type === GLTF_TYPE.nodeTransform);
+        const transforms = carried.filter(c => c.ref.type === CORE_TYPE.transform);
         if (transforms.length > 1) warnings.push(`node ${node.id} carries ${transforms.length} transforms; using "${transforms[0]!.ref.id}"`);
         const transform = transforms[0]?.row;
         if (transform) {
@@ -452,7 +459,7 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         }
 
         // Anything outside the glTF namespace travels as extension data.
-        const foreign = carried.filter(c => !GLTF_TYPES.has(c.ref.type) && c.ref.type !== CORE_TYPE.child);
+        const foreign = carried.filter(c => !NATIVE_TYPES.has(c.ref.type));
         if (foreign.length > 0) {
             gltfNode.extensions = {
                 ...(gltfNode.extensions as object | undefined),

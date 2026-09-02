@@ -47,7 +47,9 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 ## glTF-derived geometry
 
 [`sdk/ts/src/gltf/schemas/`](../src/gltf/schemas/) holds component schemas modelled on the [glTF 2.0 schemas](https://github.com/KhronosGroup/glTF/tree/main/specification/2.0/schema):
-`buffer`, `bufferView`, `accessor`, `meshPrimitive`, `material` and `nodeTransform`. Property names,
+`buffer`, `bufferView`, `accessor`, `meshPrimitive`, `material`, `image`, `sampler` and `texture`.
+The node transform is derived from the same specification but lives in the core namespace as
+`core::transform`, since a transform is not specific to glTF. Property names,
 types, enum values and defaults follow glTF, with three deliberate adaptations:
 
 - **Indices address component rows.** In glTF an accessor's `bufferView` indexes the file's

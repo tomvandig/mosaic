@@ -98,7 +98,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         [GLTF_TYPE.sampler]: [],
         [GLTF_TYPE.texture]: [],
         [GLTF_TYPE.material]: [],
-        [GLTF_TYPE.nodeTransform]: [],
+        [CORE_TYPE.transform]: [],
         [CORE_TYPE.name]: [],
     };
     const nodes: NodeElement[] = [];
@@ -322,7 +322,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         if (rows === undefined) throw new Error(`Node ${index} references mesh ${node.mesh}, which does not exist`);
 
         const transform = transformOf(index, gltfNodes, parents);
-        const transformIndex = components[GLTF_TYPE.nodeTransform]!.push(transform) - 1;
+        const transformIndex = components[CORE_TYPE.transform]!.push(transform) - 1;
 
         const refs: ComponentElement[] = rows.map((index, primitiveIndex) => ({
             type: GLTF_TYPE.meshPrimitive,
@@ -335,7 +335,7 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
 
         refs.push({
             id: "transform",
-            type: GLTF_TYPE.nodeTransform,
+            type: CORE_TYPE.transform,
             index: transformIndex,
             operation: Operation.Value,
         });

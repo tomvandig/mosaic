@@ -109,7 +109,7 @@ alongside the uuid a node is identified by. Every glTF id becomes the id of the 
 the referenced component, so later edits to the component tables cannot silently repoint a
 reference. Each buffer, bufferView, accessor, image,
 sampler, texture and material gets a node of its own; each glTF node with a mesh becomes a node
-carrying that mesh and its transform. The metallic-roughness surface travels whole — base colour,
+carrying that mesh and a `core::transform`. The metallic-roughness surface travels whole — base colour,
 metallic-roughness, normal, occlusion and emissive textures, along with `emissiveFactor`,
 `alphaMode`, `alphaCutoff` and `doubleSided` — so a textured model keeps its appearance. glTF data
 outside the component subset (morph targets, `extensions`, `extras`) is reported as a warning rather
@@ -136,6 +136,8 @@ components are written one of two ways:
   buffers, bufferViews, accessors, images, samplers, textures and materials are hoisted into the
   document's arrays, and node ids become the array indices glTF expects. Nodes sharing a primitive
   share a mesh.
+- **As a transform**, for `core::transform`. Its shape follows the glTF node transform, so it goes
+  straight onto the node as a `matrix` or as `translation`/`rotation`/`scale`.
 - **As hierarchy**, for `core::child`. That component carries no value: the *name* of the reference
   is the id of the child node, so one node can hold many children and a later section can drop a
   single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
