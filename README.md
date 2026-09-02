@@ -27,8 +27,9 @@ Each **section** carries a `MosaicProvenanceHeader` — who authored it, when, w
 message describing the change — followed by the nodes it contributes. Because sections are a list, a dataset
 is a history of layered edits rather than a single flat snapshot.
 
-A **node** has a `uuid` id and a list of component references. Each reference names a `typeID`, points at a
-row via `componentIndex`, and carries an `operation`:
+A **node** has a `uuid` id and a list of component references. Each reference names a component `type`,
+identifies itself within the node with an `id`, points at a row of that type's table via `index`, and
+carries an `operation`:
 
 - `PASS_THROUGH` — leave the inherited value alone
 - `DELETE` — unset the value
@@ -73,7 +74,7 @@ mosaic pack <input.json> [output.tsr]
 ```
 
 Packing resolves each `componentTables[].schema` reference (a path relative to the source document)
-into the schema document itself, writes one `<typeID>.ndjson` file per component table, and puts them
+into the schema document itself, writes one `<type>.ndjson` file per component table, and puts them
 alongside `index.json` in the archive. Without an output path the archive is written next to the
 source document, so `house-v1.mosaic.json` becomes `house-v1.tsr`.
 

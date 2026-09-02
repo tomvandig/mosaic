@@ -166,26 +166,26 @@
         "ComponentReference": {
             "type": "object",
             "properties": {
-                "name": {
+                "type": {
                     "type": "string"
                 },
-                "operation": {
-                    "$ref": "#/$defs/OperationType"
-                },
-                "typeID": {
+                "id": {
                     "type": "string"
                 },
-                "componentIndex": {
+                "index": {
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 4294967295
+                },
+                "operation": {
+                    "$ref": "#/$defs/OperationType"
                 }
             },
             "required": [
-                "name",
-                "operation",
-                "typeID",
-                "componentIndex"
+                "type",
+                "id",
+                "index",
+                "operation"
             ],
             "additionalProperties": false
         },

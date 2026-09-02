@@ -9,7 +9,7 @@ zip/NDJSON path a real file takes.
 {
   "description": "what this dataset is for",
   "components": {
-    // typeID -> component rows, one object per NDJSON line
+    // component type -> rows, one object per NDJSON line
     "acme::geometry::wall": [ { "name": "North wall", "height": 2.4 } ]
   },
   "index": { /* a literal MosaicIndexFile */ }
@@ -29,7 +29,7 @@ To build an archive from one of these by hand:
 mosaic pack sdk/ts/test-data/house-v1.mosaic.json
 ```
 
-Component tables are not stored as `.ndjson` files on disk because a Mosaic `typeID` contains `::`,
+Component tables are not stored as `.ndjson` files on disk because a Mosaic component type contains `::`,
 which is not a legal character in a Windows filename. Inside the zip archive it is fine.
 
 | File | What it is |

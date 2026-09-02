@@ -13,16 +13,16 @@ import { MosaicFile } from './MosaicFile.ts';
 
 function mergeComponents(oldList: ComponentElement[], newList: ComponentElement[]): ComponentElement[] {
     for (const item of newList) {
-        const idx = oldList.findIndex(x => x.name === item.name);
+        const idx = oldList.findIndex(x => x.id === item.id);
         if (idx === -1) {
             if (item.operation === Operation.Value) {
-                oldList.push({ name: item.name, operation: item.operation, typeID: item.typeID, componentIndex: item.componentIndex });
+                oldList.push({ id: item.id, operation: item.operation, type: item.type, index: item.index });
             }
         } else {
             if (item.operation === Operation.Delete) {
                 oldList.splice(idx, 1);
             } else if (item.operation === Operation.Value) {
-                oldList[idx] = { name: item.name, operation: item.operation, typeID: item.typeID, componentIndex: item.componentIndex };
+                oldList[idx] = { id: item.id, operation: item.operation, type: item.type, index: item.index };
             }
         }
     }
@@ -64,17 +64,17 @@ function diffNodes(oldNode: NodeElement, newNode: NodeElement, markMissingFromNe
 
     // components
     for (const item of (newNode.components ?? [])) {
-        const match = (oldNode.components ?? []).find(x => x.name === item.name);
+        const match = (oldNode.components ?? []).find(x => x.id === item.id);
         if (!match) {
             result.components!.push(item);
-        } else if (match.componentIndex !== item.componentIndex || match.typeID !== item.typeID) {
+        } else if (match.index !== item.index || match.type !== item.type) {
             result.components!.push(item);
         }
     }
     if (markMissingFromNewAsDelete) {
         for (const item of (oldNode.components ?? [])) {
-            if (!(newNode.components ?? []).find(x => x.name === item.name)) {
-                result.components!.push({ name: item.name, operation: Operation.Delete, typeID: "", componentIndex: 0 });
+            if (!(newNode.components ?? []).find(x => x.id === item.id)) {
+                result.components!.push({ id: item.id, operation: Operation.Delete, type: "", index: 0 });
             }
         }
     }
@@ -149,13 +149,13 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
                 };
 
                 for (const componentRef of (node.components ?? [])) {
-                    const component = newFile.readRawComponent(componentRef.typeID, componentRef.componentIndex);
-                    const newIndex = result.addSerializedComponent(componentRef.typeID, component);
+                    const component = newFile.readRawComponent(componentRef.type, componentRef.index);
+                    const newIndex = result.addSerializedComponent(componentRef.type, component);
                     newNode.components!.push({
-                        name: componentRef.name,
+                        id: componentRef.id,
                         operation: componentRef.operation,
-                        typeID: componentRef.typeID,
-                        componentIndex: newIndex
+                        type: componentRef.type,
+                        index: newIndex
                     });
                 }
 
@@ -193,20 +193,20 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
                 const resultNode: NodeElement = { id: node.id, components: [] };
 
                 for (const componentRef of (node.components ?? [])) {
-                    if (!allComponents.includes(componentRef.name)) {
+                    if (!allComponents.includes(componentRef.id)) {
                         if (componentRef.operation !== Operation.PassThrough) {
                             if (componentRef.operation === Operation.Value) {
                                 const sourceFile = fromNew ? newFile : oldFile;
-                                const component = sourceFile.readRawComponent(componentRef.typeID, componentRef.componentIndex);
+                                const component = sourceFile.readRawComponent(componentRef.type, componentRef.index);
                                 // Collapsing drops superseded rows, so the reference has to
                                 // follow the row to its position in the new component table.
-                                const newIndex = result.addSerializedComponent(componentRef.typeID, component);
-                                resultNode.components!.push({ ...componentRef, componentIndex: newIndex });
+                                const newIndex = result.addSerializedComponent(componentRef.type, component);
+                                resultNode.components!.push({ ...componentRef, index: newIndex });
                             } else {
                                 resultNode.components!.push(componentRef);
                             }
                         }
-                        allComponents.push(componentRef.name);
+                        allComponents.push(componentRef.id);
                     }
                 }
 

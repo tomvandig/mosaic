@@ -99,7 +99,7 @@ test("each referenced node carries the component type the field expects", async 
     for (const [nodeId, typeID] of expected) {
         const node = nodes.get(nodeId as string);
         assert.ok(node, `no node ${nodeId}`);
-        assert.equal(node.components![0]!.typeID, typeID, `node ${nodeId} does not carry a ${typeID}`);
+        assert.equal(node.components![0]!.type, typeID, `node ${nodeId} does not carry a ${typeID}`);
     }
 });
 
@@ -196,7 +196,7 @@ test("editing a referenced component leaves the references pointing at it", asyn
         },
         nodes: [{
             id: POSITION_NODE,
-            components: [{ name: "accessor", typeID: GLTF.accessor, componentIndex: recomputedIndex, operation: Operation.Value }],
+            components: [{ id: "accessor", type: GLTF.accessor, index: recomputedIndex, operation: Operation.Value }],
         }],
     });
 

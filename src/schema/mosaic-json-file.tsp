@@ -19,10 +19,10 @@ enum OperationType
 
 model ComponentReference
 {
-    name: string,
+    type: string;               // the component type, e.g. "khronos::gltf::meshPrimitive"
+    id: string;                 // names this reference within the node
+    index: uint32;              // the row this reference points at in the type's table
     operation: OperationType;
-    typeID: string;
-    componentIndex: uint32;
 }
 
 model MosaicNode {

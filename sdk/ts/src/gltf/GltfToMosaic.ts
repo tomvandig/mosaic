@@ -104,10 +104,10 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
     const nodes: NodeElement[] = [];
 
     /** Adds a component, puts it on a node of its own, and returns that node's id. */
-    function addOwnNode(typeID: string, name: string, component: unknown): string {
-        const componentIndex = components[typeID]!.push(component) - 1;
+    function addOwnNode(typeID: string, refName: string, component: unknown): string {
+        const index = components[typeID]!.push(component) - 1;
         const id = newId();
-        nodes.push({ id, components: [{ name, typeID, componentIndex, operation: Operation.Value }] });
+        nodes.push({ id, components: [{ type: typeID, id: refName, index, operation: Operation.Value }] });
         return id;
     }
 
@@ -324,19 +324,19 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         const transform = transformOf(index, gltfNodes, parents);
         const transformIndex = components[GLTF_TYPE.nodeTransform]!.push(transform) - 1;
 
-        const refs: ComponentElement[] = rows.map((componentIndex, primitiveIndex) => ({
-            // A mesh with one primitive keeps the plain name; several are numbered, since
-            // component names have to be unique within a node.
-            name: rows.length === 1 ? "mesh" : `mesh.${primitiveIndex}`,
-            typeID: GLTF_TYPE.meshPrimitive,
-            componentIndex,
+        const refs: ComponentElement[] = rows.map((index, primitiveIndex) => ({
+            type: GLTF_TYPE.meshPrimitive,
+            // A mesh with one primitive keeps the plain id; several are numbered, since
+            // reference ids have to be unique within a node.
+            id: rows.length === 1 ? "mesh" : `mesh.${primitiveIndex}`,
+            index,
             operation: Operation.Value,
         }));
 
         refs.push({
-            name: "transform",
-            typeID: GLTF_TYPE.nodeTransform,
-            componentIndex: transformIndex,
+            id: "transform",
+            type: GLTF_TYPE.nodeTransform,
+            index: transformIndex,
             operation: Operation.Value,
         });
 
@@ -344,16 +344,16 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         // the name is the only handle a person would recognise. The name lives in the
         // reference, as a child link does, so every name shares one empty component row.
         if (node.name !== undefined) {
-            if (refs.some(ref => ref.name === node.name)) {
+            if (refs.some(ref => ref.id === node.name)) {
                 // Reference names have to be unique within a node, so a model whose node
                 // is called "mesh" or "transform" would otherwise collide with its own parts.
                 warnings.push(`node ${index} is named "${node.name}", which its ${node.name} component already uses; the name was left off`);
             } else {
                 if (components[CORE_TYPE.name]!.length === 0) components[CORE_TYPE.name]!.push({});
                 refs.push({
-                    name: node.name,
-                    typeID: CORE_TYPE.name,
-                    componentIndex: 0,
+                    id: node.name,
+                    type: CORE_TYPE.name,
+                    index: 0,
                     operation: Operation.Value,
                 });
             }

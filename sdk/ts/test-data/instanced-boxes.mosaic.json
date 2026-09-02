@@ -184,9 +184,9 @@
             "id": "77777777-7777-4777-8777-777777777777",
             "components": [
               {
-                "name": "buffer",
-                "typeID": "khronos::gltf::buffer",
-                "componentIndex": 0,
+                "type": "khronos::gltf::buffer",
+                "id": "buffer",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -195,9 +195,9 @@
             "id": "88888888-8888-4888-8888-888888888888",
             "components": [
               {
-                "name": "bufferView",
-                "typeID": "khronos::gltf::bufferView",
-                "componentIndex": 0,
+                "type": "khronos::gltf::bufferView",
+                "id": "bufferView",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -206,9 +206,9 @@
             "id": "99999999-9999-4999-8999-999999999999",
             "components": [
               {
-                "name": "bufferView",
-                "typeID": "khronos::gltf::bufferView",
-                "componentIndex": 1,
+                "type": "khronos::gltf::bufferView",
+                "id": "bufferView",
+                "index": 1,
                 "operation": "VALUE"
               }
             ]
@@ -217,9 +217,9 @@
             "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "components": [
               {
-                "name": "accessor",
-                "typeID": "khronos::gltf::accessor",
-                "componentIndex": 0,
+                "type": "khronos::gltf::accessor",
+                "id": "accessor",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -228,9 +228,9 @@
             "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             "components": [
               {
-                "name": "accessor",
-                "typeID": "khronos::gltf::accessor",
-                "componentIndex": 1,
+                "type": "khronos::gltf::accessor",
+                "id": "accessor",
+                "index": 1,
                 "operation": "VALUE"
               }
             ]
@@ -239,9 +239,9 @@
             "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             "components": [
               {
-                "name": "material",
-                "typeID": "khronos::gltf::material",
-                "componentIndex": 0,
+                "type": "khronos::gltf::material",
+                "id": "material",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -250,21 +250,21 @@
             "id": "10101010-1010-4010-8010-101010101010",
             "components": [
               {
-                "name": "mesh",
-                "typeID": "khronos::gltf::meshPrimitive",
-                "componentIndex": 0,
+                "type": "khronos::gltf::meshPrimitive",
+                "id": "mesh",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 0,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "Box",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Box",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -273,21 +273,21 @@
             "id": "20202020-2020-4020-8020-202020202020",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 1,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 1,
                 "operation": "VALUE"
               },
               {
-                "name": "Left",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Left",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "10101010-1010-4010-8010-101010101010",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "10101010-1010-4010-8010-101010101010",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -296,21 +296,21 @@
             "id": "30303030-3030-4030-8030-303030303030",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 2,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 2,
                 "operation": "VALUE"
               },
               {
-                "name": "Right",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Right",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "10101010-1010-4010-8010-101010101010",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "10101010-1010-4010-8010-101010101010",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -319,21 +319,21 @@
             "id": "40404040-4040-4040-8040-404040404040",
             "components": [
               {
-                "name": "Pair",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Pair",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "20202020-2020-4020-8020-202020202020",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "20202020-2020-4020-8020-202020202020",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "30303030-3030-4030-8030-303030303030",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "30303030-3030-4030-8030-303030303030",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -342,21 +342,21 @@
             "id": "50505050-5050-4050-8050-505050505050",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 3,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 3,
                 "operation": "VALUE"
               },
               {
-                "name": "Near row",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Near row",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "40404040-4040-4040-8040-404040404040",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "40404040-4040-4040-8040-404040404040",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -365,21 +365,21 @@
             "id": "60606060-6060-4060-8060-606060606060",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 4,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 4,
                 "operation": "VALUE"
               },
               {
-                "name": "Far row",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Far row",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "40404040-4040-4040-8040-404040404040",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "40404040-4040-4040-8040-404040404040",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]

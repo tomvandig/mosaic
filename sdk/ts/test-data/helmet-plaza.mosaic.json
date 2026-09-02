@@ -97,21 +97,21 @@
             "id": "11110000-1111-4111-8111-111100001111",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 0,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "Left plinth",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Left plinth",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -120,21 +120,21 @@
             "id": "22220000-2222-4222-8222-222200002222",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 1,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 1,
                 "operation": "VALUE"
               },
               {
-                "name": "Right plinth",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Right plinth",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -143,21 +143,21 @@
             "id": "33330000-3333-4333-8333-333300003333",
             "components": [
               {
-                "name": "Pair",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Pair",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "11110000-1111-4111-8111-111100001111",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "11110000-1111-4111-8111-111100001111",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "22220000-2222-4222-8222-222200002222",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "22220000-2222-4222-8222-222200002222",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -166,21 +166,21 @@
             "id": "44440000-4444-4444-8444-444400004444",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 2,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 2,
                 "operation": "VALUE"
               },
               {
-                "name": "Near row",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Near row",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "33330000-3333-4333-8333-333300003333",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "33330000-3333-4333-8333-333300003333",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -189,21 +189,21 @@
             "id": "55550000-5555-4555-8555-555500005555",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 3,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 3,
                 "operation": "VALUE"
               },
               {
-                "name": "Far row",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Far row",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "33330000-3333-4333-8333-333300003333",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "33330000-3333-4333-8333-333300003333",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]
@@ -212,21 +212,21 @@
             "id": "66660000-6666-4666-8666-666600006666",
             "components": [
               {
-                "name": "transform",
-                "typeID": "khronos::gltf::nodeTransform",
-                "componentIndex": 4,
+                "type": "khronos::gltf::nodeTransform",
+                "id": "transform",
+                "index": 4,
                 "operation": "VALUE"
               },
               {
-                "name": "Spinner",
-                "typeID": "core::name",
-                "componentIndex": 0,
+                "type": "core::name",
+                "id": "Spinner",
+                "index": 0,
                 "operation": "VALUE"
               },
               {
-                "name": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "typeID": "core::child",
-                "componentIndex": 0,
+                "type": "core::child",
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]

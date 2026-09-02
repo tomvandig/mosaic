@@ -21,7 +21,7 @@ function leadingState(file: MosaicFile): Record<string, Record<string, unknown>>
     for (const [id, node] of collapseNodesByPath(file)) {
         const components: Record<string, unknown> = {};
         for (const ref of node.components ?? []) {
-            components[ref.name] = resolve(file, ref.typeID, ref.componentIndex);
+            components[ref.id] = resolve(file, ref.type, ref.index);
         }
         state[id] = components;
     }
@@ -53,18 +53,18 @@ test("diffing reports changed and added nodes, and leaves untouched ones out", a
     assert.deepEqual(diff.nodes.map(n => n.id), [NORTH, EAST]);
 
     const north = diff.nodes[0].components!;
-    assert.deepEqual(north.map(c => c.name), ["geometry"]);
+    assert.deepEqual(north.map(c => c.id), ["geometry"]);
     assert.equal(north[0].operation, Operation.Value);
-    assert.equal(north[0].componentIndex, 2);
+    assert.equal(north[0].index, 2);
 
-    assert.deepEqual(diff.nodes[1].components!.map(c => c.name), ["geometry"]);
+    assert.deepEqual(diff.nodes[1].components!.map(c => c.id), ["geometry"]);
 });
 
 test("diffing with markMissingFromNewAsDelete emits DELETE for dropped components", async () => {
     const diff = diffFiles(await loadExample("house-v1"), await loadExample("house-v2"), true);
 
     const north = diff.nodes.find(n => n.id === NORTH)!.components!;
-    assert.deepEqual(north.map(c => c.name), ["geometry", "paint"]);
+    assert.deepEqual(north.map(c => c.id), ["geometry", "paint"]);
     assert.equal(north[1].operation, Operation.Delete);
 });
 
@@ -98,8 +98,8 @@ test("federating with history rewrites component indices to stay resolvable", as
         for (const node of section.nodes) {
             for (const ref of node.components ?? []) {
                 assert.doesNotThrow(
-                    () => merged.readRawComponent(ref.typeID, ref.componentIndex),
-                    `${section.header.id}/${node.id}/${ref.name} points at a missing row`,
+                    () => merged.readRawComponent(ref.type, ref.index),
+                    `${section.header.id}/${node.id}/${ref.id} points at a missing row`,
                 );
             }
         }

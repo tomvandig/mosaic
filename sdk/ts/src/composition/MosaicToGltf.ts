@@ -86,17 +86,17 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         for (const ref of node.components ?? []) {
             let row: Row;
             try {
-                row = JSON.parse(file.readRawComponent(ref.typeID, ref.componentIndex)) as Row;
+                row = JSON.parse(file.readRawComponent(ref.type, ref.index)) as Row;
             } catch (cause) {
-                throw new Error(`Node ${node.id} references ${ref.typeID}[${ref.componentIndex}], which cannot be read`, { cause });
+                throw new Error(`Node ${node.id} references ${ref.type}[${ref.index}], which cannot be read`, { cause });
             }
 
             const entry: Carried = { node, ref, row };
             carried.push(entry);
 
-            const group = byType.get(ref.typeID);
+            const group = byType.get(ref.type);
             if (group) group.push(entry);
-            else byType.set(ref.typeID, [entry]);
+            else byType.set(ref.type, [entry]);
         }
 
         carriedBy.set(node.id, carried);
@@ -388,8 +388,8 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     for (const node of nodes) {
         const links: string[] = [];
 
-        for (const { ref } of (carriedBy.get(node.id) ?? []).filter(c => c.ref.typeID === CORE_TYPE.child)) {
-            const childId = ref.name;
+        for (const { ref } of (carriedBy.get(node.id) ?? []).filter(c => c.ref.type === CORE_TYPE.child)) {
+            const childId = ref.id;
 
             if (!known.has(childId)) {
                 warnings.push(`node ${node.id} names ${childId} as a child, but no such node is present`);
@@ -427,11 +427,11 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         const carried = carriedBy.get(node.id) ?? [];
         const gltfNode: Row = { name: node.id };
 
-        const primitives = carried.filter(c => c.ref.typeID === GLTF_TYPE.meshPrimitive);
+        const primitives = carried.filter(c => c.ref.type === GLTF_TYPE.meshPrimitive);
         if (primitives.length > 0) gltfNode.mesh = meshFor(primitives);
 
-        const transforms = carried.filter(c => c.ref.typeID === GLTF_TYPE.nodeTransform);
-        if (transforms.length > 1) warnings.push(`node ${node.id} carries ${transforms.length} transforms; using "${transforms[0]!.ref.name}"`);
+        const transforms = carried.filter(c => c.ref.type === GLTF_TYPE.nodeTransform);
+        if (transforms.length > 1) warnings.push(`node ${node.id} carries ${transforms.length} transforms; using "${transforms[0]!.ref.id}"`);
         const transform = transforms[0]?.row;
         if (transform) {
             if (transform.matrix !== undefined) gltfNode.matrix = transform.matrix;
@@ -443,21 +443,21 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         }
 
         // A node that was hoisted into one of the glTF arrays keeps a pointer to where it went.
-        const hoisted = carried.find(c => c.ref.typeID in hoistedInto);
+        const hoisted = carried.find(c => c.ref.type in hoistedInto);
         if (hoisted) {
             // Every buffer folds into the one GLB chunk, so it has no array of its own.
-            const index = hoistedInto[hoisted.ref.typeID]?.get(node.id) ?? 0;
-            gltfNode.extensions = { [MOSAIC_ELEMENT_EXTENSION]: { typeID: hoisted.ref.typeID, index } };
+            const index = hoistedInto[hoisted.ref.type]?.get(node.id) ?? 0;
+            gltfNode.extensions = { [MOSAIC_ELEMENT_EXTENSION]: { type: hoisted.ref.type, index } };
             extensionsUsed.add(MOSAIC_ELEMENT_EXTENSION);
         }
 
         // Anything outside the glTF namespace travels as extension data.
-        const foreign = carried.filter(c => !GLTF_TYPES.has(c.ref.typeID) && c.ref.typeID !== CORE_TYPE.child);
+        const foreign = carried.filter(c => !GLTF_TYPES.has(c.ref.type) && c.ref.type !== CORE_TYPE.child);
         if (foreign.length > 0) {
             gltfNode.extensions = {
                 ...(gltfNode.extensions as object | undefined),
                 [MOSAIC_COMPONENTS_EXTENSION]: {
-                    components: foreign.map(({ ref, row }) => ({ name: ref.name, typeID: ref.typeID, value: row })),
+                    components: foreign.map(({ ref, row }) => ({ name: ref.id, type: ref.type, value: row })),
                 },
             };
             extensionsUsed.add(MOSAIC_COMPONENTS_EXTENSION);

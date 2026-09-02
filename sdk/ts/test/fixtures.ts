@@ -32,8 +32,8 @@ export async function loadExample(name: string): Promise<MosaicFile> {
 }
 
 /** Resolves a component reference to the parsed row it points at. */
-export function resolve(file: MosaicFile, typeID: string, componentIndex: number): unknown {
-    return JSON.parse(file.readRawComponent(typeID, componentIndex));
+export function resolve(file: MosaicFile, typeID: string, index: number): unknown {
+    return JSON.parse(file.readRawComponent(typeID, index));
 }
 
 export type Row = Record<string, any>;
@@ -44,7 +44,7 @@ export function componentsOf(file: MosaicFile, nodeId: string): Record<string, R
     if (!node) throw new Error(`no node ${nodeId}`);
 
     return Object.fromEntries(
-        (node.components ?? []).map(ref => [ref.name, resolve(file, ref.typeID, ref.componentIndex) as Row]),
+        (node.components ?? []).map(ref => [ref.id, resolve(file, ref.type, ref.index) as Row]),
     );
 }
 
@@ -59,7 +59,7 @@ export function follow(file: MosaicFile, nodeId: unknown): Row {
     if (!ref) throw new Error(`node ${nodeId} carries no component`);
     if (rest.length > 0) throw new Error(`node ${nodeId} carries more than one component`);
 
-    return resolve(file, ref.typeID, ref.componentIndex) as Row;
+    return resolve(file, ref.type, ref.index) as Row;
 }
 
 /** Reads a glTF buffer component's data: URI back into bytes. */

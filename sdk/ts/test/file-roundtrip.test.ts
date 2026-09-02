@@ -26,14 +26,14 @@ test("loading an example exposes its sections, nodes and component rows", async 
     assert.equal(section.nodes.length, 2);
 
     const [north, south] = section.nodes;
-    assert.deepEqual(north.components?.map(c => c.name), ["geometry", "paint"]);
-    assert.deepEqual(resolve(file, WALL, north.components![0].componentIndex), {
+    assert.deepEqual(north.components?.map(c => c.id), ["geometry", "paint"]);
+    assert.deepEqual(resolve(file, WALL, north.components![0].index), {
         name: "North wall", height: 2.4, loadBearing: true,
     });
-    assert.deepEqual(resolve(file, PAINT, north.components![1].componentIndex), {
+    assert.deepEqual(resolve(file, PAINT, north.components![1].index), {
         color: "white", finish: "matte",
     });
-    assert.deepEqual(resolve(file, WALL, south.components![0].componentIndex), {
+    assert.deepEqual(resolve(file, WALL, south.components![0].index), {
         name: "South wall", height: 2.4, loadBearing: false,
     });
 });

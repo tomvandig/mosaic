@@ -2,20 +2,32 @@
   "description": "Layers a porch onto the house by importing the packed house-v1 archive rather than restating it. The imports are references only: packing leaves them as written and never pulls the referenced data in.",
   "components": {
     "acme::geometry::wall": [
-      { "name": "Porch wall", "height": 2.2, "loadBearing": false }
+      {
+        "name": "Porch wall",
+        "height": 2.2,
+        "loadBearing": false
+      }
     ]
   },
   "index": {
-    "header": { "MosaicVersion": "post-alpha" },
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
     "imports": [
       {
         "uri": "house-v1.tsr",
         "integrity": "sha384-dOTgzKC8YWZbCTLGYDMEHfF0appjjyTeoLfF0appjjyTeoLQ2i8sVe1ADhtFdgMt"
       },
-      { "uri": "https://example.com/datasets/site-survey.tsr" }
+      {
+        "uri": "https://example.com/datasets/site-survey.tsr"
+      }
     ],
     "componentTables": [
-      { "filename": "acme::geometry::wall.ndjson", "type": "NDJSON", "schema": "schemas/wall.schema.json" }
+      {
+        "filename": "acme::geometry::wall.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/wall.schema.json"
+      }
     ],
     "sections": [
       {
@@ -31,7 +43,12 @@
           {
             "id": "44444444-4444-4444-8444-444444444444",
             "components": [
-              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 0, "operation": "VALUE" }
+              {
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 0,
+                "operation": "VALUE"
+              }
             ]
           }
         ]

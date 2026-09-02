@@ -40,9 +40,9 @@
             "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             "components": [
               {
-                "name": "geometry",
-                "typeID": "acme::geometry::wall",
-                "componentIndex": 0,
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 0,
                 "operation": "VALUE"
               }
             ]

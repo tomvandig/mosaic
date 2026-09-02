@@ -2,21 +2,50 @@
   "description": "house-v1 plus a second section: the north wall is raised and stripped of paint, and an east wall is added.",
   "components": {
     "acme::geometry::wall": [
-      { "name": "North wall", "height": 2.4, "loadBearing": true },
-      { "name": "South wall", "height": 2.4, "loadBearing": false },
-      { "name": "North wall", "height": 2.7, "loadBearing": true },
-      { "name": "East wall", "height": 2.7, "loadBearing": false }
+      {
+        "name": "North wall",
+        "height": 2.4,
+        "loadBearing": true
+      },
+      {
+        "name": "South wall",
+        "height": 2.4,
+        "loadBearing": false
+      },
+      {
+        "name": "North wall",
+        "height": 2.7,
+        "loadBearing": true
+      },
+      {
+        "name": "East wall",
+        "height": 2.7,
+        "loadBearing": false
+      }
     ],
     "acme::material::paint": [
-      { "color": "white", "finish": "matte" }
+      {
+        "color": "white",
+        "finish": "matte"
+      }
     ]
   },
   "index": {
-    "header": { "MosaicVersion": "post-alpha" },
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
     "imports": [],
     "componentTables": [
-      { "filename": "acme::geometry::wall.ndjson", "type": "NDJSON", "schema": "schemas/wall.schema.json" },
-      { "filename": "acme::material::paint.ndjson", "type": "NDJSON", "schema": "schemas/paint.schema.json" }
+      {
+        "filename": "acme::geometry::wall.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/wall.schema.json"
+      },
+      {
+        "filename": "acme::material::paint.ndjson",
+        "type": "NDJSON",
+        "schema": "schemas/paint.schema.json"
+      }
     ],
     "sections": [
       {
@@ -32,14 +61,29 @@
           {
             "id": "11111111-1111-4111-8111-111111111111",
             "components": [
-              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 0, "operation": "VALUE" },
-              { "name": "paint", "typeID": "acme::material::paint", "componentIndex": 0, "operation": "VALUE" }
+              {
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 0,
+                "operation": "VALUE"
+              },
+              {
+                "type": "acme::material::paint",
+                "id": "paint",
+                "index": 0,
+                "operation": "VALUE"
+              }
             ]
           },
           {
             "id": "22222222-2222-4222-8222-222222222222",
             "components": [
-              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 1, "operation": "VALUE" }
+              {
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 1,
+                "operation": "VALUE"
+              }
             ]
           }
         ]
@@ -57,14 +101,29 @@
           {
             "id": "11111111-1111-4111-8111-111111111111",
             "components": [
-              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 2, "operation": "VALUE" },
-              { "name": "paint", "typeID": "acme::material::paint", "componentIndex": 0, "operation": "DELETE" }
+              {
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 2,
+                "operation": "VALUE"
+              },
+              {
+                "type": "acme::material::paint",
+                "id": "paint",
+                "index": 0,
+                "operation": "DELETE"
+              }
             ]
           },
           {
             "id": "33333333-3333-4333-8333-333333333333",
             "components": [
-              { "name": "geometry", "typeID": "acme::geometry::wall", "componentIndex": 3, "operation": "VALUE" }
+              {
+                "type": "acme::geometry::wall",
+                "id": "geometry",
+                "index": 3,
+                "operation": "VALUE"
+              }
             ]
           }
         ]

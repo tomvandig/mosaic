@@ -53,7 +53,7 @@ function structure(file: MosaicFile) {
 /** The mesh-bearing nodes of a converted file, in document order. */
 function meshNodes(file: MosaicFile): Array<Record<string, Row>> {
     return file.index.sections[0]!.nodes
-        .filter(node => (node.components ?? []).some(ref => ref.name.startsWith("mesh")))
+        .filter(node => (node.components ?? []).some(ref => ref.id.startsWith("mesh")))
         .map(node => componentsOf(file, node.id));
 }
 
@@ -192,9 +192,9 @@ test("glTF fields the component subset cannot carry are reported, not dropped si
 });
 
 /** The names a converted document gives its nodes, in node order. */
-function namesOf(document: { index: { sections: Array<{ nodes: Array<{ components?: Array<{ name: string; typeID: string }> }> }> } }): string[] {
+function namesOf(document: { index: { sections: Array<{ nodes: Array<{ components?: Array<{ id: string; type: string }> }> }> } }): string[] {
     return document.index.sections[0]!.nodes.flatMap(node =>
-        (node.components ?? []).filter(c => c.typeID === CORE_TYPE.name).map(c => c.name));
+        (node.components ?? []).filter(c => c.type === CORE_TYPE.name).map(c => c.id));
 }
 
 test("a node keeps the name its source file gave it", () => {
@@ -212,8 +212,8 @@ test("the name lives in the reference, so every name shares one empty row", () =
 
     const refs = document.index.sections[0]!.nodes
         .flatMap(n => n.components ?? [])
-        .filter(c => c.typeID === CORE_TYPE.name);
-    assert.deepEqual(refs.map(r => r.componentIndex), [0, 0]);
+        .filter(c => c.type === CORE_TYPE.name);
+    assert.deepEqual(refs.map(r => r.index), [0, 0]);
 });
 
 test("a name that would clash with another component on the node is reported", () => {
@@ -326,7 +326,7 @@ test("a mesh with several primitives numbers the components it puts on one node"
     const wall = file.index.sections[0]!.nodes.at(-2)!;
 
     // The last reference is the node's name, which is what a core::name reference is called.
-    assert.deepEqual(wall.components!.map(c => c.name), ["mesh.0", "mesh.1", "transform", "Front wall"]);
+    assert.deepEqual(wall.components!.map(c => c.id), ["mesh.0", "mesh.1", "transform", "Front wall"]);
 });
 
 // ---------------------------------------------------------------------------

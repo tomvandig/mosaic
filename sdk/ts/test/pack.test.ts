@@ -47,10 +47,10 @@ test("a packed example round trips to the rows it declared", async () => {
     const packed = await LoadMosaicFile(await packMosaicSource(readExample("house-v1"), resolveExampleSchema));
     const north = packed.index.sections[0].nodes[0];
 
-    assert.deepEqual(resolve(packed, WALL, north.components![0].componentIndex), {
+    assert.deepEqual(resolve(packed, WALL, north.components![0].index), {
         name: "North wall", height: 2.4, loadBearing: true,
     });
-    assert.deepEqual(resolve(packed, PAINT, north.components![1].componentIndex), {
+    assert.deepEqual(resolve(packed, PAINT, north.components![1].index), {
         color: "white", finish: "matte",
     });
 });
@@ -193,5 +193,5 @@ test("imports pass through the CLI's own pack path onto disk", async () => {
         reloaded.index.imports.map(i => ({ uri: i.uri, integrity: i.integrity })),
         readExample("linked-house").index.imports.map(i => ({ uri: i.uri, integrity: i.integrity })),
     );
-    assert.deepEqual(reloaded.index.sections[0].nodes[0].components!.map(c => c.name), ["geometry"]);
+    assert.deepEqual(reloaded.index.sections[0].nodes[0].components!.map(c => c.id), ["geometry"]);
 });
