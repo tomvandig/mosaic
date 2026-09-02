@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { DuckDBInstance, type DuckDBConnection } from "@duckdb/node-api";
+import type { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
+import { duckdb } from "./runtime.ts";
 import { LoadMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { indexOf, operationOf } from "../ComponentReference.ts";
 import { FIXED_COLUMNS, planColumns, extractionFor, quoteIdentifier, type ColumnPlan } from "./SqlTypes.ts";
@@ -13,6 +14,7 @@ import { FIXED_COLUMNS, planColumns, extractionFor, quoteIdentifier, type Column
 const FIXED_SCHEMA = [
     `CREATE TABLE IF NOT EXISTS mosaic_file (
         file_id        VARCHAR PRIMARY KEY,
+        ordinal        BIGINT,
         source         VARCHAR,
         mosaic_version VARCHAR,
         inserted_at    TIMESTAMP
@@ -93,6 +95,7 @@ export class MosaicDatabase {
     static async open(databasePath: string): Promise<MosaicDatabase> {
         if (databasePath !== ":memory:") fs.mkdirSync(path.dirname(path.resolve(databasePath)), { recursive: true });
 
+        const { DuckDBInstance } = await duckdb();
         const instance = await DuckDBInstance.create(databasePath);
         const connection = await instance.connect();
 
@@ -165,6 +168,12 @@ export class MosaicDatabase {
         }
     }
 
+    /** The position of the next archive, so insertion order survives in the database. */
+    private async nextOrdinal(): Promise<number> {
+        const [row] = await this.all(`SELECT coalesce(max(ordinal), -1) + 1 AS next FROM mosaic_file`);
+        return Number(row?.next ?? 0);
+    }
+
     /** Runs a statement with one JSON document bound to it. */
     private async runWithJson(sql: string, payload: unknown): Promise<void> {
         const statement = await this.connection.prepare(sql);
@@ -175,10 +184,10 @@ export class MosaicDatabase {
     private async write(file: MosaicFile, fileId: string, source: string, warnings: string[]): Promise<InsertResult> {
         await this.runWithJson(
             `INSERT INTO mosaic_file
-             SELECT json_extract_string(j, '$.row.file_id'), json_extract_string(j, '$.row.source'),
-                    json_extract_string(j, '$.row.version'), now()
+             SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.ordinal')::BIGINT,
+                    json_extract_string(j, '$.row.source'), json_extract_string(j, '$.row.version'), now()
              FROM (SELECT ?::JSON AS j)`,
-            { row: { file_id: fileId, source, version: file.index.header.MosaicVersion } },
+            { row: { file_id: fileId, ordinal: await this.nextOrdinal(), source, version: file.index.header.MosaicVersion } },
         );
 
         for (const [ordinal, entry] of file.index.imports.entries()) {

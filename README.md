@@ -134,7 +134,7 @@ glTF-derived component schemas; the CLI commands are a thin wrapper over it.
 `mosaic compose` reads an archive together with everything it imports and writes a binary glTF:
 
 ```bash
-mosaic compose <input.tsr> [output.glb]
+mosaic compose <input.tsr|input.duckdb> [output.glb] [--file <id>]...
 ```
 
 Imports are resolved relative to the archive that names them, recursively, and merged underneath it
@@ -238,6 +238,27 @@ cd sdk/ts && npm run example:duckdb
 
 The exporter is a subpath import (`mosaic-ts/duckdb`) rather than part of the main entry point, so
 the CLI, which bundles the SDK into a single executable, never pulls DuckDB's native module in.
+
+### Composing a database
+
+`mosaic compose` takes a database wherever it takes an archive:
+
+```bash
+mosaic compose scene.duckdb                     # everything in it
+mosaic compose scene.duckdb out.glb --file gltf-box --file typed-boxes
+```
+
+Reading a database back is the reverse of loading one: each archive kept its own component tables, so
+the rows of each type are laid end to end and every reference is shifted to where its archive's rows
+begin — the same thing federating two files does. Sections keep the order the archives were inserted
+in, so a later archive layers over an earlier one, and nodes that share an id across archives merge
+rather than duplicate. What a database has no notion of is an import graph: imports were resolved
+into rows on the way in, so insertion order is the layering.
+
+Because DuckDB is a native module and cannot live inside a single-file executable, it is left out of
+the build and loaded only when a database is actually named — from the working directory, from beside
+the executable, or from wherever `MOSAIC_DUCKDB` points. Every other command runs with nothing
+installed, and a database command with nothing to load says exactly what it looked for.
 
 ## Tests
 

@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { MosaicDatabase, exportArchivesToDatabase } from "../src/duckdb/index.ts";
+import { MosaicDatabase, exportArchivesToDatabase, readMosaicFile, listFiles, composeDatabaseToGlb } from "../src/duckdb/index.ts";
+import { composeArchive } from "../src/composition/ComposeFs.ts";
+import { mosaicToGltf } from "../src/composition/MosaicToGltf.ts";
+import { collapseNodesByPath } from "../src/MosaicFileOperations.ts";
+import { parseGlb } from "../src/gltf/GltfDocument.ts";
 import { columnTypeFor, planColumns } from "../src/duckdb/SqlTypes.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
 import { CORE_TYPE } from "../src/core/schemas.ts";
@@ -373,6 +377,189 @@ test("a missing archive is reported by name", async () => {
         await assert.rejects(() => db.insertArchive(path.join(dir, "nope.tsr")), /nope\.tsr does not exist/);
     } finally {
         await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+// ---------------------------------------------------------------------------
+// Reading a database back, and composing it
+// ---------------------------------------------------------------------------
+
+test("a database reads back as the file that went into it", async () => {
+    const dir = tempDir();
+    const db = await MosaicDatabase.open(path.join(dir, "read.duckdb"));
+    try {
+        const source = await archive("gltf-box", dir);
+        await db.insertArchive(source);
+
+        const fromDatabase = await readMosaicFile(db);
+        const composedFromDatabase = mosaicToGltf(fromDatabase);
+        const composedFromArchive = await composeArchive(source);
+
+        // Same document, down to the byte, whichever way round it came.
+        assert.deepEqual(composedFromDatabase.document, composedFromArchive.document);
+        assert.deepEqual([...composedFromDatabase.binary], [...composedFromArchive.binary]);
+    } finally {
+        await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("reading several archives shifts each one's references onto the merged tables", async () => {
+    const dir = tempDir();
+    const db = await MosaicDatabase.open(path.join(dir, "merge.duckdb"));
+    try {
+        await db.insertArchive(await archive("house-v1", dir));
+        await db.insertArchive(await archive("house-v2", dir));
+
+        const file = await readMosaicFile(db);
+
+        // Both archives' rows are in one table, so the second one's start after the first.
+        assert.equal(file.serializedComponents.get("acme::geometry::wall")!.length, 6);
+
+        // Every reference still resolves, and to the row it named in its own archive.
+        for (const section of file.index.sections) {
+            for (const node of section.nodes) {
+                for (const reference of node.components ?? []) {
+                    assert.doesNotThrow(
+                        () => file.readRawComponent(reference.type, reference.index!),
+                        `${section.header.id}/${node.id}/${reference.id}`,
+                    );
+                }
+            }
+        }
+
+        // house-v2 was inserted second, so its sections layer on top: the north wall ends
+        // up at the height that archive gave it.
+        const collapsed = collapseNodesByPath(file);
+        const north = collapsed.get("11111111-1111-4111-8111-111111111111")!;
+        const geometry = north.components!.find(c => c.id === "geometry")!;
+        assert.equal(JSON.parse(file.readRawComponent(geometry.type, geometry.index!)).height, 2.7);
+    } finally {
+        await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("composing a database writes a glb", async () => {
+    const dir = tempDir();
+    const database = path.join(dir, "scene.duckdb");
+    const db = await MosaicDatabase.open(database);
+    await db.insertArchive(await archive("gltf-box", dir));
+    await db.close();
+
+    try {
+        const result = await composeDatabaseToGlb(database);
+
+        assert.equal(result.outputPath, path.join(dir, "scene.glb"));
+        assert.deepEqual(result.sources, ["gltf-box"]);
+        assert.equal(result.meshCount, 1);
+        assert.equal(result.binaryLength, 168);
+        assert.deepEqual(result.warnings, []);
+
+        // It really is a GLB, and it holds what the archive did.
+        const { document, binaryChunk } = parseGlb(new Uint8Array(fs.readFileSync(result.outputPath)));
+        assert.equal(document.meshes?.length, 1);
+        assert.equal(binaryChunk?.byteLength, 168);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("composing several archives merges nodes that share an id rather than duplicating them", async () => {
+    const dir = tempDir();
+    const database = path.join(dir, "many.duckdb");
+    const db = await MosaicDatabase.open(database);
+    await db.insertArchive(await archive("gltf-box", dir));
+    await db.insertArchive(await archive("typed-boxes", dir));
+    await db.close();
+
+    try {
+        const result = await composeDatabaseToGlb(database, path.join(dir, "out.glb"));
+        assert.deepEqual(result.sources, ["gltf-box", "typed-boxes"]);
+
+        // typed-boxes was built from gltf-box and reuses its buffer and accessor node ids,
+        // so those are one node carrying the later archive's row -- the same layering a
+        // second section gives, which is exactly what appending archives is meant to do.
+        assert.equal(result.binaryLength, 168, "one buffer node, not two");
+        assert.equal(result.meshCount, 1);
+
+        // What is unique to each archive is all there: the walls of one, the types of the
+        // other, and the boxes that inherit from them.
+        const { document } = parseGlb(new Uint8Array(fs.readFileSync(result.outputPath)));
+        const named = document.nodes!
+            .map(n => (n as any).extensions?.MOSAIC_components?.components?.find((c: any) => c.type === "core::name")?.name)
+            .filter(Boolean);
+        assert.ok(named.includes("Box type"), "from typed-boxes");
+        assert.ok(named.includes("Near box"), "and the things that are-a box type");
+        assert.equal(document.nodes!.filter(n => n.mesh !== undefined).length, 8, "two walls plus six boxes");
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("only the named archives are composed", async () => {
+    const dir = tempDir();
+    const database = path.join(dir, "pick.duckdb");
+    const db = await MosaicDatabase.open(database);
+    await db.insertArchive(await archive("gltf-box", dir));
+    await db.insertArchive(await archive("typed-boxes", dir));
+    await db.close();
+
+    try {
+        const result = await composeDatabaseToGlb(database, path.join(dir, "one.glb"), { files: ["gltf-box"] });
+
+        assert.deepEqual(result.sources, ["gltf-box"]);
+        assert.equal(result.binaryLength, 168, "only one archive's geometry");
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("asking for an archive the database does not have says so", async () => {
+    const dir = tempDir();
+    const database = path.join(dir, "missing.duckdb");
+    const db = await MosaicDatabase.open(database);
+    await db.insertArchive(await archive("gltf-box", dir));
+    await db.close();
+
+    try {
+        await assert.rejects(
+            () => composeDatabaseToGlb(database, path.join(dir, "x.glb"), { files: ["nope"] }),
+            /no archive called nope/,
+        );
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("listFiles reports the archives in the order they were inserted", async () => {
+    const dir = tempDir();
+    const db = await MosaicDatabase.open(path.join(dir, "order.duckdb"));
+    try {
+        await db.insertArchive(await archive("typed-boxes", dir));
+        await db.insertArchive(await archive("gltf-box", dir));
+        await db.insertArchive(await archive("house-v1", dir));
+
+        const files = await listFiles(db);
+        assert.deepEqual(files.map(f => f.fileId), ["typed-boxes", "gltf-box", "house-v1"]);
+        assert.deepEqual(files.map(f => f.ordinal), [0, 1, 2]);
+        assert.equal(files[2]!.sections, 1);
+    } finally {
+        await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("composing an empty database says so rather than writing nothing", async () => {
+    const dir = tempDir();
+    const database = path.join(dir, "empty.duckdb");
+    const db = await MosaicDatabase.open(database);
+    await db.close();
+
+    try {
+        await assert.rejects(() => composeDatabaseToGlb(database), /holds no archives/);
+    } finally {
         fs.rmSync(dir, { recursive: true, force: true });
     }
 });

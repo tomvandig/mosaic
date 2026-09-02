@@ -12,6 +12,9 @@ await esbuild.build({
     // Node's SEA loader only supports CommonJS entry points.
     format: "cjs",
     target: "node24",
+    // DuckDB is a native module: it cannot live inside a single-file executable, so it is
+    // left out and resolved at run time by whichever command actually needs it.
+    external: ["@duckdb/node-api"],
     sourcemap: true,
     logLevel: "info"
 });
