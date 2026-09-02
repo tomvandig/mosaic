@@ -5,17 +5,20 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./duckdb": "./src/duckdb/index.ts"
   },
   "scripts": {
     "test": "node --experimental-transform-types --test \"test/**/*.test.ts\"",
     "test:watch": "node --experimental-transform-types --test --watch \"test/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "example:duckdb": "node --experimental-transform-types examples/duckdb-queries.ts"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@duckdb/node-api": "^1.5.5-r.4",
     "jszip": "^3.10.1"
   },
   "devDependencies": {

@@ -183,6 +183,62 @@ errors, reporting only the tangent-space warning the original itself carries.
 The composition lives in the SDK under [`sdk/ts/src/composition/`](sdk/ts/src/composition/); the CLI
 command is a thin wrapper over it.
 
+## Querying a dataset with DuckDB
+
+The TypeScript SDK can load archives into a [DuckDB](https://duckdb.org) database, which turns a set
+of Mosaic files into something SQL can be pointed at:
+
+```ts
+import { MosaicDatabase } from "mosaic-ts/duckdb";
+
+const db = await MosaicDatabase.open("scene.duckdb");   // creates it if it is not there
+await db.insertArchive("house-v2.tsr");
+await db.insertArchive("gltf-box.tsr");                  // appends; nothing is overwritten
+const rows = await db.all(`SELECT * FROM "khronos::gltf::accessor"`);
+await db.close();
+```
+
+A fixed set of tables holds the index — `mosaic_file`, `mosaic_import`, `mosaic_section`,
+`mosaic_node`, `mosaic_component_ref` and `mosaic_component_table` — and **each component type gets a
+table named after it**, built at load time from the schema the archive carries, since which components
+a file holds is not known up front:
+
+```sql
+SELECT name, count, min FROM "khronos::gltf::accessor" WHERE type = 'VEC3';
+```
+
+Columns follow the schema: a string becomes `VARCHAR`, an integer `BIGINT`, an array of numbers
+`DOUBLE[]`, and anything with no scalar equivalent stays `JSON`. Every table also keeps `file_id`,
+`idx` — the row a reference points at — and `value`, the component exactly as it was stored, so a
+nested object is still reachable with `json_extract`. A type whose schema has grown by the time a
+later archive arrives gains the new columns; the rows already there read `NULL` for them.
+
+Loading is **pre-composition**: sections are appended as written, so no `DELETE` or `PASS_THROUGH` is
+ever applied and inserting the same archive twice keeps both copies, under `name` and `name#2`. A
+reference resolves against its own archive, so joins carry `file_id`:
+
+```sql
+SELECT w.name
+FROM mosaic_component_ref r
+JOIN "acme::geometry::wall" w ON w.file_id = r.file_id AND w.idx = r.idx
+WHERE r.type = 'acme::geometry::wall';
+```
+
+Because a value-less component keeps its data in the reference `id`, names, child links and is-a
+links are all queried straight off `mosaic_component_ref` — `WHERE type = 'core::inherit'` answers
+"everything that is a Chair" without touching the geometry at all.
+
+[`examples/duckdb-queries.ts`](sdk/ts/examples/duckdb-queries.ts) builds a database from the example
+archives and runs ten such queries — the scene tree, is-a links, transforms, following a mesh to its
+vertex data, geometry totals per file, and the sections that touched a given node:
+
+```bash
+cd sdk/ts && npm run example:duckdb
+```
+
+The exporter is a subpath import (`mosaic-ts/duckdb`) rather than part of the main entry point, so
+the CLI, which bundles the SDK into a single executable, never pulls DuckDB's native module in.
+
 ## Tests
 
 The TypeScript SDK is tested end to end: each case builds a real `.mosaic` archive from an example
