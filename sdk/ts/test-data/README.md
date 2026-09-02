@@ -40,6 +40,7 @@ which is not a legal character in a Windows filename. Inside the zip archive it 
 | `gltf-box.mosaic.json` | Geometry: a box mesh described with glTF-derived components, shared by two nodes that differ only in transform. |
 | `gltf-box-hierarchy.mosaic.json` | The glTF box with its walls hung off a group node using `core::child` links, whose ids live in the reference names. |
 | `helmet-plaza.mosaic.json` | Five Damaged Helmets from one import and one copy of its geometry and textures, placed through two levels of `core::child` links. Needs `helmet.tsr`, built with the command below. |
+| `typed-boxes.mosaic.json` | Two type nodes and four things that are of those types, linked with `core::inherit`. Shows a node taking its mesh from its type, overriding the transform, and a chain where a middle link shields what it replaced. |
 | `instanced-boxes.mosaic.json` | One box mesh placed four times through two levels of `core::child` links, so composing writes the whole `Pair → Left/Right → Box` subtree once per row. |
 | `composed-house.mosaic.json` | Imports the packed glTF box and adds a wall of non-glTF components, so composing it exercises geometry, imports and the extension path together. |
 | `schemas/*.schema.json` | Component schemas, referenced by the fixtures and used as `originSchemaSrc` in the typed round-trip test. |

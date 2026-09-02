@@ -148,6 +148,14 @@ components are written one of two ways:
   share a mesh.
 - **As a transform**, for `core::transform`. Its shape follows the glTF node transform, so it goes
   straight onto the node as a `matrix` or as `translation`/`rotation`/`scale`.
+- **As inheritance**, for `core::inherit`, expanded before anything else is read. A node that names
+  another with an is-a link receives all of that node's components, except where it carries one under
+  the same reference `id` — its own always wins. Several links are allowed, and so are chains; where
+  two inherited nodes offer the same `id`, the one named first wins. The is-a links come along with
+  the components, so a node two steps down a chain still answers to the type at the top, which is
+  what makes "everything that is a Chair" a question about nodes rather than a graph walk. Unlike a
+  child link, this changes the node itself, not what hangs beneath it. Inheritance is expanded when
+  composing only: the file always records what was written.
 - **As hierarchy**, for `core::child`. That component carries no value: the *name* of the reference
   is the id of the child node, so one node can hold many children and a later section can drop a
   single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a

@@ -661,6 +661,75 @@ test("the plaza repeats a whole subtree under each row", { skip: !fs.existsSync(
     }
 });
 
+// ---------------------------------------------------------------------------
+// core::inherit: a node takes its components from the node it is-a
+// ---------------------------------------------------------------------------
+
+async function composeTypedBoxes() {
+    const out = tempDir();
+    fs.writeFileSync(path.join(out, "typed.tsr"), await packMosaicSource(readExample("typed-boxes"), resolveExampleSchema));
+    return await composeArchive(path.join(out, "typed.tsr"));
+}
+
+/** The is-a links a composed node ended up with, by the node ids they name. */
+function isA(node: any): string[] {
+    const carried = node.extensions?.[MOSAIC_COMPONENTS_EXTENSION]?.components ?? [];
+    return carried.filter((c: any) => c.type === CORE_TYPE.inherit).map((c: any) => c.name);
+}
+
+test("everything that is-a box gets the mesh without restating it", async () => {
+    const { document, warnings } = await composeTypedBoxes();
+
+    assert.deepEqual(warnings, []);
+    // The type holds the mesh once; the five nodes that inherit it render the same one.
+    assert.equal(document.meshes?.length, 1);
+    assert.equal(document.nodes!.filter(n => n.mesh !== undefined).length, 6);
+});
+
+test("a node that overrides the transform keeps its own", async () => {
+    const { document } = await composeTypedBoxes();
+    const at = (name: string) => document.nodes!.find(n => labelOf(n) === name)!;
+
+    assert.deepEqual(at("Near box").translation, [-1, 0, 0]);
+    assert.deepEqual(at("Far box").translation, [1, 0, 0]);
+    // Its own transform has no scale, so the inherited scale is gone with it: a component
+    // is taken or overridden whole.
+    assert.equal(at("Near box").scale, undefined);
+});
+
+test("a node that overrides nothing keeps the transform of its type", async () => {
+    const { document } = await composeTypedBoxes();
+    const unplaced = document.nodes!.find(n => labelOf(n) === "Unplaced box")!;
+    const type = document.nodes!.find(n => labelOf(n) === "Box type")!;
+
+    assert.deepEqual(unplaced.translation, type.translation);
+    assert.deepEqual(unplaced.scale, type.scale);
+    assert.equal(unplaced.mesh, type.mesh);
+});
+
+test("a middle link in the chain shields what it replaced", async () => {
+    const { document } = await composeTypedBoxes();
+    const small = document.nodes!.find(n => labelOf(n) === "Small box type")!;
+
+    // Small box type is-a box type, but replaces its transform.
+    assert.deepEqual(small.scale, [0.25, 0.25, 0.25]);
+    assert.equal(small.mesh, 0, "while still taking the mesh from the type");
+});
+
+test("an is-a link two steps up comes along, so a query need only look at the node", async () => {
+    const { document } = await composeTypedBoxes();
+    const small = document.nodes!.find(n => labelOf(n) === "Small box")!;
+    const near = document.nodes!.find(n => labelOf(n) === "Near box")!;
+
+    // Small box inherits Small box type, which inherits Box type: both links are present.
+    assert.equal(isA(small).length, 2);
+    assert.equal(isA(near).length, 1);
+    // Every box in the scene answers to the box type, however deep the chain.
+    const boxType = isA(near)[0]!;
+    assert.ok(isA(small).includes(boxType));
+    assert.equal(document.nodes!.filter(n => isA(n).includes(boxType)).length, 5);
+});
+
 test("a missing input archive is reported by name", async () => {
     await assert.rejects(() => composeArchiveToGlb("no-such.tsr"), /no-such\.tsr does not exist/);
 });

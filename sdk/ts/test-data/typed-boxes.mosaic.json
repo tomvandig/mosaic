@@ -1,0 +1,350 @@
+{
+  "description": "Two type nodes and four things that are of those types. A core::inherit reference carries no value: its id is the node to inherit from, and composing gives the node every component of that node, except where it carries one under the same reference id, which wins. So 'Box type' holds the mesh once and everything that is-a box picks it up without restating it, while each one overrides the transform to say where it sits. 'Small box type' is-a box type in turn, overriding only the scale, which shows that inheritance follows a chain and that a middle link shields what it replaced. 'Unplaced box' overrides nothing, so it keeps the type's own transform. Unlike a core::child link, inheritance changes the node itself, so a query for everything that is-a box type has only to look at the nodes.",
+  "components": {
+    "khronos::gltf::buffer": [
+      {
+        "name": "box",
+        "byteLength": 168,
+        "uri": "data:application/octet-stream;base64,AAAAvwAAAL8AAAA/AAAAPwAAAL8AAAA/AAAAPwAAAD8AAAA/AAAAvwAAAD8AAAA/AAAAvwAAAL8AAAC/AAAAPwAAAL8AAAC/AAAAPwAAAD8AAAC/AAAAvwAAAD8AAAC/AAABAAIAAAACAAMAAQAFAAYAAQAGAAIABQAEAAcABQAHAAYABAAAAAMABAADAAcAAwACAAYAAwAGAAcABAAFAAEABAABAAAA"
+      }
+    ],
+    "khronos::gltf::bufferView": [
+      {
+        "name": "positions",
+        "buffer": "77777777-7777-4777-8777-777777777777",
+        "byteOffset": 0,
+        "byteLength": 96,
+        "target": 34962
+      },
+      {
+        "name": "indices",
+        "buffer": "77777777-7777-4777-8777-777777777777",
+        "byteOffset": 96,
+        "byteLength": 72,
+        "target": 34963
+      }
+    ],
+    "khronos::gltf::accessor": [
+      {
+        "name": "POSITION",
+        "bufferView": "88888888-8888-4888-8888-888888888888",
+        "byteOffset": 0,
+        "componentType": 5126,
+        "count": 8,
+        "type": "VEC3",
+        "min": [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        "max": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "name": "indices",
+        "bufferView": "99999999-9999-4999-8999-999999999999",
+        "byteOffset": 0,
+        "componentType": 5123,
+        "count": 36,
+        "type": "SCALAR"
+      }
+    ],
+    "khronos::gltf::material": [
+      {
+        "name": "Painted brick",
+        "pbrMetallicRoughness": {
+          "baseColorFactor": [
+            0.8,
+            0.78,
+            0.74,
+            1.0
+          ],
+          "metallicFactor": 0.0,
+          "roughnessFactor": 0.9
+        },
+        "doubleSided": false
+      }
+    ],
+    "khronos::gltf::meshPrimitive": [
+      {
+        "attributes": {
+          "POSITION": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        },
+        "indices": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "material": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "mode": 4
+      }
+    ],
+    "core::transform": [
+      {
+        "translation": [
+          0,
+          2,
+          0
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      {
+        "translation": [
+          0,
+          2,
+          1.5
+        ],
+        "scale": [
+          0.25,
+          0.25,
+          0.25
+        ]
+      },
+      {
+        "translation": [
+          -1,
+          0,
+          0
+        ]
+      },
+      {
+        "translation": [
+          1,
+          0,
+          0
+        ]
+      },
+      {
+        "translation": [
+          0,
+          0,
+          1.5
+        ]
+      }
+    ]
+  },
+  "index": {
+    "header": {
+      "MosaicVersion": "post-alpha"
+    },
+    "imports": [],
+    "componentTables": [
+      {
+        "filename": "khronos::gltf::buffer.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/buffer.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::bufferView.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/bufferView.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::accessor.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/accessor.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::meshPrimitive.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/meshPrimitive.schema.json"
+      },
+      {
+        "filename": "khronos::gltf::material.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/gltf/schemas/material.schema.json"
+      },
+      {
+        "filename": "core::transform.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/core/schemas/transform.schema.json"
+      },
+      {
+        "filename": "core::transform.ndjson",
+        "type": "NDJSON",
+        "schema": "../src/core/schemas/transform.schema.json"
+      }
+    ],
+    "sections": [
+      {
+        "header": {
+          "id": "typed-boxes",
+          "message": "Four boxes that inherit their shape from a type",
+          "dataVersion": "1.0.0",
+          "author": "ada@example.com",
+          "timestamp": "2026-09-02T09:30:00Z",
+          "application": "mosaic-tests"
+        },
+        "nodes": [
+          {
+            "id": "77777777-7777-4777-8777-777777777777",
+            "components": [
+              {
+                "type": "khronos::gltf::buffer",
+                "id": "buffer",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "88888888-8888-4888-8888-888888888888",
+            "components": [
+              {
+                "type": "khronos::gltf::bufferView",
+                "id": "bufferView",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "99999999-9999-4999-8999-999999999999",
+            "components": [
+              {
+                "type": "khronos::gltf::bufferView",
+                "id": "bufferView",
+                "index": 1
+              }
+            ]
+          },
+          {
+            "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "components": [
+              {
+                "type": "khronos::gltf::accessor",
+                "id": "accessor",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "components": [
+              {
+                "type": "khronos::gltf::accessor",
+                "id": "accessor",
+                "index": 1
+              }
+            ]
+          },
+          {
+            "id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "components": [
+              {
+                "type": "khronos::gltf::material",
+                "id": "material",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000001",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Box type"
+              },
+              {
+                "type": "khronos::gltf::meshPrimitive",
+                "id": "mesh",
+                "index": 0
+              },
+              {
+                "type": "core::transform",
+                "id": "transform",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000002",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Small box type"
+              },
+              {
+                "type": "core::inherit",
+                "id": "70000000-7000-4000-8000-700000000001"
+              },
+              {
+                "type": "core::transform",
+                "id": "transform",
+                "index": 1
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000003",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Near box"
+              },
+              {
+                "type": "core::inherit",
+                "id": "70000000-7000-4000-8000-700000000001"
+              },
+              {
+                "type": "core::transform",
+                "id": "transform",
+                "index": 2
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000004",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Far box"
+              },
+              {
+                "type": "core::inherit",
+                "id": "70000000-7000-4000-8000-700000000001"
+              },
+              {
+                "type": "core::transform",
+                "id": "transform",
+                "index": 3
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000005",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Small box"
+              },
+              {
+                "type": "core::inherit",
+                "id": "70000000-7000-4000-8000-700000000002"
+              },
+              {
+                "type": "core::transform",
+                "id": "transform",
+                "index": 4
+              }
+            ]
+          },
+          {
+            "id": "70000000-7000-4000-8000-700000000006",
+            "components": [
+              {
+                "type": "core::name",
+                "id": "Unplaced box"
+              },
+              {
+                "type": "core::inherit",
+                "id": "70000000-7000-4000-8000-700000000001"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

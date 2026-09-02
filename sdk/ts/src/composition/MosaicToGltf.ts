@@ -4,6 +4,7 @@ import { collapseNodesByPath } from "../MosaicFileOperations.ts";
 import { GLTF_TYPE } from "../gltf/schemas.ts";
 import { CORE_TYPE } from "../core/schemas.ts";
 import { hasValue, indexOf } from "../ComponentReference.ts";
+import { resolveInheritance } from "./Inheritance.ts";
 import type { GltfDocument } from "../gltf/GltfDocument.ts";
 
 /** Carries the Mosaic components that have no native glTF form. */
@@ -77,12 +78,17 @@ interface Carried {
  * and `core::child` becomes the glTF node hierarchy. Everything else rides along in a
  * `MOSAIC_components` extension, which a viewer is free to ignore.
  *
+ * `core::inherit` is expanded first, so a node that is-a something carries that thing's
+ * components by the time any of this runs.
+ *
  * Each child relation produces its own glTF node, so naming one node from two places puts
  * it in both. The copies share a mesh, so the geometry is stored once.
  */
 export function mosaicToGltf(file: MosaicFile): ComposeResult {
     const warnings: string[] = [];
-    const nodes = [...collapseNodesByPath(file).values()];
+    // Inheritance is expanded here, when composing, rather than in the file itself: a
+    // node that is-a something gets that something's components before anything is read.
+    const nodes = [...resolveInheritance(collapseNodesByPath(file), warnings).values()];
 
     // --- gather every component, grouped by the node carrying it -----------
     const byType = new Map<string, Carried[]>();

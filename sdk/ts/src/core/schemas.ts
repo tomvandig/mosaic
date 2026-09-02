@@ -1,6 +1,7 @@
 import child from "./schemas/child.schema.json" with { type: "json" };
 import name from "./schemas/name.schema.json" with { type: "json" };
 import transform from "./schemas/transform.schema.json" with { type: "json" };
+import inherit from "./schemas/inherit.schema.json" with { type: "json" };
 
 /** Component types Mosaic itself defines, outside any vendor namespace. */
 export const CORE_TYPE = {
@@ -20,6 +21,12 @@ export const CORE_TYPE = {
      * transform is not specific to glTF, so it belongs to the core namespace.
      */
     transform: "core::transform",
+    /**
+     * An is-a link. The component has no value; the *name* of the reference is the id of
+     * the node to inherit from. Composing copies that node's components onto this one,
+     * with this node's own components winning any clash.
+     */
+    inherit: "core::inherit",
 } as const;
 
 export type CoreComponentType = (typeof CORE_TYPE)[keyof typeof CORE_TYPE];
@@ -28,6 +35,7 @@ export const CORE_SCHEMAS: Record<CoreComponentType, unknown> = {
     [CORE_TYPE.child]: child,
     [CORE_TYPE.name]: name,
     [CORE_TYPE.transform]: transform,
+    [CORE_TYPE.inherit]: inherit,
 };
 
 /** The value every core::child and core::name component carries: nothing. */

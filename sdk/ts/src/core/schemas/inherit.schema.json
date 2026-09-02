@@ -1,0 +1,9 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "core::inherit",
+  "title": "Inherit",
+  "description": "An is-a link. The component carries no value: the name of the reference is the id of the node to inherit from, the way a core::child reference names its child. Composing gives the node every component of the node it inherits, except where it carries one under the same reference id, which wins. A node may inherit from several nodes, and from a node that itself inherits.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {}
+}
