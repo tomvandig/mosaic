@@ -127,9 +127,6 @@
           1
         ]
       }
-    ],
-    "core::child": [
-      {}
     ]
   },
   "index": {
@@ -167,11 +164,6 @@
         "filename": "core::transform.ndjson",
         "type": "NDJSON",
         "schema": "../src/core/schemas/transform.schema.json"
-      },
-      {
-        "filename": "core::child.ndjson",
-        "type": "NDJSON",
-        "schema": "../src/core/schemas/child.schema.json"
       }
     ],
     "sections": [
@@ -191,8 +183,7 @@
               {
                 "type": "khronos::gltf::buffer",
                 "id": "buffer",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -202,8 +193,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -213,8 +203,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -224,8 +213,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -235,8 +223,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -246,8 +233,7 @@
               {
                 "type": "khronos::gltf::material",
                 "id": "material",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -257,14 +243,12 @@
               {
                 "type": "khronos::gltf::meshPrimitive",
                 "id": "mesh",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -274,14 +258,12 @@
               {
                 "type": "khronos::gltf::meshPrimitive",
                 "id": "mesh",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -291,20 +273,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 2,
-                "operation": "VALUE"
+                "index": 2
               },
               {
                 "type": "core::child",
-                "id": "55555555-5555-4555-8555-555555555555",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "55555555-5555-4555-8555-555555555555"
               },
               {
                 "type": "core::child",
-                "id": "66666666-6666-4666-8666-666666666666",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "66666666-6666-4666-8666-666666666666"
               }
             ]
           }

@@ -46,8 +46,7 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           }

@@ -64,14 +64,12 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "acme::material::paint",
                 "id": "paint",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -81,8 +79,7 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           }
@@ -104,8 +101,7 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 2,
-                "operation": "VALUE"
+                "index": 2
               },
               {
                 "type": "acme::material::paint",
@@ -121,8 +117,7 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 3,
-                "operation": "VALUE"
+                "index": 3
               }
             ]
           }

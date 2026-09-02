@@ -54,14 +54,12 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "acme::material::paint",
                 "id": "paint",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -71,8 +69,7 @@
               {
                 "type": "acme::geometry::wall",
                 "id": "geometry",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           }

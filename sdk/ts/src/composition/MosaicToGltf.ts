@@ -3,6 +3,7 @@ import type { ComponentElement, NodeElement } from "../MosaicIndexFile.ts";
 import { collapseNodesByPath } from "../MosaicFileOperations.ts";
 import { GLTF_TYPE } from "../gltf/schemas.ts";
 import { CORE_TYPE } from "../core/schemas.ts";
+import { hasValue, indexOf } from "../ComponentReference.ts";
 import type { GltfDocument } from "../gltf/GltfDocument.ts";
 
 /** Carries the Mosaic components that have no native glTF form. */
@@ -91,11 +92,16 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         const carried: Carried[] = [];
 
         for (const ref of node.components ?? []) {
-            let row: Row;
-            try {
-                row = JSON.parse(file.readRawComponent(ref.type, ref.index)) as Row;
-            } catch (cause) {
-                throw new Error(`Node ${node.id} references ${ref.type}[${ref.index}], which cannot be read`, { cause });
+            let row: Row = {};
+
+            // A reference with no index carries no value -- a child link or a name says
+            // everything in its id -- so there is nothing to read.
+            if (hasValue(ref)) {
+                try {
+                    row = JSON.parse(file.readRawComponent(ref.type, indexOf(ref))) as Row;
+                } catch (cause) {
+                    throw new Error(`Node ${node.id} references ${ref.type}[${indexOf(ref)}], which cannot be read`, { cause });
+                }
             }
 
             const entry: Carried = { node, ref, row };

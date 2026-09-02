@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { MosaicFile, LoadMosaicFile } from "../src/MosaicFile.ts";
 import { collapseNodesByPath } from "../src/MosaicFileOperations.ts";
 import { packMosaicSource, type MosaicSourceDocument, type SchemaResolver } from "../src/MosaicPack.ts";
+import { hasValue, indexOf } from "../src/ComponentReference.ts";
 
 export const DATA_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "test-data");
 
@@ -43,8 +44,10 @@ export function componentsOf(file: MosaicFile, nodeId: string): Record<string, R
     const node = collapseNodesByPath(file).get(nodeId);
     if (!node) throw new Error(`no node ${nodeId}`);
 
+    // A reference with no index carries no value, so there is nothing to resolve; it is
+    // recorded as an empty row so callers can still see that it is there.
     return Object.fromEntries(
-        (node.components ?? []).map(ref => [ref.id, resolve(file, ref.type, ref.index) as Row]),
+        (node.components ?? []).map(ref => [ref.id, hasValue(ref) ? resolve(file, ref.type, indexOf(ref)) as Row : {}]),
     );
 }
 
@@ -55,11 +58,13 @@ export function follow(file: MosaicFile, nodeId: unknown): Row {
     const node = collapseNodesByPath(file).get(nodeId);
     if (!node) throw new Error(`no node ${nodeId}`);
 
-    const [ref, ...rest] = node.components ?? [];
+    // A name reference carries no value, so it is not the component being followed.
+    const carried = (node.components ?? []).filter(hasValue);
+    const [ref, ...rest] = carried;
     if (!ref) throw new Error(`node ${nodeId} carries no component`);
     if (rest.length > 0) throw new Error(`node ${nodeId} carries more than one component`);
 
-    return resolve(file, ref.type, ref.index) as Row;
+    return resolve(file, ref.type, indexOf(ref)) as Row;
 }
 
 /** Reads a glTF buffer component's data: URI back into bytes. */

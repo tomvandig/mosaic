@@ -19,6 +19,8 @@ import {
 } from "../src/gltf/GltfConvertFs.ts";
 import { composeTrs, multiply, IDENTITY } from "../src/gltf/matrix.ts";
 import { DATA_DIR, follow, componentsOf, decodeBuffer, type Row } from "./fixtures.ts";
+import { indexOf, operationOf, NO_COMPONENT_INDEX } from "../src/ComponentReference.ts";
+import { Operation } from "../src/MosaicIndexFile.ts";
 
 const GLTF_DIR = path.join(DATA_DIR, "gltf");
 const input = (name: string) => path.join(GLTF_DIR, name);
@@ -107,8 +109,6 @@ test("converting produces a node per referenced element plus one per mesh node",
         [
             [GLTF_TYPE.buffer, 1], [GLTF_TYPE.bufferView, 2], [GLTF_TYPE.accessor, 2],
             [GLTF_TYPE.meshPrimitive, 1], [GLTF_TYPE.material, 1], [CORE_TYPE.transform, 2],
-            // Both walls are named, and every name shares the one empty row.
-            [CORE_TYPE.name, 1],
         ],
     );
 });
@@ -203,17 +203,24 @@ test("a node keeps the name its source file gave it", () => {
     assert.deepEqual(namesOf(document), ["Front wall", "Side wall"]);
 });
 
-test("the name lives in the reference, so every name shares one empty row", () => {
+test("a name reference carries no value, so it needs no row at all", () => {
     const { document } = convertGltfFile(input("box.glb"), { newId: counter() });
     const file = buildMosaicFile(document);
 
-    // One value-less row, however many nodes are named -- as with core::child.
-    assert.deepEqual([...file.serializedComponents.get(CORE_TYPE.name)!], ["{}"]);
+    // Nothing to point at: an absent index is -1, which says there is no value.
+    assert.equal(file.serializedComponents.get(CORE_TYPE.name), undefined);
 
     const refs = document.index.sections[0]!.nodes
         .flatMap(n => n.components ?? [])
         .filter(c => c.type === CORE_TYPE.name);
-    assert.deepEqual(refs.map(r => r.index), [0, 0]);
+
+    assert.equal(refs.length, 2);
+    for (const ref of refs) {
+        assert.equal(ref.index, undefined, "written without an index");
+        assert.equal(ref.operation, undefined, "and without an operation");
+        assert.equal(indexOf(ref), NO_COMPONENT_INDEX);
+        assert.equal(operationOf(ref), Operation.Value);
+    }
 });
 
 test("a name that would clash with another component on the node is reported", () => {
@@ -227,12 +234,16 @@ test("a name that would clash with another component on the node is reported", (
     assert.deepEqual(namesOf(document), ["Side wall"], "the other node is unaffected");
 });
 
-test("the name schema travels with the document, like every other component", async () => {
+test("a type with no rows gets no component table", () => {
     const { document } = convertGltfFile(input("box.glb"), { newId: counter() });
 
-    const table = document.index.componentTables.find(t => t.filename === `${CORE_TYPE.name}.ndjson`);
-    assert.ok(table, "no table for core::name");
-    assert.equal(table.schema["x-mosaic-id"], CORE_TYPE.name);
+    // core::name stores nothing, so it needs neither an ndjson file nor a schema.
+    assert.ok(!document.index.componentTables.some(t => t.filename === `${CORE_TYPE.name}.ndjson`));
+
+    // The types that do carry values still declare theirs.
+    const transform = document.index.componentTables.find(t => t.filename === `${CORE_TYPE.transform}.ndjson`);
+    assert.ok(transform, "no table for core::transform");
+    assert.equal(transform.schema["x-mosaic-id"], CORE_TYPE.transform);
 });
 
 test("a node with no name in the glTF gets no name component", () => {

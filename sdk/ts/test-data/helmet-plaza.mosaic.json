@@ -48,12 +48,6 @@
           0.6
         ]
       }
-    ],
-    "core::child": [
-      {}
-    ],
-    "core::name": [
-      {}
     ]
   },
   "index": {
@@ -70,16 +64,6 @@
         "filename": "core::transform.ndjson",
         "type": "NDJSON",
         "schema": "../src/core/schemas/transform.schema.json"
-      },
-      {
-        "filename": "core::child.ndjson",
-        "type": "NDJSON",
-        "schema": "../src/core/schemas/child.schema.json"
-      },
-      {
-        "filename": "core::name.ndjson",
-        "type": "NDJSON",
-        "schema": "../src/core/schemas/name.schema.json"
       }
     ],
     "sections": [
@@ -99,20 +83,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::name",
-                "id": "Left plinth",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Left plinth"
               },
               {
                 "type": "core::child",
-                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba"
               }
             ]
           },
@@ -122,20 +101,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               },
               {
                 "type": "core::name",
-                "id": "Right plinth",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Right plinth"
               },
               {
                 "type": "core::child",
-                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba"
               }
             ]
           },
@@ -144,21 +118,15 @@
             "components": [
               {
                 "type": "core::name",
-                "id": "Pair",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Pair"
               },
               {
                 "type": "core::child",
-                "id": "11110000-1111-4111-8111-111100001111",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "11110000-1111-4111-8111-111100001111"
               },
               {
                 "type": "core::child",
-                "id": "22220000-2222-4222-8222-222200002222",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "22220000-2222-4222-8222-222200002222"
               }
             ]
           },
@@ -168,20 +136,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 2,
-                "operation": "VALUE"
+                "index": 2
               },
               {
                 "type": "core::name",
-                "id": "Near row",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Near row"
               },
               {
                 "type": "core::child",
-                "id": "33330000-3333-4333-8333-333300003333",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "33330000-3333-4333-8333-333300003333"
               }
             ]
           },
@@ -191,20 +154,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 3,
-                "operation": "VALUE"
+                "index": 3
               },
               {
                 "type": "core::name",
-                "id": "Far row",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Far row"
               },
               {
                 "type": "core::child",
-                "id": "33330000-3333-4333-8333-333300003333",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "33330000-3333-4333-8333-333300003333"
               }
             ]
           },
@@ -214,20 +172,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 4,
-                "operation": "VALUE"
+                "index": 4
               },
               {
                 "type": "core::name",
-                "id": "Spinner",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Spinner"
               },
               {
                 "type": "core::child",
-                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba"
               }
             ]
           }

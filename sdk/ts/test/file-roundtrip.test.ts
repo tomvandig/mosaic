@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { MosaicFile, WriteMosaicFile, LoadMosaicFile } from "../src/MosaicFile.ts";
 import { Type } from "../src/MosaicIndexFile.ts";
 import { loadExample, readSchema, resolve } from "./fixtures.ts";
+import { indexOf } from "../src/ComponentReference.ts";
 
 const WALL = "acme::geometry::wall";
 const PAINT = "acme::material::paint";
@@ -27,13 +28,13 @@ test("loading an example exposes its sections, nodes and component rows", async 
 
     const [north, south] = section.nodes;
     assert.deepEqual(north.components?.map(c => c.id), ["geometry", "paint"]);
-    assert.deepEqual(resolve(file, WALL, north.components![0].index), {
+    assert.deepEqual(resolve(file, WALL, indexOf(north.components![0]!)), {
         name: "North wall", height: 2.4, loadBearing: true,
     });
-    assert.deepEqual(resolve(file, PAINT, north.components![1].index), {
+    assert.deepEqual(resolve(file, PAINT, indexOf(north.components![1]!)), {
         color: "white", finish: "matte",
     });
-    assert.deepEqual(resolve(file, WALL, south.components![0].index), {
+    assert.deepEqual(resolve(file, WALL, indexOf(south.components![0]!)), {
         name: "South wall", height: 2.4, loadBearing: false,
     });
 });

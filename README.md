@@ -27,16 +27,26 @@ Each **section** carries a `MosaicProvenanceHeader` — who authored it, when, w
 message describing the change — followed by the nodes it contributes. Because sections are a list, a dataset
 is a history of layered edits rather than a single flat snapshot.
 
-A **node** has a `uuid` id and a list of component references. Each reference names a component `type`,
-identifies itself within the node with an `id`, points at a row of that type's table via `index`, and
-carries an `operation`:
+A **node** has a `uuid` id and a list of component references. Each reference names a component `type`
+and identifies itself within the node with an `id`. Both remaining fields are optional: `index` points
+at a row of that type's table and defaults to `-1`, meaning the reference carries no value at all — a
+`core::child` or `core::name` says everything in its `id`, so its type needs no table. `operation`
+defaults to `VALUE`:
 
 - `PASS_THROUGH` — leave the inherited value alone
 - `DELETE` — unset the value
 - `VALUE` — set the value
 
 That three-way operation is what lets a later section modify a node introduced by an earlier one without
-restating everything about it.
+restating everything about it. Since `VALUE` is the default, a reference that sets something is written
+without an `operation` at all:
+
+```json
+{ "type": "core::transform", "id": "transform", "index": 0 }
+{ "type": "core::name", "id": "Left plinth" }
+{ "type": "core::child", "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba" }
+{ "type": "core::child", "id": "66666666-6666-4666-8666-666666666666", "operation": "DELETE" }
+```
 
 ## Generating the schema
 

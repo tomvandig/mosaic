@@ -171,8 +171,7 @@
               {
                 "type": "khronos::gltf::buffer",
                 "id": "buffer",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -182,8 +181,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -193,8 +191,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -204,8 +201,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -215,8 +211,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -226,8 +221,7 @@
               {
                 "type": "khronos::gltf::material",
                 "id": "material",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -237,14 +231,12 @@
               {
                 "type": "khronos::gltf::meshPrimitive",
                 "id": "mesh",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -254,14 +246,12 @@
               {
                 "type": "khronos::gltf::meshPrimitive",
                 "id": "mesh",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           }

@@ -8,6 +8,7 @@ import { LoadMosaicFile } from "../src/MosaicFile.ts";
 import { buildMosaicFile, packMosaicSource, type MosaicSourceDocument } from "../src/MosaicPack.ts";
 import { packMosaicSourceFile, defaultOutputPath } from "../src/MosaicPackFs.ts";
 import { DATA_DIR, examplePath, readExample, readSchema, resolveExampleSchema, resolve } from "./fixtures.ts";
+import { indexOf } from "../src/ComponentReference.ts";
 
 const WALL = "acme::geometry::wall";
 const PAINT = "acme::material::paint";
@@ -47,10 +48,10 @@ test("a packed example round trips to the rows it declared", async () => {
     const packed = await LoadMosaicFile(await packMosaicSource(readExample("house-v1"), resolveExampleSchema));
     const north = packed.index.sections[0].nodes[0];
 
-    assert.deepEqual(resolve(packed, WALL, north.components![0].index), {
+    assert.deepEqual(resolve(packed, WALL, indexOf(north.components![0]!)), {
         name: "North wall", height: 2.4, loadBearing: true,
     });
-    assert.deepEqual(resolve(packed, PAINT, north.components![1].index), {
+    assert.deepEqual(resolve(packed, PAINT, indexOf(north.components![1]!)), {
         color: "white", finish: "matte",
     });
 });

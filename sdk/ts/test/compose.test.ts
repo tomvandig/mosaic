@@ -410,8 +410,10 @@ test("a core::child link becomes a glTF child, named by the reference not the va
     const group = document.nodes![byName.get(GROUP)!]!;
 
     assert.deepEqual(group.children, [byName.get(WALL_FRONT), byName.get(WALL_SIDE)]);
-    // The component itself carries nothing; the id is in the name of the reference.
-    assert.deepEqual(readExample("gltf-box-hierarchy").components[CORE_TYPE.child], [{}]);
+    // The reference carries no value at all: no index, so no row and no table.
+    const source = readExample("gltf-box-hierarchy");
+    assert.equal(source.components[CORE_TYPE.child], undefined);
+    assert.ok(!source.index.componentTables.some(t => t.filename.startsWith(CORE_TYPE.child)));
 });
 
 test("a node that is someone's child is not also a root of the scene", async () => {
@@ -430,7 +432,7 @@ test("a node that is someone's child is not also a root of the scene", async () 
 test("a DELETE on the child name removes just that link", async () => {
     const { document } = await composeHierarchy(doc => {
         doc.index.sections.push(section("unparent", GROUP, {
-            type: CORE_TYPE.child, id: WALL_SIDE, index: 0, operation: "DELETE",
+            type: CORE_TYPE.child, id: WALL_SIDE, operation: "DELETE",
         }));
     });
 
@@ -453,7 +455,7 @@ test("core::child is consumed as hierarchy, not carried as extension data", asyn
 test("a child link naming a node that is not present is reported and skipped", async () => {
     const { document, warnings } = await composeHierarchy(doc => {
         doc.index.sections[0].nodes.at(-1).components.push({
-            type: CORE_TYPE.child, id: "00000000-0000-4000-8000-000000000000", index: 0, operation: "VALUE",
+            type: CORE_TYPE.child, id: "00000000-0000-4000-8000-000000000000",
         });
     });
 
@@ -464,7 +466,7 @@ test("a child link naming a node that is not present is reported and skipped", a
 test("a node naming itself as a child is reported and skipped", async () => {
     const { document, warnings } = await composeHierarchy(doc => {
         doc.index.sections.push(section("self", GROUP, {
-            type: CORE_TYPE.child, id: GROUP, index: 0, operation: "VALUE",
+            type: CORE_TYPE.child, id: GROUP,
         }));
     });
 
@@ -477,7 +479,7 @@ test("a node named by two parents is placed under each of them", async () => {
     // share a mesh, so the geometry is stored once however often it is placed.
     const { document, warnings } = await composeHierarchy(doc => {
         doc.index.sections.push(section("second-parent", WALL_FRONT, {
-            type: CORE_TYPE.child, id: WALL_SIDE, index: 0, operation: "VALUE",
+            type: CORE_TYPE.child, id: WALL_SIDE,
         }));
     });
 
@@ -499,7 +501,7 @@ test("the same node placed three times keeps one copy of its geometry", async ()
         for (const id of ["d1d1d1d1-d1d1-4d1d-8d1d-d1d1d1d1d1d1", "d2d2d2d2-d2d2-4d2d-8d2d-d2d2d2d2d2d2"]) {
             nodes.push({
                 id,
-                components: [{ type: CORE_TYPE.child, id: WALL_FRONT, index: 0, operation: "VALUE" }],
+                components: [{ type: CORE_TYPE.child, id: WALL_FRONT }],
             });
         }
     });
@@ -515,7 +517,7 @@ test("a node placed twice carries its own subtree each time", async () => {
     const { document } = await composeHierarchy(doc => {
         doc.index.sections[0].nodes.push({
             id: "d3d3d3d3-d3d3-4d3d-8d3d-d3d3d3d3d3d3",
-            components: [{ type: CORE_TYPE.child, id: GROUP, index: 0, operation: "VALUE" }],
+            components: [{ type: CORE_TYPE.child, id: GROUP }],
         });
     });
 
@@ -533,7 +535,7 @@ test("child links that form a cycle are refused", async () => {
         () => composeHierarchy(doc => {
             // The front wall adopts the group that already parents it.
             doc.index.sections.push(section("cycle", WALL_FRONT, {
-                type: CORE_TYPE.child, id: GROUP, index: 0, operation: "VALUE",
+                type: CORE_TYPE.child, id: GROUP,
             }));
         }),
         /Child links form a cycle/,

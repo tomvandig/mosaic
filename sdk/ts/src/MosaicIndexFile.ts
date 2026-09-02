@@ -54,10 +54,10 @@ export interface NodeElement {
 }
 
 export interface ComponentElement {
-    id:        string;
-    index:     number;
-    operation: Operation;
-    type:      string;
+    id:         string;
+    index?:     number;
+    operation?: Operation;
+    type:       string;
 }
 
 export enum Operation {
@@ -267,8 +267,8 @@ const typeMap: any = {
     ], false),
     "ComponentElement": o([
         { json: "id", js: "id", typ: "" },
-        { json: "index", js: "index", typ: 0 },
-        { json: "operation", js: "operation", typ: r("Operation") },
+        { json: "index", js: "index", typ: u(undefined, 0) },
+        { json: "operation", js: "operation", typ: u(undefined, r("Operation")) },
         { json: "type", js: "type", typ: "" },
     ], false),
     "Type": [

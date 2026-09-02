@@ -4,6 +4,7 @@ import { collapseNodesByPath, diffFiles, federate } from "../src/MosaicFileOpera
 import { MosaicFile } from "../src/MosaicFile.ts";
 import { Operation } from "../src/MosaicIndexFile.ts";
 import { loadExample, resolve } from "./fixtures.ts";
+import { indexOf, operationOf } from "../src/ComponentReference.ts";
 
 const WALL = "acme::geometry::wall";
 const NORTH = "11111111-1111-4111-8111-111111111111";
@@ -21,7 +22,7 @@ function leadingState(file: MosaicFile): Record<string, Record<string, unknown>>
     for (const [id, node] of collapseNodesByPath(file)) {
         const components: Record<string, unknown> = {};
         for (const ref of node.components ?? []) {
-            components[ref.id] = resolve(file, ref.type, ref.index);
+            components[ref.id] = resolve(file, ref.type, indexOf(ref));
         }
         state[id] = components;
     }
@@ -54,7 +55,8 @@ test("diffing reports changed and added nodes, and leaves untouched ones out", a
 
     const north = diff.nodes[0].components!;
     assert.deepEqual(north.map(c => c.id), ["geometry"]);
-    assert.equal(north[0].operation, Operation.Value);
+    // An absent operation is VALUE, which is what a diff writes for a change.
+    assert.equal(operationOf(north[0]!), Operation.Value);
     assert.equal(north[0].index, 2);
 
     assert.deepEqual(diff.nodes[1].components!.map(c => c.id), ["geometry"]);
@@ -65,7 +67,7 @@ test("diffing with markMissingFromNewAsDelete emits DELETE for dropped component
 
     const north = diff.nodes.find(n => n.id === NORTH)!.components!;
     assert.deepEqual(north.map(c => c.id), ["geometry", "paint"]);
-    assert.equal(north[1].operation, Operation.Delete);
+    assert.equal(operationOf(north[1]!), Operation.Delete);
 });
 
 test("federating with history keeps every section from both files", async () => {
@@ -98,7 +100,7 @@ test("federating with history rewrites component indices to stay resolvable", as
         for (const node of section.nodes) {
             for (const ref of node.components ?? []) {
                 assert.doesNotThrow(
-                    () => merged.readRawComponent(ref.type, ref.index),
+                    () => merged.readRawComponent(ref.type, indexOf(ref)),
                     `${section.header.id}/${node.id}/${ref.id} points at a missing row`,
                 );
             }

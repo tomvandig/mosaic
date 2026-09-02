@@ -21,8 +21,9 @@ model ComponentReference
 {
     type: string;               // the component type, e.g. "khronos::gltf::meshPrimitive"
     id: string;                 // names this reference within the node
-    index: uint32;              // the row this reference points at in the type's table
-    operation: OperationType;
+    index?: int32 = -1;         // the row in the type's table; -1, the default, means the
+                                // reference carries no value and the type has no table
+    operation?: OperationType = OperationType.VALUE;
 }
 
 model MosaicNode {

@@ -6,6 +6,7 @@ import {
     type SectionHeader,
 } from './MosaicIndexFile.ts';
 import { MosaicFile } from './MosaicFile.ts';
+import { hasValue, indexOf, operationOf } from './ComponentReference.ts';
 
 // ---------------------------------------------------------------------------
 // Merge: applies newNode onto oldNode in-place (operation-aware)
@@ -14,15 +15,17 @@ import { MosaicFile } from './MosaicFile.ts';
 function mergeComponents(oldList: ComponentElement[], newList: ComponentElement[]): ComponentElement[] {
     for (const item of newList) {
         const idx = oldList.findIndex(x => x.id === item.id);
+        const operation = operationOf(item);
+
         if (idx === -1) {
-            if (item.operation === Operation.Value) {
-                oldList.push({ id: item.id, operation: item.operation, type: item.type, index: item.index });
+            if (operation === Operation.Value) {
+                oldList.push({ ...item });
             }
         } else {
-            if (item.operation === Operation.Delete) {
+            if (operation === Operation.Delete) {
                 oldList.splice(idx, 1);
-            } else if (item.operation === Operation.Value) {
-                oldList[idx] = { id: item.id, operation: item.operation, type: item.type, index: item.index };
+            } else if (operation === Operation.Value) {
+                oldList[idx] = { ...item };
             }
         }
     }
@@ -67,7 +70,7 @@ function diffNodes(oldNode: NodeElement, newNode: NodeElement, markMissingFromNe
         const match = (oldNode.components ?? []).find(x => x.id === item.id);
         if (!match) {
             result.components!.push(item);
-        } else if (match.index !== item.index || match.type !== item.type) {
+        } else if (indexOf(match) !== indexOf(item) || match.type !== item.type) {
             result.components!.push(item);
         }
     }
@@ -149,14 +152,15 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
                 };
 
                 for (const componentRef of (node.components ?? [])) {
-                    const component = newFile.readRawComponent(componentRef.type, componentRef.index);
+                    if (!hasValue(componentRef)) {
+                        // Nothing to copy: the reference says all it has to say in its id.
+                        newNode.components!.push({ ...componentRef });
+                        continue;
+                    }
+
+                    const component = newFile.readRawComponent(componentRef.type, indexOf(componentRef));
                     const newIndex = result.addSerializedComponent(componentRef.type, component);
-                    newNode.components!.push({
-                        id: componentRef.id,
-                        operation: componentRef.operation,
-                        type: componentRef.type,
-                        index: newIndex
-                    });
+                    newNode.components!.push({ ...componentRef, index: newIndex });
                 }
 
                 newSection.nodes.push(newNode);
@@ -194,10 +198,10 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
 
                 for (const componentRef of (node.components ?? [])) {
                     if (!allComponents.includes(componentRef.id)) {
-                        if (componentRef.operation !== Operation.PassThrough) {
-                            if (componentRef.operation === Operation.Value) {
+                        if (operationOf(componentRef) !== Operation.PassThrough) {
+                            if (operationOf(componentRef) === Operation.Value && hasValue(componentRef)) {
                                 const sourceFile = fromNew ? newFile : oldFile;
-                                const component = sourceFile.readRawComponent(componentRef.type, componentRef.index);
+                                const component = sourceFile.readRawComponent(componentRef.type, indexOf(componentRef));
                                 // Collapsing drops superseded rows, so the reference has to
                                 // follow the row to its position in the new component table.
                                 const newIndex = result.addSerializedComponent(componentRef.type, component);

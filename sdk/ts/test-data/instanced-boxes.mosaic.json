@@ -114,12 +114,6 @@
           2
         ]
       }
-    ],
-    "core::child": [
-      {}
-    ],
-    "core::name": [
-      {}
     ]
   },
   "index": {
@@ -157,16 +151,6 @@
         "filename": "core::transform.ndjson",
         "type": "NDJSON",
         "schema": "../src/core/schemas/transform.schema.json"
-      },
-      {
-        "filename": "core::child.ndjson",
-        "type": "NDJSON",
-        "schema": "../src/core/schemas/child.schema.json"
-      },
-      {
-        "filename": "core::name.ndjson",
-        "type": "NDJSON",
-        "schema": "../src/core/schemas/name.schema.json"
       }
     ],
     "sections": [
@@ -186,8 +170,7 @@
               {
                 "type": "khronos::gltf::buffer",
                 "id": "buffer",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -197,8 +180,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -208,8 +190,7 @@
               {
                 "type": "khronos::gltf::bufferView",
                 "id": "bufferView",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -219,8 +200,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -230,8 +210,7 @@
               {
                 "type": "khronos::gltf::accessor",
                 "id": "accessor",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               }
             ]
           },
@@ -241,8 +220,7 @@
               {
                 "type": "khronos::gltf::material",
                 "id": "material",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               }
             ]
           },
@@ -252,20 +230,16 @@
               {
                 "type": "khronos::gltf::meshPrimitive",
                 "id": "mesh",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 0,
-                "operation": "VALUE"
+                "index": 0
               },
               {
                 "type": "core::name",
-                "id": "Box",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Box"
               }
             ]
           },
@@ -275,20 +249,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 1,
-                "operation": "VALUE"
+                "index": 1
               },
               {
                 "type": "core::name",
-                "id": "Left",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Left"
               },
               {
                 "type": "core::child",
-                "id": "10101010-1010-4010-8010-101010101010",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "10101010-1010-4010-8010-101010101010"
               }
             ]
           },
@@ -298,20 +267,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 2,
-                "operation": "VALUE"
+                "index": 2
               },
               {
                 "type": "core::name",
-                "id": "Right",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Right"
               },
               {
                 "type": "core::child",
-                "id": "10101010-1010-4010-8010-101010101010",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "10101010-1010-4010-8010-101010101010"
               }
             ]
           },
@@ -320,21 +284,15 @@
             "components": [
               {
                 "type": "core::name",
-                "id": "Pair",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Pair"
               },
               {
                 "type": "core::child",
-                "id": "20202020-2020-4020-8020-202020202020",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "20202020-2020-4020-8020-202020202020"
               },
               {
                 "type": "core::child",
-                "id": "30303030-3030-4030-8030-303030303030",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "30303030-3030-4030-8030-303030303030"
               }
             ]
           },
@@ -344,20 +302,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 3,
-                "operation": "VALUE"
+                "index": 3
               },
               {
                 "type": "core::name",
-                "id": "Near row",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Near row"
               },
               {
                 "type": "core::child",
-                "id": "40404040-4040-4040-8040-404040404040",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "40404040-4040-4040-8040-404040404040"
               }
             ]
           },
@@ -367,20 +320,15 @@
               {
                 "type": "core::transform",
                 "id": "transform",
-                "index": 4,
-                "operation": "VALUE"
+                "index": 4
               },
               {
                 "type": "core::name",
-                "id": "Far row",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "Far row"
               },
               {
                 "type": "core::child",
-                "id": "40404040-4040-4040-8040-404040404040",
-                "index": 0,
-                "operation": "VALUE"
+                "id": "40404040-4040-4040-8040-404040404040"
               }
             ]
           }

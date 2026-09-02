@@ -1,6 +1,6 @@
 import type { MosaicSourceDocument } from "../MosaicPack.ts";
 import type { ComponentElement, NodeElement, SectionElement } from "../MosaicIndexFile.ts";
-import { Operation, Type } from "../MosaicIndexFile.ts";
+import { Type } from "../MosaicIndexFile.ts";
 import { GLTF_TYPE, GLTF_SCHEMAS, type GltfComponentType } from "./schemas.ts";
 import { CORE_TYPE, CORE_SCHEMAS } from "../core/schemas.ts";
 import type { GltfDocument, GltfNode, GltfImage, GltfTextureInfo } from "./GltfDocument.ts";
@@ -99,7 +99,6 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
         [GLTF_TYPE.texture]: [],
         [GLTF_TYPE.material]: [],
         [CORE_TYPE.transform]: [],
-        [CORE_TYPE.name]: [],
     };
     const nodes: NodeElement[] = [];
 
@@ -107,7 +106,8 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
     function addOwnNode(typeID: string, refName: string, component: unknown): string {
         const index = components[typeID]!.push(component) - 1;
         const id = newId();
-        nodes.push({ id, components: [{ type: typeID, id: refName, index, operation: Operation.Value }] });
+        // operation is left out: VALUE is what a reference does by default.
+        nodes.push({ id, components: [{ type: typeID, id: refName, index }] });
         return id;
     }
 
@@ -330,32 +330,26 @@ export function gltfToMosaic(gltf: GltfDocument, options: ConvertOptions): Conve
             // reference ids have to be unique within a node.
             id: rows.length === 1 ? "mesh" : `mesh.${primitiveIndex}`,
             index,
-            operation: Operation.Value,
         }));
 
         refs.push({
-            id: "transform",
             type: CORE_TYPE.transform,
+            id: "transform",
             index: transformIndex,
-            operation: Operation.Value,
         });
 
         // Whatever the source file called this node, keep it: the node id is a uuid, and
         // the name is the only handle a person would recognise. The name lives in the
-        // reference, as a child link does, so every name shares one empty component row.
+        // reference, as a child link does, so core::name needs no row and no table.
         if (node.name !== undefined) {
             if (refs.some(ref => ref.id === node.name)) {
                 // Reference names have to be unique within a node, so a model whose node
                 // is called "mesh" or "transform" would otherwise collide with its own parts.
                 warnings.push(`node ${index} is named "${node.name}", which its ${node.name} component already uses; the name was left off`);
             } else {
-                if (components[CORE_TYPE.name]!.length === 0) components[CORE_TYPE.name]!.push({});
-                refs.push({
-                    id: node.name,
-                    type: CORE_TYPE.name,
-                    index: 0,
-                    operation: Operation.Value,
-                });
+                // No index and no operation: an absent index is -1, which says the
+                // reference carries no value, and an absent operation is VALUE.
+                refs.push({ type: CORE_TYPE.name, id: node.name });
             }
         }
 

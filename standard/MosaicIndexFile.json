@@ -174,18 +174,18 @@
                 },
                 "index": {
                     "type": "integer",
-                    "minimum": 0,
-                    "maximum": 4294967295
+                    "minimum": -2147483648,
+                    "maximum": 2147483647,
+                    "default": -1
                 },
                 "operation": {
-                    "$ref": "#/$defs/OperationType"
+                    "$ref": "#/$defs/OperationType",
+                    "default": "VALUE"
                 }
             },
             "required": [
                 "type",
-                "id",
-                "index",
-                "operation"
+                "id"
             ],
             "additionalProperties": false
         },
