@@ -4,24 +4,24 @@ import { MosaicDatabase } from "../duckdb/Export.ts";
 import { LoadMosaicFile, WriteMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { federate } from "../MosaicFileOperations.ts";
 import type {
-    BlobResponse, CreateModelCommand, CreateModelVersionCommand, CreateModelVersionResponse,
-    ModelDetails, ModelStatus, ModelVersion, MosaicProvenanceData,
+    BlobResponse, CreateTesseraCommand, CreateTesseraVersionCommand, CreateTesseraVersionResponse,
+    TesseraDetails, TesseraStatus, TesseraVersion, MosaicProvenanceData,
 } from "./MosaicApiTypes.ts";
-import { CreateModelVersionResponseState, MosaicFileDownloadType } from "./MosaicApiTypes.ts";
+import { CreateTesseraVersionResponseState, MosaicFileDownloadType } from "./MosaicApiTypes.ts";
 
 /**
- * The tables the API keeps beside the ones an archive is loaded into. Models and their
+ * The tables the API keeps beside the ones an archive is loaded into. Tesserae and their
  * versions are the API's own bookkeeping; the archives themselves stay as blobs, and are
  * only read when a download has to be built out of them.
  */
 const API_SCHEMA = [
-    `CREATE TABLE IF NOT EXISTS api_model (
-        model_id   VARCHAR PRIMARY KEY,
+    `CREATE TABLE IF NOT EXISTS api_tessera (
+        tessera_id VARCHAR PRIMARY KEY,
         name       VARCHAR,
         created_at TIMESTAMP
     )`,
-    `CREATE TABLE IF NOT EXISTS api_model_version (
-        model_id            VARCHAR,
+    `CREATE TABLE IF NOT EXISTS api_tessera_version (
+        tessera_id          VARCHAR,
         version_id          VARCHAR,
         previous_version_id VARCHAR,
         blob_id             VARCHAR,
@@ -34,7 +34,7 @@ const API_SCHEMA = [
     )`,
     `CREATE TABLE IF NOT EXISTS api_blob (
         blob_id     VARCHAR PRIMARY KEY,
-        model_id    VARCHAR,
+        tessera_id  VARCHAR,
         byte_length BIGINT,
         created_at  TIMESTAMP
     )`,
@@ -105,13 +105,13 @@ export class ApiStore {
     }
 
     /** Records a blob the API handed out an upload url for. */
-    async reserveBlob(blobId: string, modelId: string): Promise<void> {
+    async reserveBlob(blobId: string, tesseraId: string): Promise<void> {
         await this.insert(
             `INSERT INTO api_blob
-             SELECT json_extract_string(j, '$.row.blob_id'), json_extract_string(j, '$.row.model_id'),
+             SELECT json_extract_string(j, '$.row.blob_id'), json_extract_string(j, '$.row.tessera_id'),
                     0, now()
              FROM (SELECT ?::JSON AS j)`,
-            { row: { blob_id: blobId, model_id: modelId } },
+            { row: { blob_id: blobId, tessera_id: tesseraId } },
         );
     }
 
@@ -134,69 +134,69 @@ export class ApiStore {
         }
     }
 
-    // --- models -------------------------------------------------------------
+    // --- tesserae -----------------------------------------------------------
 
-    async listModels(): Promise<ModelStatus[]> {
+    async listTesserae(): Promise<TesseraStatus[]> {
         const rows = await this.database.all(
-            `SELECT m.model_id, m.name,
-                    (SELECT v.version_id FROM api_model_version v
-                      WHERE v.model_id = m.model_id ORDER BY v.ordinal DESC LIMIT 1) AS latest
-             FROM api_model m
-             ORDER BY m.created_at, m.model_id`);
+            `SELECT m.tessera_id, m.name,
+                    (SELECT v.version_id FROM api_tessera_version v
+                      WHERE v.tessera_id = m.tessera_id ORDER BY v.ordinal DESC LIMIT 1) AS latest
+             FROM api_tessera m
+             ORDER BY m.created_at, m.tessera_id`);
 
         return rows.map(row => ({
-            id: String(row.model_id),
+            id: String(row.tessera_id),
             name: String(row.name ?? ""),
             latestVersion: row.latest === null || row.latest === undefined ? "" : String(row.latest),
         }));
     }
 
-    async createModel(command: CreateModelCommand): Promise<void> {
-        if (!command?.id || !command?.name) throw new BadRequest(`A model needs an id and a name`);
+    async createTessera(command: CreateTesseraCommand): Promise<void> {
+        if (!command?.id || !command?.name) throw new BadRequest(`A tessera needs an id and a name`);
 
         const existing = await this.database.all(
-            `SELECT model_id FROM api_model WHERE model_id = ${literal(command.id)}`);
-        if (existing.length > 0) throw new BadRequest(`A model with id ${command.id} already exists`);
+            `SELECT tessera_id FROM api_tessera WHERE tessera_id = ${literal(command.id)}`);
+        if (existing.length > 0) throw new BadRequest(`A tessera with id ${command.id} already exists`);
 
         await this.insert(
-            `INSERT INTO api_model
-             SELECT json_extract_string(j, '$.row.model_id'), json_extract_string(j, '$.row.name'), now()
+            `INSERT INTO api_tessera
+             SELECT json_extract_string(j, '$.row.tessera_id'), json_extract_string(j, '$.row.name'), now()
              FROM (SELECT ?::JSON AS j)`,
-            { row: { model_id: command.id, name: command.name } },
+            { row: { tessera_id: command.id, name: command.name } },
         );
     }
 
-    async getModel(modelId: string): Promise<ModelDetails> {
-        const [model] = await this.database.all(
-            `SELECT model_id, name FROM api_model WHERE model_id = ${literal(modelId)}`);
-        if (!model) throw new NotFound(`No model ${modelId}`);
+    async getTessera(tesseraId: string): Promise<TesseraDetails> {
+        const [tessera] = await this.database.all(
+            `SELECT tessera_id, name FROM api_tessera WHERE tessera_id = ${literal(tesseraId)}`);
+        if (!tessera) throw new NotFound(`No tessera ${tesseraId}`);
 
         return {
-            id: String(model.model_id),
-            name: String(model.name ?? ""),
-            history: await this.versionsOf(modelId),
+            id: String(tessera.tessera_id),
+            name: String(tessera.name ?? ""),
+            history: await this.versionsOf(tesseraId),
         };
     }
 
-    async deleteModel(modelId: string): Promise<void> {
-        const [model] = await this.database.all(
-            `SELECT model_id FROM api_model WHERE model_id = ${literal(modelId)}`);
-        if (!model) throw new NotFound(`No model ${modelId}`);
+    async deleteTessera(tesseraId: string): Promise<void> {
+        const [tessera] = await this.database.all(
+            `SELECT tessera_id FROM api_tessera WHERE tessera_id = ${literal(tesseraId)}`);
+        if (!tessera) throw new NotFound(`No tessera ${tesseraId}`);
 
-        // The blobs stay: they are content, and another model version may name the same one.
-        await this.database.run(`DELETE FROM api_model_version WHERE model_id = ${literal(modelId)}`);
-        await this.database.run(`DELETE FROM api_model WHERE model_id = ${literal(modelId)}`);
+        // The blobs stay: they are content, and another version may name the same one.
+        await this.database.run(`DELETE FROM api_tessera_version WHERE tessera_id = ${literal(tesseraId)}`);
+        await this.database.run(`DELETE FROM api_tessera WHERE tessera_id = ${literal(tesseraId)}`);
     }
 
     // --- versions -----------------------------------------------------------
 
-    async versionsOf(modelId: string): Promise<ModelVersion[]> {
+    async versionsOf(tesseraId: string): Promise<TesseraVersion[]> {
         const rows = await this.database.all(
-            `SELECT model_id, version_id, previous_version_id, author, timestamp, application, message
-             FROM api_model_version WHERE model_id = ${literal(modelId)} ORDER BY ordinal`);
+            `SELECT tessera_id, version_id, previous_version_id, author, timestamp, application, message
+             FROM api_tessera_version WHERE tessera_id = ${literal(tesseraId)} ORDER BY ordinal`);
 
         return rows.map(row => ({
-            modelId: String(row.model_id),
+            tesseraId: String(row.tessera_id),
             versionId: String(row.version_id),
             previousVersionId: row.previous_version_id === null ? "" : String(row.previous_version_id),
             provenance: {
@@ -208,41 +208,41 @@ export class ApiStore {
         }));
     }
 
-    async getVersion(modelId: string, versionId: string): Promise<ModelVersion> {
-        const versions = await this.versionsOf(modelId);
+    async getVersion(tesseraId: string, versionId: string): Promise<TesseraVersion> {
+        const versions = await this.versionsOf(tesseraId);
         const version = versions.find(candidate => candidate.versionId === versionId);
-        if (!version) throw new NotFound(`Model ${modelId} has no version ${versionId}`);
+        if (!version) throw new NotFound(`Tessera ${tesseraId} has no version ${versionId}`);
         return version;
     }
 
     /** The id of the version a new one has to follow, or "" when there is none yet. */
-    async latestVersionId(modelId: string): Promise<string> {
+    async latestVersionId(tesseraId: string): Promise<string> {
         const [row] = await this.database.all(
-            `SELECT version_id FROM api_model_version WHERE model_id = ${literal(modelId)}
+            `SELECT version_id FROM api_tessera_version WHERE tessera_id = ${literal(tesseraId)}
              ORDER BY ordinal DESC LIMIT 1`);
         return row ? String(row.version_id) : "";
     }
 
     /**
-     * Adds a version, if it follows the one the model is actually on and its blob holds a
+     * Adds a version, if it follows the one the tessera is actually on and its blob holds a
      * readable archive. Both checks answer with a state rather than an error, because
      * being out of date is an ordinary thing for a client to be.
      */
-    async createVersion(modelId: string, command: CreateModelVersionCommand): Promise<CreateModelVersionResponse> {
-        const [model] = await this.database.all(
-            `SELECT model_id FROM api_model WHERE model_id = ${literal(modelId)}`);
-        if (!model) throw new NotFound(`No model ${modelId}`);
+    async createVersion(tesseraId: string, command: CreateTesseraVersionCommand): Promise<CreateTesseraVersionResponse> {
+        const [tessera] = await this.database.all(
+            `SELECT tessera_id FROM api_tessera WHERE tessera_id = ${literal(tesseraId)}`);
+        if (!tessera) throw new NotFound(`No tessera ${tesseraId}`);
 
         if (!command?.id || !command?.blobId) {
-            return { state: CreateModelVersionResponseState.ValidationError, validationErrors: ["id and blobId are required"] };
+            return { state: CreateTesseraVersionResponseState.ValidationError, validationErrors: ["id and blobId are required"] };
         }
 
-        const latest = await this.latestVersionId(modelId);
-        const claimed = command.previousModelVersionId ?? "";
+        const latest = await this.latestVersionId(tesseraId);
+        const claimed = command.previousTesseraVersionId ?? "";
         if (claimed !== latest) {
             return {
-                state: CreateModelVersionResponseState.OutOfDate,
-                validationErrors: [`The model is on version ${latest || "(none)"}, not ${claimed || "(none)"}`],
+                state: CreateTesseraVersionResponseState.OutOfDate,
+                validationErrors: [`The tessera is on version ${latest || "(none)"}, not ${claimed || "(none)"}`],
             };
         }
 
@@ -260,7 +260,7 @@ export class ApiStore {
         }
 
         if (validationErrors.length > 0) {
-            return { state: CreateModelVersionResponseState.ValidationError, validationErrors };
+            return { state: CreateTesseraVersionResponseState.ValidationError, validationErrors };
         }
 
         // The provenance of the newest section is the provenance of the version.
@@ -273,8 +273,8 @@ export class ApiStore {
         };
 
         await this.insert(
-            `INSERT INTO api_model_version
-             SELECT json_extract_string(j, '$.row.model_id'), json_extract_string(j, '$.row.version_id'),
+            `INSERT INTO api_tessera_version
+             SELECT json_extract_string(j, '$.row.tessera_id'), json_extract_string(j, '$.row.version_id'),
                     json_extract_string(j, '$.row.previous_version_id'), json_extract_string(j, '$.row.blob_id'),
                     json_extract(j, '$.row.ordinal')::BIGINT,
                     json_extract_string(j, '$.row.author'), json_extract_string(j, '$.row.timestamp'),
@@ -282,9 +282,9 @@ export class ApiStore {
              FROM (SELECT ?::JSON AS j)`,
             {
                 row: {
-                    model_id: modelId, version_id: command.id,
+                    tessera_id: tesseraId, version_id: command.id,
                     previous_version_id: claimed, blob_id: command.blobId,
-                    ordinal: (await this.versionsOf(modelId)).length,
+                    ordinal: (await this.versionsOf(tesseraId)).length,
                     ...provenance,
                 },
             },
@@ -292,9 +292,9 @@ export class ApiStore {
 
         // The archive also goes into the database proper, so it can be queried and composed
         // alongside every other archive without being unpacked again.
-        await this.database.insertFile(file!, `${modelId}/${command.id}`, this.blobPath(command.blobId));
+        await this.database.insertFile(file!, `${tesseraId}/${command.id}`, this.blobPath(command.blobId));
 
-        return { state: CreateModelVersionResponseState.Ok, validationErrors: [] };
+        return { state: CreateTesseraVersionResponseState.Ok, validationErrors: [] };
     }
 
     /**
@@ -303,10 +303,10 @@ export class ApiStore {
      * Anything beyond the single version is federated out of the versions leading up to
      * it: intact keeps every section, condensed collapses them to what is still leading.
      */
-    async materialiseDownload(modelId: string, versionId: string, type: MosaicFileDownloadType): Promise<string> {
-        const version = await this.getVersion(modelId, versionId);
+    async materialiseDownload(tesseraId: string, versionId: string, type: MosaicFileDownloadType): Promise<string> {
+        const version = await this.getVersion(tesseraId, versionId);
         const rows = await this.database.all(
-            `SELECT version_id, blob_id FROM api_model_version WHERE model_id = ${literal(modelId)} ORDER BY ordinal`);
+            `SELECT version_id, blob_id FROM api_tessera_version WHERE tessera_id = ${literal(tesseraId)} ORDER BY ordinal`);
 
         const upTo: string[] = [];
         for (const row of rows) {
@@ -319,7 +319,7 @@ export class ApiStore {
             return String(row!.blob_id);
         }
 
-        const keepHistory = type === MosaicFileDownloadType.WholeModelHistoryIntact;
+        const keepHistory = type === MosaicFileDownloadType.WholeTesseraHistoryIntact;
         let composed: MosaicFile | undefined;
         for (const blobId of upTo) {
             const file = await LoadMosaicFile(this.readBlob(blobId));
@@ -327,7 +327,7 @@ export class ApiStore {
         }
 
         void version;
-        const derived = `${modelId}-${versionId}-${type}`.replace(/[^A-Za-z0-9-]/g, "_");
+        const derived = `${tesseraId}-${versionId}-${type}`.replace(/[^A-Za-z0-9-]/g, "_");
         await this.writeBlob(derived, Buffer.from(await WriteMosaicFile(composed!)));
         return derived;
     }

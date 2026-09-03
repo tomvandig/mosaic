@@ -25,84 +25,68 @@ export const API_ROUTES = [
         "hasBody": false
     },
     {
-        "operationId": "ModelRoutes_delete_model",
-        "method": "DELETE",
-        "path": "/Mosaic-api/models/{modelId}",
-        "pathParameters": [
-            "modelId"
-        ],
-        "queryParameters": [],
-        "hasBody": false
-    },
-    {
-        "operationId": "ModelRoutes_get_model",
-        "method": "GET",
-        "path": "/Mosaic-api/models/{modelId}",
-        "pathParameters": [
-            "modelId"
-        ],
-        "queryParameters": [],
-        "hasBody": false
-    },
-    {
-        "operationId": "ModelRoutes_uploadMosaicBlobUrl",
+        "operationId": "Tesserae_createTessera",
         "method": "POST",
-        "path": "/Mosaic-api/models/{modelId}/upload-Mosaic-blob-url",
-        "pathParameters": [
-            "modelId"
-        ],
-        "queryParameters": [],
-        "hasBody": false
-    },
-    {
-        "operationId": "Models_createModel",
-        "method": "POST",
-        "path": "/Mosaic-api/models",
+        "path": "/Mosaic-api/tesserae",
         "pathParameters": [],
         "queryParameters": [],
         "hasBody": true
     },
     {
-        "operationId": "Models_models",
+        "operationId": "Tesserae_tesserae",
         "method": "GET",
-        "path": "/Mosaic-api/models",
+        "path": "/Mosaic-api/tesserae",
         "pathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
     {
-        "operationId": "ModelVersionRoutes_get_model_version",
-        "method": "GET",
-        "path": "/Mosaic-api/models/{modelId}/versions/{versionId}",
+        "operationId": "TesseraRoutes_delete_tessera",
+        "method": "DELETE",
+        "path": "/Mosaic-api/tesserae/{tesseraId}",
         "pathParameters": [
-            "modelId",
+            "tesseraId"
+        ],
+        "queryParameters": [],
+        "hasBody": false
+    },
+    {
+        "operationId": "TesseraRoutes_get_tessera",
+        "method": "GET",
+        "path": "/Mosaic-api/tesserae/{tesseraId}",
+        "pathParameters": [
+            "tesseraId"
+        ],
+        "queryParameters": [],
+        "hasBody": false
+    },
+    {
+        "operationId": "TesseraRoutes_uploadMosaicBlobUrl",
+        "method": "POST",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url",
+        "pathParameters": [
+            "tesseraId"
+        ],
+        "queryParameters": [],
+        "hasBody": false
+    },
+    {
+        "operationId": "TesseraVersionRoutes_get_tessera_version",
+        "method": "GET",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}",
+        "pathParameters": [
+            "tesseraId",
             "versionId"
         ],
         "queryParameters": [],
         "hasBody": false
     },
     {
-        "operationId": "ModelVersionRoutes_model_Mosaic",
-        "method": "PUT",
-        "path": "/Mosaic-api/models/{modelId}/versions/{versionId}/download-Mosaic",
-        "pathParameters": [
-            "modelId",
-            "versionId"
-        ],
-        "queryParameters": [
-            {
-                "name": "downloadType",
-                "required": true
-            }
-        ],
-        "hasBody": false
-    },
-    {
-        "operationId": "ModelVersionRoutes_query",
+        "operationId": "TesseraVersionRoutes_query",
         "method": "GET",
-        "path": "/Mosaic-api/models/{modelId}/versions/{versionId}/query",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/query",
         "pathParameters": [
-            "modelId",
+            "tesseraId",
             "versionId"
         ],
         "queryParameters": [
@@ -126,6 +110,22 @@ export const API_ROUTES = [
         "hasBody": false
     },
     {
+        "operationId": "TesseraVersionRoutes_tessera_Mosaic",
+        "method": "PUT",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic",
+        "pathParameters": [
+            "tesseraId",
+            "versionId"
+        ],
+        "queryParameters": [
+            {
+                "name": "downloadType",
+                "required": true
+            }
+        ],
+        "hasBody": false
+    },
+    {
         "operationId": "upload",
         "method": "PUT",
         "path": "/Mosaic-api/upload/{blobId}",
@@ -136,11 +136,11 @@ export const API_ROUTES = [
         "hasBody": true
     },
     {
-        "operationId": "VersionsRoutes_createModelVersion",
+        "operationId": "VersionsRoutes_createTesseraVersion",
         "method": "POST",
-        "path": "/Mosaic-api/models/{modelId}/versions",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/versions",
         "pathParameters": [
-            "modelId"
+            "tesseraId"
         ],
         "queryParameters": [],
         "hasBody": true

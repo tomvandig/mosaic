@@ -9,39 +9,33 @@ export interface BlobResponse {
     putURL: string;
 }
 
-export interface CreateModelCommand {
+export interface CreateTesseraCommand {
     id:   string;
     name: string;
 }
 
-export interface CreateModelVersionCommand {
-    blobId:                 string;
-    id:                     string;
-    previousModelVersionId: string;
+export interface CreateTesseraVersionCommand {
+    blobId:                   string;
+    id:                       string;
+    previousTesseraVersionId: string;
 }
 
-export interface CreateModelVersionResponse {
-    state:            CreateModelVersionResponseState;
+export interface CreateTesseraVersionResponse {
+    state:            CreateTesseraVersionResponseState;
     validationErrors: string[];
 }
 
-export enum CreateModelVersionResponseState {
+export enum CreateTesseraVersionResponseState {
     Ok = "OK",
     OutOfDate = "OUT_OF_DATE",
     ValidationError = "VALIDATION_ERROR",
 }
 
-export interface ModelDetails {
-    history: ModelVersion[];
-    id:      string;
-    name:    string;
-}
-
-export interface ModelVersion {
-    modelId:           string;
-    previousVersionId: string;
-    provenance:        MosaicProvenanceData;
-    versionId:         string;
+export enum MosaicFileDownloadType {
+    JustThisVersion = "just_this_version",
+    WholeTesseraAndImportsHistoryCondensed = "whole_tessera_and_imports_history_condensed",
+    WholeTesseraHistoryCondensed = "whole_tessera_history_condensed",
+    WholeTesseraHistoryIntact = "whole_tessera_history_intact",
 }
 
 export interface MosaicProvenanceData {
@@ -49,23 +43,6 @@ export interface MosaicProvenanceData {
     author:      string;
     message:     string;
     timestamp:   string;
-}
-
-export interface ModelStatus {
-    id:            string;
-    latestVersion: string;
-    name:          string;
-}
-
-export interface ModelVersionMosaicFile {
-    blobUrl: string;
-}
-
-export enum MosaicFileDownloadType {
-    JustThisVersion = "just_this_version",
-    WholeModelAndImportsHistoryCondensed = "whole_model_and_imports_history_condensed",
-    WholeModelHistoryCondensed = "whole_model_history_condensed",
-    WholeModelHistoryIntact = "whole_model_history_intact",
 }
 
 export interface MosaicQueryAPINodeComponent {
@@ -80,4 +57,27 @@ export interface MosaicQueryAPINodeResponse {
 
 export interface MosaicQueryAPIResponse {
     nodes: MosaicQueryAPINodeResponse[];
+}
+
+export interface TesseraDetails {
+    history: TesseraVersion[];
+    id:      string;
+    name:    string;
+}
+
+export interface TesseraVersion {
+    previousVersionId: string;
+    provenance:        MosaicProvenanceData;
+    tesseraId:         string;
+    versionId:         string;
+}
+
+export interface TesseraStatus {
+    id:            string;
+    latestVersion: string;
+    name:          string;
+}
+
+export interface TesseraVersionMosaicFile {
+    blobUrl: string;
 }

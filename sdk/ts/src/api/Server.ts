@@ -1,7 +1,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { API_ROUTES, type ApiRoute } from "./MosaicApiRoutes.ts";
-import { MosaicFileDownloadType, type CreateModelCommand, type CreateModelVersionCommand } from "./MosaicApiTypes.ts";
+import { MosaicFileDownloadType, type CreateTesseraCommand, type CreateTesseraVersionCommand } from "./MosaicApiTypes.ts";
 import { ApiStore, BadRequest, NotFound, blobResponse } from "./Store.ts";
 
 export interface ServeOptions {
@@ -69,55 +69,55 @@ const HANDLERS: Record<string, Handler> = {
         return { bytes: store.readBlob(params.blobId!), contentType: "application/octet-stream" };
     },
 
-    // --- models -------------------------------------------------------------
-    async Models_models({ store }) {
-        return json(await store.listModels());
+    // --- tesserae -------------------------------------------------------------
+    async Tesserae_tesserae({ store }) {
+        return json(await store.listTesserae());
     },
 
-    async Models_createModel(request) {
-        await request.store.createModel(await readJson<CreateModelCommand>(request));
+    async Tesserae_createTessera(request) {
+        await request.store.createTessera(await readJson<CreateTesseraCommand>(request));
         return json({});
     },
 
-    async ModelRoutes_get_model({ store, params }) {
-        return json(await store.getModel(params.modelId!));
+    async TesseraRoutes_get_tessera({ store, params }) {
+        return json(await store.getTessera(params.tesseraId!));
     },
 
-    async ModelRoutes_delete_model({ store, params }) {
-        await store.deleteModel(params.modelId!);
+    async TesseraRoutes_delete_tessera({ store, params }) {
+        await store.deleteTessera(params.tesseraId!);
         return json({});
     },
 
-    async ModelRoutes_uploadMosaicBlobUrl({ store, params, baseUrl }) {
-        // The model has to exist, so that a client cannot reserve blobs against nothing.
-        await store.getModel(params.modelId!);
+    async TesseraRoutes_uploadMosaicBlobUrl({ store, params, baseUrl }) {
+        // The tessera has to exist, so that a client cannot reserve blobs against nothing.
+        await store.getTessera(params.tesseraId!);
 
         const blobId = randomUUID();
-        await store.reserveBlob(blobId, params.modelId!);
+        await store.reserveBlob(blobId, params.tesseraId!);
         return json(blobResponse(blobId, baseUrl));
     },
 
     // --- versions -----------------------------------------------------------
-    async VersionsRoutes_createModelVersion(request) {
-        const command = await readJson<CreateModelVersionCommand>(request);
-        return json(await request.store.createVersion(request.params.modelId!, command));
+    async VersionsRoutes_createTesseraVersion(request) {
+        const command = await readJson<CreateTesseraVersionCommand>(request);
+        return json(await request.store.createVersion(request.params.tesseraId!, command));
     },
 
-    async ModelVersionRoutes_get_model_version({ store, params }) {
-        return json(await store.getVersion(params.modelId!, params.versionId!));
+    async TesseraVersionRoutes_get_tessera_version({ store, params }) {
+        return json(await store.getVersion(params.tesseraId!, params.versionId!));
     },
 
-    async ModelVersionRoutes_model_Mosaic({ store, params, query, baseUrl }) {
+    async TesseraVersionRoutes_tessera_Mosaic({ store, params, query, baseUrl }) {
         const asked = query.get("downloadType") ?? MosaicFileDownloadType.JustThisVersion;
         const known = Object.values(MosaicFileDownloadType) as string[];
         if (!known.includes(asked)) throw new BadRequest(`Unknown downloadType "${asked}"; expected one of ${known.join(", ")}`);
 
-        const blobId = await store.materialiseDownload(params.modelId!, params.versionId!, asked as MosaicFileDownloadType);
+        const blobId = await store.materialiseDownload(params.tesseraId!, params.versionId!, asked as MosaicFileDownloadType);
         return json({ blobUrl: `${baseUrl}/Mosaic-api/download/${blobId}` });
     },
 
     // --- not yet ------------------------------------------------------------
-    async ModelVersionRoutes_query() {
+    async TesseraVersionRoutes_query() {
         return json({ error: "The query API is not implemented yet" }, 501);
     },
 };

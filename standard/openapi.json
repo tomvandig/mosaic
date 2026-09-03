@@ -34,9 +34,9 @@
         }
       }
     },
-    "/Mosaic-api/models": {
+    "/Mosaic-api/tesserae": {
       "get": {
-        "operationId": "Models_models",
+        "operationId": "Tesserae_tesserae",
         "parameters": [],
         "responses": {
           "200": {
@@ -46,7 +46,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/ModelStatus"
+                    "$ref": "#/components/schemas/TesseraStatus"
                   }
                 }
               }
@@ -55,7 +55,7 @@
         }
       },
       "post": {
-        "operationId": "Models_createModel",
+        "operationId": "Tesserae_createTessera",
         "parameters": [],
         "responses": {
           "200": {
@@ -67,19 +67,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateModelCommand"
+                "$ref": "#/components/schemas/CreateTesseraCommand"
               }
             }
           }
         }
       }
     },
-    "/Mosaic-api/models/{modelId}": {
+    "/Mosaic-api/tesserae/{tesseraId}": {
       "get": {
-        "operationId": "ModelRoutes_get_model",
+        "operationId": "TesseraRoutes_get_tessera",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -93,7 +93,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ModelDetails"
+                  "$ref": "#/components/schemas/TesseraDetails"
                 }
               }
             }
@@ -101,10 +101,10 @@
         }
       },
       "delete": {
-        "operationId": "ModelRoutes_delete_model",
+        "operationId": "TesseraRoutes_delete_tessera",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -119,12 +119,12 @@
         }
       }
     },
-    "/Mosaic-api/models/{modelId}/upload-Mosaic-blob-url": {
+    "/Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url": {
       "post": {
-        "operationId": "ModelRoutes_uploadMosaicBlobUrl",
+        "operationId": "TesseraRoutes_uploadMosaicBlobUrl",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -146,12 +146,12 @@
         }
       }
     },
-    "/Mosaic-api/models/{modelId}/versions": {
+    "/Mosaic-api/tesserae/{tesseraId}/versions": {
       "post": {
-        "operationId": "VersionsRoutes_createModelVersion",
+        "operationId": "VersionsRoutes_createTesseraVersion",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -165,7 +165,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreateModelVersionResponse"
+                  "$ref": "#/components/schemas/CreateTesseraVersionResponse"
                 }
               }
             }
@@ -176,19 +176,19 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateModelVersionCommand"
+                "$ref": "#/components/schemas/CreateTesseraVersionCommand"
               }
             }
           }
         }
       }
     },
-    "/Mosaic-api/models/{modelId}/versions/{versionId}": {
+    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}": {
       "get": {
-        "operationId": "ModelVersionRoutes_get_model_version",
+        "operationId": "TesseraVersionRoutes_get_tessera_version",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -210,7 +210,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ModelVersion"
+                  "$ref": "#/components/schemas/TesseraVersion"
                 }
               }
             }
@@ -218,12 +218,12 @@
         }
       }
     },
-    "/Mosaic-api/models/{modelId}/versions/{versionId}/download-Mosaic": {
+    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic": {
       "put": {
-        "operationId": "ModelVersionRoutes_model_Mosaic",
+        "operationId": "TesseraVersionRoutes_tessera_Mosaic",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -254,7 +254,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ModelVersionMosaicFile"
+                  "$ref": "#/components/schemas/TesseraVersionMosaicFile"
                 }
               }
             }
@@ -262,12 +262,12 @@
         }
       }
     },
-    "/Mosaic-api/models/{modelId}/versions/{versionId}/query": {
+    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/query": {
       "get": {
-        "operationId": "ModelVersionRoutes_query",
+        "operationId": "TesseraVersionRoutes_query",
         "parameters": [
           {
-            "name": "modelId",
+            "name": "tesseraId",
             "in": "path",
             "required": true,
             "schema": {
@@ -382,7 +382,7 @@
           }
         }
       },
-      "CreateModelCommand": {
+      "CreateTesseraCommand": {
         "type": "object",
         "required": [
           "id",
@@ -400,18 +400,18 @@
           "not": {}
         }
       },
-      "CreateModelVersionCommand": {
+      "CreateTesseraVersionCommand": {
         "type": "object",
         "required": [
           "id",
-          "previousModelVersionId",
+          "previousTesseraVersionId",
           "blobId"
         ],
         "properties": {
           "id": {
             "$ref": "#/components/schemas/uuid"
           },
-          "previousModelVersionId": {
+          "previousTesseraVersionId": {
             "$ref": "#/components/schemas/uuid"
           },
           "blobId": {
@@ -419,7 +419,7 @@
           }
         }
       },
-      "CreateModelVersionResponse": {
+      "CreateTesseraVersionResponse": {
         "type": "object",
         "required": [
           "state",
@@ -427,7 +427,7 @@
         ],
         "properties": {
           "state": {
-            "$ref": "#/components/schemas/CreateModelVersionResponseState"
+            "$ref": "#/components/schemas/CreateTesseraVersionResponseState"
           },
           "validationErrors": {
             "type": "array",
@@ -437,7 +437,7 @@
           }
         }
       },
-      "CreateModelVersionResponseState": {
+      "CreateTesseraVersionResponseState": {
         "type": "string",
         "enum": [
           "OK",
@@ -445,88 +445,13 @@
           "VALIDATION_ERROR"
         ]
       },
-      "ModelDetails": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "history"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "history": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelVersion"
-            }
-          }
-        }
-      },
-      "ModelStatus": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "latestVersion"
-        ],
-        "properties": {
-          "id": {
-            "$ref": "#/components/schemas/uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "latestVersion": {
-            "$ref": "#/components/schemas/uuid"
-          }
-        }
-      },
-      "ModelVersion": {
-        "type": "object",
-        "required": [
-          "modelId",
-          "versionId",
-          "previousVersionId",
-          "provenance"
-        ],
-        "properties": {
-          "modelId": {
-            "$ref": "#/components/schemas/uuid"
-          },
-          "versionId": {
-            "$ref": "#/components/schemas/uuid"
-          },
-          "previousVersionId": {
-            "$ref": "#/components/schemas/uuid"
-          },
-          "provenance": {
-            "$ref": "#/components/schemas/MosaicProvenanceData"
-          }
-        }
-      },
-      "ModelVersionMosaicFile": {
-        "type": "object",
-        "required": [
-          "blobUrl"
-        ],
-        "properties": {
-          "blobUrl": {
-            "type": "string"
-          }
-        }
-      },
       "MosaicFileDownloadType": {
         "type": "string",
         "enum": [
           "just_this_version",
-          "whole_model_history_intact",
-          "whole_model_history_condensed",
-          "whole_model_and_imports_history_condensed"
+          "whole_tessera_history_intact",
+          "whole_tessera_history_condensed",
+          "whole_tessera_and_imports_history_condensed"
         ]
       },
       "MosaicProvenanceData": {
@@ -594,6 +519,81 @@
             "items": {
               "$ref": "#/components/schemas/MosaicQueryApiNodeResponse"
             }
+          }
+        }
+      },
+      "TesseraDetails": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "history"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TesseraVersion"
+            }
+          }
+        }
+      },
+      "TesseraStatus": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latestVersion"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "$ref": "#/components/schemas/uuid"
+          }
+        }
+      },
+      "TesseraVersion": {
+        "type": "object",
+        "required": [
+          "tesseraId",
+          "versionId",
+          "previousVersionId",
+          "provenance"
+        ],
+        "properties": {
+          "tesseraId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "previousVersionId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/MosaicProvenanceData"
+          }
+        }
+      },
+      "TesseraVersionMosaicFile": {
+        "type": "object",
+        "required": [
+          "blobUrl"
+        ],
+        "properties": {
+          "blobUrl": {
+            "type": "string"
           }
         }
       },

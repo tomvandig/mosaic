@@ -8,26 +8,26 @@ using Http;
 scalar path extends string;
 
 @pattern("</[A-Za-z0-9.]+:[A-Za-z0-9]+>")
-scalar attribute_uri extends string;
+scalar component_uri extends string;
 
 @pattern("</[A-Za-z0-9.]+")
-scalar attribute_file_name extends string;
+scalar component_file_name extends string;
 
 @format("uuid")
 scalar uuid extends string;
 
-model ModelStatus
+model TesseraStatus
 {
   id: uuid;
   name: string;
   latestVersion: uuid;
 }
 
-model ModelDetails
+model TesseraDetails
 {
   id: uuid;
   name: string;
-  history: ModelVersion[]
+  history: TesseraVersion[]
 }
 
 model MosaicProvenanceData
@@ -38,35 +38,35 @@ model MosaicProvenanceData
   message: string;
 }
 
-model ModelVersion
+model TesseraVersion
 {
-  modelId: uuid;
+  tesseraId: uuid;
   versionId: uuid;
   previousVersionId: uuid;
   provenance: MosaicProvenanceData;
 }
 
-model ModelVersionMosaicFile
+model TesseraVersionMosaicFile
 {
   blobUrl: string;
 }
 
-model CreateModelCommand
+model CreateTesseraCommand
 {
   id: uuid;
   name: string;
    ...Record<never>; // make additionalProperties = false show up
 }
 
-model UpdateModelCommand
+model UpdateTesseraCommand
 {
   name: string;
 }
 
-model CreateModelVersionCommand
+model CreateTesseraVersionCommand
 {
   id: uuid;
-  previousModelVersionId: uuid;
+  previousTesseraVersionId: uuid;
   blobId: uuid;
 }
 
@@ -79,21 +79,21 @@ model BlobResponse
 enum MosaicFileDownloadType
 {
   just_this_version,
-  whole_model_history_intact,
-  whole_model_history_condensed,
-  whole_model_and_imports_history_condensed
+  whole_tessera_history_intact,
+  whole_tessera_history_condensed,
+  whole_tessera_and_imports_history_condensed
 }
 
-enum CreateModelVersionResponseState
+enum CreateTesseraVersionResponseState
 {
   OK,
   OUT_OF_DATE,
   VALIDATION_ERROR
 }
 
-model CreateModelVersionResponse
+model CreateTesseraVersionResponse
 {
-  state: CreateModelVersionResponseState;
+  state: CreateTesseraVersionResponseState;
   validationErrors: string[];
 }
 
@@ -107,36 +107,36 @@ namespace MosaicApi {
   @route("/download/{blobId}")
   @put op download(@path blobId: uuid): File;
   
-  @route("/models")
-  namespace Models
+  @route("/tesserae")
+  namespace Tesserae
   {
-    @get op models(): ModelStatus[];
+    @get op tesserae(): TesseraStatus[];
 
-    @post op createModel(@body cmd: CreateModelCommand): OkResponse;
+    @post op createTessera(@body cmd: CreateTesseraCommand): OkResponse;
 
-    @route("/{modelId}")
-    namespace ModelRoutes {
-      @get op get_model(@path modelId: uuid): ModelDetails;
-      @delete op delete_model(@path modelId: uuid): OkResponse;
+    @route("/{tesseraId}")
+    namespace TesseraRoutes {
+      @get op get_tessera(@path tesseraId: uuid): TesseraDetails;
+      @delete op delete_tessera(@path tesseraId: uuid): OkResponse;
       
       @route("/upload-Mosaic-blob-url")
-      @post op uploadMosaicBlobUrl(@path modelId: uuid): BlobResponse;
+      @post op uploadMosaicBlobUrl(@path tesseraId: uuid): BlobResponse;
 
       @route("/versions")
       namespace VersionsRoutes {
-        @post op createModelVersion(@path modelId: uuid, @body version: CreateModelVersionCommand): CreateModelVersionResponse;
+        @post op createTesseraVersion(@path tesseraId: uuid, @body version: CreateTesseraVersionCommand): CreateTesseraVersionResponse;
 
         @route("/{versionId}")
-        namespace ModelVersionRoutes
+        namespace TesseraVersionRoutes
         {
-          @get op get_model_version(@path modelId: uuid, @path versionId: uuid): ModelVersion;
+          @get op get_tessera_version(@path tesseraId: uuid, @path versionId: uuid): TesseraVersion;
 
           @route("/download-Mosaic")
-          @put op model_Mosaic(
-            @path modelId: uuid, 
+          @put op tessera_Mosaic(
+            @path tesseraId: uuid, 
             @path versionId: uuid,
             @query downloadType: MosaicFileDownloadType
-          ): ModelVersionMosaicFile;
+          ): TesseraVersionMosaicFile;
 
           @route("/query")
           op query is MosaicQueryApi.query;
@@ -165,7 +165,7 @@ model MosaicQueryApiResponse
 
 interface MosaicQueryApi {
   @get op query(
-    @path modelId: uuid,
+    @path tesseraId: uuid,
     @path versionId: uuid,
     @query path: string;
     @query provenance: boolean;

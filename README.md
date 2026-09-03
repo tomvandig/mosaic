@@ -262,7 +262,7 @@ installed, and a database command with nothing to load says exactly what it look
 
 ## The HTTP API
 
-[`src/schema/mosaic-api.tsp`](src/schema/mosaic-api.tsp) describes an API for keeping models and their
+[`src/schema/mosaic-api.tsp`](src/schema/mosaic-api.tsp) describes an API for keeping tesserae and their
 versions. It emits OpenAPI on its own config, since the file format's emitter has nothing to say
 about routes:
 
@@ -274,8 +274,8 @@ npm run gen-api-sdk          # openapi.json  -> sdk/ts/src/api/
 
 The second step generates two files the server is built on:
 
-- **`MosaicApiTypes.ts`** — the models, through quicktype, as the file format does it. Object schemas
-  are sealed on the way through so the types say exactly what each model holds.
+- **`MosaicApiTypes.ts`** — the types, through quicktype, as the file format does it. Object schemas
+  are sealed on the way through so each type says exactly what it holds.
 - **`MosaicApiRoutes.ts`** — one entry per operation: id, method, path template, path and query
   parameters, whether it takes a body.
 
@@ -287,23 +287,38 @@ than as a route nobody noticed. A test asserts every operation has one.
 mosaic serve scene.duckdb --port 8791
 ```
 
-Models, versions and blob bookkeeping go in `api_model`, `api_model_version` and `api_blob`, beside
+A **tessera** is one model kept by the API — a tile of the mosaic — and every route is named for it:
+
+```
+GET    /Mosaic-api/tesserae
+POST   /Mosaic-api/tesserae
+GET    /Mosaic-api/tesserae/{tesseraId}
+DELETE /Mosaic-api/tesserae/{tesseraId}
+POST   /Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url
+POST   /Mosaic-api/tesserae/{tesseraId}/versions
+GET    /Mosaic-api/tesserae/{tesseraId}/versions/{versionId}
+PUT    /Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic
+PUT    /Mosaic-api/upload/{blobId}
+PUT    /Mosaic-api/download/{blobId}
+```
+
+Tesserae, versions and blob bookkeeping go in `api_tessera`, `api_tessera_version` and `api_blob`, beside
 the tables archives are loaded into — so a version's contents are queryable in the same database it
 is served from:
 
 ```sql
-SELECT file_id, name FROM "acme::geometry::wall";   -- file_id is "<modelId>/<versionId>"
+SELECT file_id, name FROM "acme::geometry::wall";   -- file_id is "<tesseraId>/<versionId>"
 ```
 
 Blob bytes are files in `<database>.blobs/`, not a column: they are whole archives, written once and
 read whole. `upload-Mosaic-blob-url` hands out an id and a `putURL`, the client PUTs the archive
-there, and `POST /versions` then checks it — a version that does not follow the one the model is
+there, and `POST /versions` then checks it — a version that does not follow the one the tessera is
 actually on answers `OUT_OF_DATE`, and a blob that is not a readable archive answers
 `VALIDATION_ERROR` with the reason, rather than either being an HTTP error. On success the archive is
 also loaded into the database, so it is queryable and composable immediately.
 
 `download-Mosaic` builds what the `downloadType` asks for and answers with a blob url:
-`just_this_version` hands back the archive as uploaded, `whole_model_history_intact` federates every
+`just_this_version` hands back the archive as uploaded, `whole_tessera_history_intact` federates every
 version up to that one keeping all sections, and the condensed forms collapse them to what is still
 leading.
 
