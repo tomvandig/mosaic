@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./package.json": "./package.json",
-    "./duckdb": "./src/duckdb/index.ts"
+    "./duckdb": "./src/duckdb/index.ts",
+    "./api": "./src/api/index.ts"
   },
   "scripts": {
     "test": "node --experimental-transform-types --test \"test/**/*.test.ts\"",

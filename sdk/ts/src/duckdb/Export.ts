@@ -174,6 +174,19 @@ export class MosaicDatabase {
         return Number(row?.next ?? 0);
     }
 
+    /** Runs a statement that returns nothing. */
+    async run(sql: string): Promise<void> {
+        await this.connection.run(sql);
+    }
+
+    /**
+     * Runs a statement with one JSON document bound to it, which is how every insert
+     * here works: one parameter, and the columns cast out of it in SQL.
+     */
+    async runWithJsonPayload(sql: string, payload: unknown): Promise<void> {
+        await this.runWithJson(sql, payload);
+    }
+
     /** Runs a statement with one JSON document bound to it. */
     private async runWithJson(sql: string, payload: unknown): Promise<void> {
         const statement = await this.connection.prepare(sql);

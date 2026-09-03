@@ -1,0 +1,606 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "(title)",
+    "version": "0.0.0"
+  },
+  "tags": [],
+  "paths": {
+    "/Mosaic-api/download/{blobId}": {
+      "put": {
+        "operationId": "download",
+        "parameters": [
+          {
+            "name": "blobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models": {
+      "get": {
+        "operationId": "Models_models",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelStatus"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "Models_createModel",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModelCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}": {
+      "get": {
+        "operationId": "ModelRoutes_get_model",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ModelRoutes_delete_model",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded."
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}/upload-Mosaic-blob-url": {
+      "post": {
+        "operationId": "ModelRoutes_uploadMosaicBlobUrl",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}/versions": {
+      "post": {
+        "operationId": "VersionsRoutes_createModelVersion",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateModelVersionResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateModelVersionCommand"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}/versions/{versionId}": {
+      "get": {
+        "operationId": "ModelVersionRoutes_get_model_version",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelVersion"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}/versions/{versionId}/download-Mosaic": {
+      "put": {
+        "operationId": "ModelVersionRoutes_model_Mosaic",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "downloadType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/MosaicFileDownloadType"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelVersionMosaicFile"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/models/{modelId}/versions/{versionId}/query": {
+      "get": {
+        "operationId": "ModelVersionRoutes_query",
+        "parameters": [
+          {
+            "name": "modelId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "explode": false
+          },
+          {
+            "name": "provenance",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            },
+            "explode": false
+          },
+          {
+            "name": "expandChildren",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            },
+            "explode": false
+          },
+          {
+            "name": "expandChildrenRecursive",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MosaicQueryApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/Mosaic-api/upload/{blobId}": {
+      "put": {
+        "operationId": "upload",
+        "parameters": [
+          {
+            "name": "blobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "*/*": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BlobResponse": {
+        "type": "object",
+        "required": [
+          "blobId",
+          "putURL"
+        ],
+        "properties": {
+          "blobId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "putURL": {
+            "type": "string"
+          }
+        }
+      },
+      "CreateModelCommand": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {
+          "not": {}
+        }
+      },
+      "CreateModelVersionCommand": {
+        "type": "object",
+        "required": [
+          "id",
+          "previousModelVersionId",
+          "blobId"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "previousModelVersionId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "blobId": {
+            "$ref": "#/components/schemas/uuid"
+          }
+        }
+      },
+      "CreateModelVersionResponse": {
+        "type": "object",
+        "required": [
+          "state",
+          "validationErrors"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/CreateModelVersionResponseState"
+          },
+          "validationErrors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "CreateModelVersionResponseState": {
+        "type": "string",
+        "enum": [
+          "OK",
+          "OUT_OF_DATE",
+          "VALIDATION_ERROR"
+        ]
+      },
+      "ModelDetails": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "history"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelVersion"
+            }
+          }
+        }
+      },
+      "ModelStatus": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "latestVersion"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "$ref": "#/components/schemas/uuid"
+          }
+        }
+      },
+      "ModelVersion": {
+        "type": "object",
+        "required": [
+          "modelId",
+          "versionId",
+          "previousVersionId",
+          "provenance"
+        ],
+        "properties": {
+          "modelId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "versionId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "previousVersionId": {
+            "$ref": "#/components/schemas/uuid"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/MosaicProvenanceData"
+          }
+        }
+      },
+      "ModelVersionMosaicFile": {
+        "type": "object",
+        "required": [
+          "blobUrl"
+        ],
+        "properties": {
+          "blobUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "MosaicFileDownloadType": {
+        "type": "string",
+        "enum": [
+          "just_this_version",
+          "whole_model_history_intact",
+          "whole_model_history_condensed",
+          "whole_model_and_imports_history_condensed"
+        ]
+      },
+      "MosaicProvenanceData": {
+        "type": "object",
+        "required": [
+          "author",
+          "timestamp",
+          "application",
+          "message"
+        ],
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "application": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MosaicQueryApiNodeComponent": {
+        "type": "object",
+        "required": [
+          "name",
+          "type",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "value": {}
+        }
+      },
+      "MosaicQueryApiNodeResponse": {
+        "type": "object",
+        "required": [
+          "components"
+        ],
+        "properties": {
+          "components": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MosaicQueryApiNodeComponent"
+            }
+          }
+        }
+      },
+      "MosaicQueryApiResponse": {
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MosaicQueryApiNodeResponse"
+            }
+          }
+        }
+      },
+      "uuid": {
+        "type": "string",
+        "format": "uuid"
+      }
+    }
+  }
+}

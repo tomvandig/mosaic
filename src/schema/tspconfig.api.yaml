@@ -1,0 +1,9 @@
+# The API is emitted on its own: the file format config emits JSON Schema, which has
+# nothing to say about HTTP routes.
+emit:
+  - "@typespec/openapi3"
+options:
+  "@typespec/openapi3":
+    file-type: json
+    emitter-output-dir: "{output-dir}"
+output-dir: "{project-root}/../../standard"

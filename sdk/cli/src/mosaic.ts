@@ -2,6 +2,7 @@ import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE } from "./commands/pack.js";
 import { runGltf, runGltfPack, GLTF_USAGE, GLTF_PACK_USAGE } from "./commands/gltf.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
+import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
 const VERSION = "0.1.0";
 
@@ -36,6 +37,11 @@ const COMMANDS: Record<string, Command> = {
         usage: COMPOSE_USAGE,
         summary: "Compose an archive and its imports into a renderable .glb",
         run: runCompose
+    },
+    serve: {
+        usage: SERVE_USAGE,
+        summary: "Serve the Mosaic API over a database",
+        run: runServe
     }
 };
 

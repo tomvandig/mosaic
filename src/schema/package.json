@@ -9,7 +9,9 @@
   },
   "scripts": {
     "compile-json-spec": "tsp compile mosaic-json-file.tsp",
-    "gen-sdk-index-ts": "quicktype -s schema ../../standard/MosaicIndexFile.json -l ts -o ../../sdk/ts/src/MosaicIndexFile.ts"
+    "gen-sdk-index-ts": "quicktype -s schema ../../standard/MosaicIndexFile.json -l ts -o ../../sdk/ts/src/MosaicIndexFile.ts",
+    "compile-api-spec": "tsp compile mosaic-api.tsp --config ./tspconfig.api.yaml",
+    "gen-api-sdk": "node scripts/gen-api-sdk.mjs"
   },
   "private": true
 }
