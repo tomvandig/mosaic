@@ -272,12 +272,31 @@ npm run compile-api-spec     # mosaic-api.tsp -> standard/openapi.json
 npm run gen-api-sdk          # openapi.json  -> sdk/ts/src/api/
 ```
 
-The second step generates two files the server is built on:
+The second step generates three files:
 
 - **`MosaicApiTypes.ts`** — the types, through quicktype, as the file format does it. Object schemas
   are sealed on the way through so each type says exactly what it holds.
 - **`MosaicApiRoutes.ts`** — one entry per operation: id, method, path template, path and query
   parameters, whether it takes a body.
+- **`MosaicApiClient.ts`** — a `fetch` client with one method per operation, typed from the same
+  schemas the server answers with. A non-2xx becomes an `ApiError` carrying the status and the
+  server's message; a state the API answers with, such as `OUT_OF_DATE`, comes back as a value.
+
+Client and server are generated from the same document, so a route that moves moves in both at once:
+
+```ts
+import { MosaicApiClient } from "mosaic-ts/api";
+
+const client = new MosaicApiClient("http://127.0.0.1:8791");
+await client.createTessera({ body: { id, name: "Terrace" } });
+const blob = await client.uploadMosaicBlobUrl({ tesseraId: id });
+await client.upload({ blobId: blob.blobId, body: archiveBytes });
+```
+
+The client is tested against a server that is really listening — a real port, real sockets, real
+HTTP — and the server's lifecycle is part of what the tests check: that the port is taken while it
+runs, given up when it closes, reusable by the next server, and that a client pointed at a stopped
+server fails to connect rather than hanging.
 
 The server routes off that table rather than a hand-written list, so the paths it answers on are the
 paths the spec declares, and an operation added to the `.tsp` shows up as a missing handler rather

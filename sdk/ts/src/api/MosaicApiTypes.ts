@@ -45,18 +45,18 @@ export interface MosaicProvenanceData {
     timestamp:   string;
 }
 
-export interface MosaicQueryAPINodeComponent {
+export interface MosaicQueryApiNodeComponent {
     name:  string;
     type:  string;
     value: any;
 }
 
-export interface MosaicQueryAPINodeResponse {
-    components: MosaicQueryAPINodeComponent[];
+export interface MosaicQueryApiNodeResponse {
+    components: MosaicQueryApiNodeComponent[];
 }
 
-export interface MosaicQueryAPIResponse {
-    nodes: MosaicQueryAPINodeResponse[];
+export interface MosaicQueryApiResponse {
+    nodes: MosaicQueryApiNodeResponse[];
 }
 
 export interface TesseraDetails {
