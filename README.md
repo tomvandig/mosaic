@@ -10,7 +10,8 @@ This repository holds the format's specification and the tooling used to work wi
   canonical JSON Schema.
 - **`standard`** — the emitted JSON Schema, checked in so consumers can use it without running the toolchain.
 - **`src/code-gen`** — a CLI that turns Mosaic component schemas into typed TypeScript or C# classes.
-- **`sdk`** — runtime libraries (in progress).
+- **`sdk`** — runtime libraries (in progress), the `mosaic` CLI, and `sdk/scenarios`, where what a
+  user actually does is written in prose and the test beside it is generated from that.
 
 ## The format
 
@@ -359,6 +360,27 @@ npm test
 The runner is Node's built-in `node:test` with native TypeScript execution, so there is no test
 framework or build step to configure. Example datasets live in [`sdk/ts/test-data/`](sdk/ts/test-data/)
 and are documented in the README there.
+
+## Scenarios
+
+[`sdk/scenarios/`](sdk/scenarios/) describes, in prose, things a user of Mosaic actually does — and
+holds the tests generated from those descriptions. One folder per scenario: the Markdown is the
+source, and `<name>.test.ts` beside it mirrors the prose step for step, with each `Given` / `When` /
+`Then` as the comment above the code that carries it out.
+
+They run for real. Every scenario gets a temporary folder and, when it asks for one, a server
+listening on a free port; both are cleaned up afterwards, whether it passed or not.
+
+```bash
+cd sdk/scenarios
+npm install
+npm test
+```
+
+The first one, [publish-a-tessera](sdk/scenarios/publish-a-tessera/publish-a-tessera.md), writes a
+source document to disk, packs it into an archive, publishes it through the API as a tessera's first
+version, downloads it back byte for byte, composes it into a `.glb`, and checks that a second version
+claiming to follow nothing is answered with `OUT_OF_DATE`.
 
 ## Status
 
