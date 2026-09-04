@@ -1,8 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
 import { MosaicDatabase } from "../duckdb/Export.ts";
 import { LoadMosaicFile, WriteMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { federate } from "../MosaicFileOperations.ts";
+import { readMosaicFile } from "../duckdb/Import.ts";
 import { selectNodes, type SelectionRequest } from "../Selection.ts";
 import { mosaicToGltf } from "../composition/MosaicToGltf.ts";
 import { writeGlb } from "../composition/GlbWriter.ts";
@@ -13,9 +12,18 @@ import type {
 import { CreateTesseraVersionResponseState, MosaicFileDownloadType, NodeFetchFormat } from "./MosaicApiTypes.ts";
 
 /**
- * The tables the API keeps beside the ones an archive is loaded into. Tesserae and their
- * versions are the API's own bookkeeping; the archives themselves stay as blobs, and are
- * only read when a download has to be built out of them.
+ * The tables the API keeps beside the ones an archive is loaded into.
+ *
+ * Everything the API holds is in the database and nothing is on disk. Tesserae and their
+ * versions are its own bookkeeping; `api_blob` holds the bytes that move in and out, which
+ * are the only bytes kept as bytes. The content of a version is not among them: an
+ * uploaded archive is unpacked into the component tables, and every answer is built back
+ * out of those.
+ *
+ * The component tables themselves are not declared here. Which component types a database
+ * holds is not known until an archive arrives carrying them, so each one is created when
+ * it is first seen, from the schema the archive supplies -- see
+ * `MosaicDatabase.ensureComponentTable`.
  */
 const API_SCHEMA = [
     `CREATE TABLE IF NOT EXISTS api_tessera (
@@ -28,6 +36,7 @@ const API_SCHEMA = [
         version_id          VARCHAR,
         previous_version_id VARCHAR,
         blob_id             VARCHAR,
+        file_id             VARCHAR,
         ordinal             BIGINT,
         author              VARCHAR,
         timestamp           VARCHAR,
@@ -38,6 +47,7 @@ const API_SCHEMA = [
     `CREATE TABLE IF NOT EXISTS api_blob (
         blob_id     VARCHAR PRIMARY KEY,
         tessera_id  VARCHAR,
+        bytes       BLOB,
         byte_length BIGINT,
         created_at  TIMESTAMP
     )`,
@@ -68,19 +78,13 @@ export class ApiStore {
     private constructor(
         private readonly database: MosaicDatabase,
         readonly databasePath: string,
-        readonly blobDirectory: string,
     ) {}
 
     static async open(databasePath: string): Promise<ApiStore> {
         const database = await MosaicDatabase.open(databasePath);
         for (const statement of API_SCHEMA) await database.run(statement);
 
-        const blobs = databasePath === ":memory:"
-            ? fs.mkdtempSync(path.join(process.cwd(), ".mosaic-blobs-"))
-            : `${path.resolve(databasePath)}.blobs`;
-        fs.mkdirSync(blobs, { recursive: true });
-
-        return new ApiStore(database, databasePath, blobs);
+        return new ApiStore(database, databasePath);
     }
 
     async close(): Promise<void> {
@@ -94,47 +98,74 @@ export class ApiStore {
 
     // --- blobs --------------------------------------------------------------
 
-    blobPath(blobId: string): string {
-        return path.join(this.blobDirectory, `${blobId}.tsr`);
+    /** True when bytes have been uploaded under that id. */
+    async hasBlob(blobId: string): Promise<boolean> {
+        const [row] = await this.database.all(
+            `SELECT byte_length FROM api_blob WHERE blob_id = ${literal(blobId)} AND bytes IS NOT NULL`);
+        return row !== undefined;
     }
 
-    hasBlob(blobId: string): boolean {
-        return fs.existsSync(this.blobPath(blobId));
+    /**
+     * The bytes stored under a blob id.
+     *
+     * They come back through base64 rather than as a BLOB value: it is the one
+     * representation that is unambiguous on the way out, whatever the driver wraps a
+     * BLOB in.
+     */
+    async readBlob(blobId: string): Promise<Buffer> {
+        const [row] = await this.database.all(
+            `SELECT to_base64(bytes) AS encoded FROM api_blob
+             WHERE blob_id = ${literal(blobId)} AND bytes IS NOT NULL`);
+        if (!row) throw new NotFound(`No blob ${blobId}`);
+
+        return Buffer.from(String(row.encoded), "base64");
     }
 
-    readBlob(blobId: string): Buffer {
-        if (!this.hasBlob(blobId)) throw new NotFound(`No blob ${blobId}`);
-        return fs.readFileSync(this.blobPath(blobId));
+    /**
+     * Drops the bytes of every blob, keeping the rows that name them.
+     *
+     * This is what a sweep of old uploads would do. Nothing the API answers should notice:
+     * a version's content lives in the component tables, not in the archive it arrived in.
+     */
+    async forgetBlobs(): Promise<void> {
+        await this.database.run(`UPDATE api_blob SET bytes = NULL, byte_length = 0`);
     }
 
-    /** Records a blob the API handed out an upload url for. */
+    /** Records a blob the API handed out an upload url for, with nothing in it yet. */
     async reserveBlob(blobId: string, tesseraId: string): Promise<void> {
         await this.insert(
             `INSERT INTO api_blob
              SELECT json_extract_string(j, '$.row.blob_id'), json_extract_string(j, '$.row.tessera_id'),
-                    0, now()
+                    NULL, 0, now()
              FROM (SELECT ?::JSON AS j)`,
             { row: { blob_id: blobId, tessera_id: tesseraId } },
         );
     }
 
+    /** Stores bytes under a blob id, in the database. */
     async writeBlob(blobId: string, bytes: Buffer): Promise<void> {
-        fs.writeFileSync(this.blobPath(blobId), bytes);
-
         const known = await this.database.all(
             `SELECT blob_id FROM api_blob WHERE blob_id = ${literal(blobId)}`);
+
+        // Binary rides in as base64 and is decoded by DuckDB, so the one bound parameter
+        // every insert here uses stays a string.
         if (known.length === 0) {
             await this.insert(
                 `INSERT INTO api_blob
                  SELECT json_extract_string(j, '$.row.blob_id'), NULL,
+                        from_base64(json_extract_string(j, '$.row.bytes')),
                         json_extract(j, '$.row.byte_length')::BIGINT, now()
                  FROM (SELECT ?::JSON AS j)`,
-                { row: { blob_id: blobId, byte_length: bytes.byteLength } },
+                { row: { blob_id: blobId, bytes: bytes.toString("base64"), byte_length: bytes.byteLength } },
             );
-        } else {
-            await this.database.run(
-                `UPDATE api_blob SET byte_length = ${bytes.byteLength} WHERE blob_id = ${literal(blobId)}`);
+            return;
         }
+
+        const statement = `UPDATE api_blob
+                           SET bytes = from_base64(json_extract_string(?::JSON, '$.bytes')),
+                               byte_length = ${bytes.byteLength}
+                           WHERE blob_id = ${literal(blobId)}`;
+        await this.database.runWithJsonPayload(statement, { bytes: bytes.toString("base64") });
     }
 
     // --- tesserae -----------------------------------------------------------
@@ -252,11 +283,13 @@ export class ApiStore {
         const validationErrors: string[] = [];
         let file: MosaicFile | undefined;
 
-        if (!this.hasBlob(command.blobId)) {
+        if (!(await this.hasBlob(command.blobId))) {
             validationErrors.push(`Blob ${command.blobId} has not been uploaded`);
         } else {
             try {
-                file = await LoadMosaicFile(this.readBlob(command.blobId));
+                // The one place an uploaded archive is read: unpacking it into the
+                // component tables is how its content gets into the database at all.
+                file = await LoadMosaicFile(await this.readBlob(command.blobId));
             } catch (error) {
                 validationErrors.push(`Blob ${command.blobId} is not a readable Mosaic archive: ${messageOf(error)}`);
             }
@@ -275,11 +308,15 @@ export class ApiStore {
             message: header?.message ?? "",
         };
 
+        // The archive goes into the database before the version row, so the row can record
+        // what it is called there. Every later read goes through that name, never the blob.
+        const stored = await this.database.insertFile(file!, `${tesseraId}/${command.id}`, `blob:${command.blobId}`);
+
         await this.insert(
             `INSERT INTO api_tessera_version
              SELECT json_extract_string(j, '$.row.tessera_id'), json_extract_string(j, '$.row.version_id'),
                     json_extract_string(j, '$.row.previous_version_id'), json_extract_string(j, '$.row.blob_id'),
-                    json_extract(j, '$.row.ordinal')::BIGINT,
+                    json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.ordinal')::BIGINT,
                     json_extract_string(j, '$.row.author'), json_extract_string(j, '$.row.timestamp'),
                     json_extract_string(j, '$.row.application'), json_extract_string(j, '$.row.message'), now()
              FROM (SELECT ?::JSON AS j)`,
@@ -287,60 +324,89 @@ export class ApiStore {
                 row: {
                     tessera_id: tesseraId, version_id: command.id,
                     previous_version_id: claimed, blob_id: command.blobId,
+                    file_id: stored.fileId,
                     ordinal: (await this.versionsOf(tesseraId)).length,
                     ...provenance,
                 },
             },
         );
 
-        // The archive also goes into the database proper, so it can be queried and composed
-        // alongside every other archive without being unpacked again.
-        await this.database.insertFile(file!, `${tesseraId}/${command.id}`, this.blobPath(command.blobId));
-
         return { state: CreateTesseraVersionResponseState.Ok, validationErrors: [] };
     }
 
     /**
-     * Builds the archive a download asks for, and returns the blob it ended up in.
+     * The names, in the database, of the archives making up a tessera's history up to and
+     * including one version.
+     */
+    private async archivesUpTo(tesseraId: string, versionId: string): Promise<string[]> {
+        const rows = await this.database.all(
+            `SELECT version_id, file_id FROM api_tessera_version
+             WHERE tessera_id = ${literal(tesseraId)} ORDER BY ordinal`);
+
+        const names: string[] = [];
+        for (const row of rows) {
+            if (row.file_id) names.push(String(row.file_id));
+            if (String(row.version_id) === versionId) return names;
+        }
+
+        throw new NotFound(`Tessera ${tesseraId} has no version ${versionId}`);
+    }
+
+    /**
+     * Reads a version back out of the database.
      *
-     * Anything beyond the single version is federated out of the versions leading up to
-     * it: intact keeps every section, condensed collapses them to what is still leading.
+     * This is the only way anything here reads content. The blob a version was published
+     * from is not consulted: blobs exist to carry bytes in and out, they are not storage,
+     * and by the time a question is asked the blob may be long gone. What the archive
+     * held is in the database, which is what answers.
+     */
+    private async versionFile(tesseraId: string, versionId: string): Promise<MosaicFile> {
+        await this.getVersion(tesseraId, versionId);
+        const [name] = await this.archivesUpTo(tesseraId, versionId).then(names => names.slice(-1));
+        if (!name) throw new NotFound(`Version ${versionId} of tessera ${tesseraId} is not in the database`);
+
+        return await readMosaicFile(this.database, { files: [name] });
+    }
+
+    /**
+     * Builds the archive a download asks for, and returns the blob it was written to.
+     *
+     * Built out of the database every time, never out of the blob the version arrived in.
+     * The bytes are therefore equal in content to what was published rather than equal
+     * byte for byte: an archive is repacked from what it held, not handed back.
      */
     async materialiseDownload(tesseraId: string, versionId: string, type: MosaicFileDownloadType): Promise<string> {
-        const version = await this.getVersion(tesseraId, versionId);
-        const rows = await this.database.all(
-            `SELECT version_id, blob_id FROM api_tessera_version WHERE tessera_id = ${literal(tesseraId)} ORDER BY ordinal`);
+        const history = await this.archivesUpTo(tesseraId, versionId);
 
-        const upTo: string[] = [];
-        for (const row of rows) {
-            upTo.push(String(row.blob_id));
-            if (String(row.version_id) === versionId) break;
-        }
-
+        let composed: MosaicFile;
         if (type === MosaicFileDownloadType.JustThisVersion) {
-            const [row] = rows.filter(candidate => String(candidate.version_id) === versionId);
-            return String(row!.blob_id);
+            composed = await this.versionFile(tesseraId, versionId);
+        } else if (type === MosaicFileDownloadType.WholeTesseraHistoryIntact) {
+            // Reading the whole history at once lays every section down in order, which is
+            // what keeping the history intact means.
+            composed = await readMosaicFile(this.database, { files: history });
+        } else {
+            // Condensed: fold the versions together, dropping what is no longer leading.
+            let folded: MosaicFile | undefined;
+            for (const name of history) {
+                const file = await readMosaicFile(this.database, { files: [name] });
+                folded = folded ? federate(folded, file, false) : file;
+            }
+            composed = folded!;
         }
 
-        const keepHistory = type === MosaicFileDownloadType.WholeTesseraHistoryIntact;
-        let composed: MosaicFile | undefined;
-        for (const blobId of upTo) {
-            const file = await LoadMosaicFile(this.readBlob(blobId));
-            composed = composed ? federate(composed, file, keepHistory) : file;
-        }
-
-        void version;
         const derived = `${tesseraId}-${versionId}-${type}`.replace(/[^A-Za-z0-9-]/g, "_");
-        await this.writeBlob(derived, Buffer.from(await WriteMosaicFile(composed!)));
+        await this.writeBlob(derived, Buffer.from(await WriteMosaicFile(composed)));
         return derived;
     }
 
     /**
      * Builds a file out of some of a version's nodes, on demand.
      *
-     * Nothing is stored: the version's archive is read, the subset taken, and the bytes
-     * written straight back to whoever asked. A glb is what a viewer opens; a tsr is the
-     * same subset as a Mosaic archive, which can be published again or composed later.
+     * Nothing is stored and no blob is read: the version is reconstructed from the
+     * database, the subset taken, and the bytes written straight back to whoever asked.
+     * A glb is what a viewer opens; a tsr is the same subset as a Mosaic archive, which
+     * can be published again or composed later.
      */
     async fetchNodes(
         tesseraId: string,
@@ -348,15 +414,7 @@ export class ApiStore {
         format: NodeFetchFormat,
         request: SelectionRequest,
     ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
-        const version = await this.getVersion(tesseraId, versionId);
-        void version;
-
-        const [row] = await this.database.all(
-            `SELECT blob_id FROM api_tessera_version
-             WHERE tessera_id = ${literal(tesseraId)} AND version_id = ${literal(versionId)}`);
-        if (!row) throw new NotFound(`Tessera ${tesseraId} has no version ${versionId}`);
-
-        const source = await LoadMosaicFile(this.readBlob(String(row.blob_id)));
+        const source = await this.versionFile(tesseraId, versionId);
         const selection = selectNodes(source, request);
 
         if (format === NodeFetchFormat.Tsr) {

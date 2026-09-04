@@ -302,7 +302,7 @@ async function tesseraWithHistory(api: Awaited<ReturnType<typeof withServer>>) {
     return { tesseraId, versions };
 }
 
-test("downloading just this version hands back the archive that was uploaded", async () => {
+test("downloading just this version rebuilds what was published, out of the database", async () => {
     const api = await withServer();
     try {
         const { tesseraId, versions } = await tesseraWithHistory(api);
@@ -312,8 +312,82 @@ test("downloading just this version hands back the archive that was uploaded", a
         assert.equal(asked.status, 200);
         assert.match(asked.body.blobUrl, /\/Mosaic-api\/download\//);
 
-        const bytes = await api.bytes(asked.body.blobUrl.replace(api.server.url, ""));
-        assert.deepEqual([...bytes.buffer], [...await archiveBytes("house-v1")]);
+        // The answer is built from what the database holds, not handed back from the blob
+        // the version arrived in, so it matches in content rather than byte for byte.
+        const rebuilt = await LoadMosaicFile((await api.bytes(asked.body.blobUrl.replace(api.server.url, ""))).buffer);
+        const published = await LoadMosaicFile(await archiveBytes("house-v1"));
+
+        assert.deepEqual(
+            rebuilt.index.sections.map(section => section.nodes.map(node => node.id)),
+            published.index.sections.map(section => section.nodes.map(node => node.id)),
+        );
+        assert.deepEqual(
+            [...rebuilt.serializedComponents].map(([type, rows]) => [type, rows.map(row => JSON.parse(row))]),
+            [...published.serializedComponents].map(([type, rows]) => [type, rows.map(row => JSON.parse(row))]),
+        );
+    } finally {
+        await api.server.close();
+        fs.rmSync(api.dir, { recursive: true, force: true });
+    }
+});
+
+test("emptying the blob table really does remove the bytes", async () => {
+    const api = await withServer();
+    try {
+        const { tesseraId } = await tesseraWithHistory(api);
+        void tesseraId;
+
+        const before = await api.server.store.all(`SELECT count(*) AS n FROM api_blob WHERE bytes IS NOT NULL`);
+        assert.ok(Number(before[0]!.n) > 0, "the uploads should be there to begin with");
+
+        await api.server.store.forgetBlobs();
+
+        const after = await api.server.store.all(`SELECT count(*) AS n FROM api_blob WHERE bytes IS NOT NULL`);
+        assert.equal(Number(after[0]!.n), 0);
+    } finally {
+        await api.server.close();
+        fs.rmSync(api.dir, { recursive: true, force: true });
+    }
+});
+
+test("a version is still readable once its blob is gone", async () => {
+    const api = await withServer();
+    try {
+        const { tesseraId, versions } = await tesseraWithHistory(api);
+
+        // Blobs carry bytes in and out; they are not storage. Once published, nothing the
+        // server answers should depend on them still being there.
+        await api.server.store.forgetBlobs();
+
+        const asked = await api.send("PUT",
+            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-Mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryIntact}`);
+        assert.equal(asked.status, 200);
+
+        const file = await LoadMosaicFile((await api.bytes(asked.body.blobUrl.replace(api.server.url, ""))).buffer);
+        assert.deepEqual(file.index.sections.map(s => s.header.id), ["house-v1", "house-v1", "house-v2"]);
+    } finally {
+        await api.server.close();
+        fs.rmSync(api.dir, { recursive: true, force: true });
+    }
+});
+
+test("nodes can be fetched once the blobs are gone", async () => {
+    const api = await withServer();
+    try {
+        const { tesseraId, versions } = await tesseraWithHistory(api);
+        await api.server.store.forgetBlobs();
+
+        const response = await fetch(
+            `${api.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/nodes?format=tsr`,
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ nodes: ["11111111-1111-4111-8111-111111111111"] }),
+            });
+
+        assert.equal(response.status, 200);
+        const file = await LoadMosaicFile(new Uint8Array(await response.arrayBuffer()));
+        assert.deepEqual(file.index.sections[0]!.nodes.map(node => node.id), ["11111111-1111-4111-8111-111111111111"]);
     } finally {
         await api.server.close();
         fs.rmSync(api.dir, { recursive: true, force: true });

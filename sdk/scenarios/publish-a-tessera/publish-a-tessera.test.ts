@@ -4,7 +4,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
-import { CreateTesseraVersionResponseState, MosaicFileDownloadType } from "mosaic-ts/api";
+import { CreateTesseraVersionResponseState, MosaicFileDownloadType, NodeFetchFormat } from "mosaic-ts/api";
 import { LoadMosaicFile, packMosaicSource, composeArchiveToGlb, parseGlb, Type, type MosaicSourceDocument } from "mosaic-ts";
 import { runScenario, type World } from "../support/scenario.ts";
 
@@ -134,10 +134,10 @@ test("a first version is published and read back unchanged", async () => {
     });
 });
 
-test("the published version comes back byte for byte", async () => {
+test("the published version comes back, rebuilt from the database", async () => {
     await runScenario("publish-a-tessera", async world => {
         await world.startServer();
-        const { archive, client, tesseraId, versionId } = await published(world);
+        const { client, tesseraId, versionId } = await published(world);
 
         // When I ask to download just that version
         const asked = await client.tesseraMosaic({
@@ -147,14 +147,47 @@ test("the published version comes back byte for byte", async () => {
         // Then the server answers with a blob url
         assert.ok(asked.blobUrl.startsWith(client.baseUrl), asked.blobUrl);
 
-        // And the bytes behind it are identical to the bytes I uploaded
-        const downloaded = await client.download({ blobId: asked.blobUrl.split("/").pop()! });
-        assert.deepEqual([...downloaded], [...archive.bytes]);
-
-        // And those bytes load as an archive with one section holding two walls
-        const file = await LoadMosaicFile(downloaded);
+        // And what is behind it is an archive with one section holding the same two walls
+        const file = await LoadMosaicFile(await client.download({ blobId: asked.blobUrl.split("/").pop()! }));
         assert.equal(file.index.sections.length, 1);
+
+        const walls = file.serializedComponents.get("acme::geometry::wall")!.map(row => JSON.parse(row));
+        assert.deepEqual(walls, [{ name: "North wall", height: 2.4 }, { name: "South wall", height: 2.4 }]);
+
+        // And it holds the provenance the version was published with
+        assert.equal(file.index.sections[0]!.header.author, "ada@example.com");
+        assert.equal(file.index.sections[0]!.header.message, "Initial two walls");
+    });
+});
+
+test("a version outlives the blob it arrived in", async () => {
+    await runScenario("publish-a-tessera", async world => {
+        const server = await world.startServer();
+        const { client, tesseraId, versionId } = await published(world);
+
+        // And every blob on the server has been deleted
+        await server.store.forgetBlobs();
+
+        // When I ask to download just that version
+        const asked = await client.tesseraMosaic({
+            tesseraId, versionId, downloadType: MosaicFileDownloadType.JustThisVersion,
+        });
+
+        // Then it still comes back, with both walls in it
+        const file = await LoadMosaicFile(await client.download({ blobId: asked.blobUrl.split("/").pop()! }));
         assert.equal(file.serializedComponents.get("acme::geometry::wall")!.length, 2);
+
+        // When I fetch one of its nodes -- Then that comes back too
+        const fetched = await client.fetchNodes({
+            tesseraId, versionId,
+            format: NodeFetchFormat.Tsr,
+            body: { nodes: ["11111111-1111-4111-8111-111111111111"] },
+        });
+        const subset = await LoadMosaicFile(fetched);
+        assert.deepEqual(
+            subset.index.sections[0]!.nodes.map(node => node.id),
+            ["11111111-1111-4111-8111-111111111111"],
+        );
     });
 });
 

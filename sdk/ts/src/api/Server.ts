@@ -70,7 +70,7 @@ const HANDLERS: Record<string, Handler> = {
     },
 
     async download({ store, params }) {
-        return { bytes: store.readBlob(params.blobId!), contentType: "application/octet-stream" };
+        return { bytes: await store.readBlob(params.blobId!), contentType: "application/octet-stream" };
     },
 
     // --- tesserae -------------------------------------------------------------

@@ -330,12 +330,20 @@ is served from:
 SELECT file_id, name FROM "acme::geometry::wall";   -- file_id is "<tesseraId>/<versionId>"
 ```
 
-Blob bytes are files in `<database>.blobs/`, not a column: they are whole archives, written once and
-read whole. `upload-Mosaic-blob-url` hands out an id and a `putURL`, the client PUTs the archive
-there, and `POST /versions` then checks it — a version that does not follow the one the tessera is
-actually on answers `OUT_OF_DATE`, and a blob that is not a readable archive answers
-`VALIDATION_ERROR` with the reason, rather than either being an HTTP error. On success the archive is
-also loaded into the database, so it is queryable and composable immediately.
+**Nothing is on disk but the database.** Uploaded bytes are a `BLOB` in `api_blob`, not a file, and
+they are the only bytes kept as bytes. `upload-Mosaic-blob-url` hands out an id and a `putURL`, the
+client PUTs the archive there, and `POST /versions` reads it *once* — to check it and to unpack it
+into the component tables. A version that does not follow the one the tessera is actually on answers
+`OUT_OF_DATE`, and a blob that is not a readable archive answers `VALIDATION_ERROR` with the reason,
+rather than either being an HTTP error.
+
+**After that, every answer is built from the tables.** A version's content lives in
+`mosaic_component_ref` — which node carries which component — and in one table per component type.
+Those tables are created when a type is first seen, from the schema the archive carries, since which
+components a database will hold is not knowable up front. Downloads and node fetches are assembled
+from them and never from the archive a version arrived in, so **dropping every uploaded byte changes
+nothing a client can ask for**. One consequence is worth stating plainly: a download is *rebuilt*, so
+it equals what was published in content, not byte for byte.
 
 `POST /versions/{versionId}/nodes` fetches **a set of nodes by id**, built when it is asked for and
 stored nowhere:

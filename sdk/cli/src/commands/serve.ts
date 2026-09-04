@@ -41,7 +41,7 @@ export async function runServe(argv: string[]): Promise<void> {
     const server = await serve({ database: path.resolve(database), ...(port !== undefined ? { port } : {}), ...(host !== undefined ? { host } : {}) });
 
     console.log(`Serving the Mosaic API from ${path.resolve(database)}`);
-    console.log(`Blobs: ${server.store.blobDirectory}`);
+    console.log(`Everything it holds, uploads included, is in that database.`);
     console.log();
     console.log(`Listening on ${server.url}`);
     console.log();

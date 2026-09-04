@@ -27,14 +27,28 @@ path a client takes end to end, so it touches real files on disk and a server re
 - **And** the tessera lists it as the latest version
 - **And** the version carries the provenance the archive was authored with
 
-## Scenario: the published version comes back byte for byte
+## Scenario: the published version comes back, rebuilt from the database
+
+The server answers out of its database, never out of the blob a version arrived in — a blob carries
+bytes in and out and may be gone by the time anyone asks. So what comes back holds what was
+published, rather than being the same bytes.
 
 - **Given** a tessera whose first version was published from `terrace.tsr`
 
 - **When** I ask to download just that version
 - **Then** the server answers with a blob url
-- **And** the bytes behind it are identical to the bytes I uploaded
-- **And** those bytes load as an archive with one section holding two walls
+- **And** what is behind it is an archive with one section holding the same two walls
+- **And** it holds the provenance the version was published with
+
+## Scenario: a version outlives the blob it arrived in
+
+- **Given** a tessera whose first version was published from `terrace.tsr`
+- **And** every blob on the server has been deleted
+
+- **When** I ask to download just that version
+- **Then** it still comes back, with both walls in it
+- **When** I fetch one of its nodes
+- **Then** that comes back too
 
 ## Scenario: what was published can be composed into a viewable file
 
