@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { CreateTesseraVersionResponseState } from "../MosaicApiTypes.ts";
-import { ApiStore, BadRequest } from "../Store.ts";
+import { CreateTesseraVersionResponseState, NodeFetchFormat } from "../MosaicApiTypes.ts";
+import { ApiStore, BadRequest, type VersionRef } from "../Store.ts";
 import { APP_PAGE } from "./page.ts";
 
 /**
@@ -17,6 +17,8 @@ export interface AppReply {
     status?: number;
     json?: unknown;
     html?: string;
+    bytes?: Buffer;
+    contentType?: string;
 }
 
 interface AppRequest {
@@ -30,6 +32,26 @@ function required(query: URLSearchParams, name: string): string {
     const value = query.get(name);
     if (!value) throw new BadRequest(`${name} is required`);
     return value;
+}
+
+/**
+ * The versions a request is about: `versions=tessera:version,tessera:version`.
+ *
+ * A single pair may also be given as `tesseraId` and `versionId`, which is the same
+ * request with one version in it.
+ */
+function versionsIn(query: URLSearchParams): VersionRef[] {
+    const listed = query.get("versions");
+    if (!listed) return [{ tesseraId: required(query, "tesseraId"), versionId: required(query, "versionId") }];
+
+    const refs = listed.split(",").map(entry => entry.trim()).filter(entry => entry.length > 0).map(entry => {
+        const [tesseraId, versionId] = entry.split(":");
+        if (!tesseraId || !versionId) throw new BadRequest(`"${entry}" is not a tessera:version pair`);
+        return { tesseraId, versionId };
+    });
+
+    if (refs.length === 0) throw new BadRequest(`versions is empty`);
+    return refs;
 }
 
 export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppReply>> = {
@@ -85,29 +107,57 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
     },
 
     /**
-     * A whole version as the page needs it: which nodes are roots, and for every node its
+     * A whole scene as the page needs it: which nodes are roots, and for every node its
      * name, its children and its components.
      *
-     * This is one selection over the roots with everything beneath them, so what the tree
-     * shows is exactly what a fetch of those nodes would give -- the same call the 3D view
-     * makes, read as data instead of as a file.
+     * Several versions can be asked for at once, and whatever they import comes with
+     * them, so this is one selection over everything on show. A child reference that
+     * leaves one tessera and lands in another is therefore an ordinary link here: the
+     * node it names is in the answer, marked with the tessera it is written in.
+     *
+     * It is one selection over the roots with everything beneath them, so what the tree
+     * shows is exactly what a fetch of those nodes would give -- the same call the 3D
+     * view makes, read as data instead of as a file.
      */
     async "GET /app/scene"({ store, query }) {
-        const tesseraId = required(query, "tesseraId");
-        const versionId = required(query, "versionId");
+        const refs = versionsIn(query);
         const compose = query.get("compose") === "true";
 
-        const roots = await store.rootNodeIds(tesseraId, versionId);
-        if (roots.length === 0) return { json: { roots: [], nodes: {} } };
+        const scope = await store.resolveScope(refs);
+        const roots = await store.rootsAcross(refs, scope);
+        const seeds = roots.flatMap(entry => entry.nodes);
 
-        const selection = await store.selection(tesseraId, versionId, {
-            nodes: roots,
+        const versions = roots.map(entry => ({
+            tesseraId: entry.tesseraId,
+            versionId: entry.versionId,
+            name: entry.name,
+            roots: entry.nodes,
+        }));
+
+        // What is here only because something imports it, said so the page can show that
+        // a tessera on screen brought others along.
+        const imported = scope.entries
+            .filter(entry => entry.imported)
+            .map(entry => ({ tesseraId: entry.tesseraId, versionId: entry.versionId, name: entry.name }));
+
+        if (seeds.length === 0) {
+            return { json: { versions, imported, roots: [], nodes: {}, warnings: scope.warnings } };
+        }
+
+        const selection = await store.selectionAcross(refs, {
+            nodes: seeds,
             includeChildren: true,
             compose,
-        });
+        }, scope);
 
         const file = selection.file;
         const nodes: Record<string, unknown> = {};
+
+        // Which tessera each node is written in, which is what a link between two of them
+        // looks like from here.
+        const written = file.index.sections[0]?.nodes.map(node => node.id) ?? [];
+        const origins = await store.originsOf(scope.entries.map(entry => entry.fileId), written);
+        const ofFile = new Map(scope.entries.map(entry => [entry.fileId, entry]));
 
         for (const node of file.index.sections[0]?.nodes ?? []) {
             const components = (node.components ?? []).map(reference => {
@@ -120,16 +170,66 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
                 };
             });
 
+            const origin = ofFile.get(origins.get(node.id) ?? "");
+
             nodes[node.id] = {
                 id: node.id,
                 // A name is a value-less component, so the name is the reference id.
                 name: components.find(component => component.type === "core::name")?.id ?? null,
                 children: components.filter(component => component.type === "core::child").map(component => component.id),
                 components,
+                tessera: origin?.name ?? null,
+                tesseraId: origin?.tesseraId ?? null,
+                versionId: origin?.versionId ?? null,
             };
         }
 
-        return { json: { roots: roots.filter(id => nodes[id] !== undefined), nodes } };
+        return {
+            json: {
+                versions: versions.map(version => ({
+                    ...version,
+                    roots: version.roots.filter(id => nodes[id] !== undefined),
+                })),
+                imported,
+                roots: seeds.filter(id => nodes[id] !== undefined),
+                nodes,
+                warnings: scope.warnings,
+            },
+        };
+    },
+
+    /**
+     * A glb of some nodes taken from several versions at once.
+     *
+     * The single-version case goes through the API's own `nodes` endpoint, which is the
+     * thing being looked at and is left to answer for itself. This exists for the case
+     * that endpoint cannot express: one view over more than one tessera, which is a
+     * question about a set of versions rather than about one of them.
+     */
+    async "POST /app/glb"({ store, body }) {
+        if (body.byteLength === 0) throw new BadRequest(`This request needs a JSON body`);
+
+        let asked: { versions?: VersionRef[]; nodes?: string[]; compose?: boolean; includeChildren?: boolean };
+        try {
+            asked = JSON.parse(body.toString("utf-8"));
+        } catch (error) {
+            throw new BadRequest(`The body is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        if (!Array.isArray(asked?.versions) || asked.versions.length === 0) {
+            throw new BadRequest(`A glb needs a "versions" array with at least one tessera and version`);
+        }
+        if (!Array.isArray(asked?.nodes) || asked.nodes.length === 0) {
+            throw new BadRequest(`A glb needs a "nodes" array with at least one id`);
+        }
+
+        const built = await store.buildNodes(asked.versions, NodeFetchFormat.Glb, {
+            nodes: asked.nodes,
+            includeChildren: asked.includeChildren ?? true,
+            compose: asked.compose ?? false,
+        });
+
+        return { bytes: Buffer.from(built.bytes), contentType: built.contentType };
     },
 };
 

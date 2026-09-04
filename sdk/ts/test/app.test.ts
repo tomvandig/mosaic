@@ -6,7 +6,7 @@ import os from "node:os";
 import { serve, type RunningServer } from "../src/api/Server.ts";
 import { parseGlb } from "../src/gltf/GltfDocument.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
-import { readExample, resolveExampleSchema } from "./fixtures.ts";
+import { DATA_DIR, readExample, resolveExampleSchema } from "./fixtures.ts";
 
 /** The page and the endpoints it uses, over a server that is really listening. */
 
@@ -38,8 +38,33 @@ async function upload(url: string, example: string): Promise<any> {
     return JSON.parse(text);
 }
 
+/** Publishes an archive that is already packed, the way a user drops a .tsr on the page. */
+async function uploadArchive(url: string, name: string): Promise<any> {
+    const bytes = fs.readFileSync(path.join(DATA_DIR, `${name}.tsr`));
+    const response = await fetch(`${url}/app/upload?name=${encodeURIComponent(`${name}.tsr`)}`, {
+        method: "POST", body: bytes,
+    });
+
+    const text = await response.text();
+    assert.equal(response.status, 200, text);
+    return JSON.parse(text);
+}
+
 const scene = async (url: string, tesseraId: string, versionId: string, compose = false): Promise<any> =>
     await (await fetch(`${url}/app/scene?tesseraId=${tesseraId}&versionId=${versionId}&compose=${compose}`)).json();
+
+/** The scene over several versions at once, which is what ticking two tesserae asks for. */
+const sceneOf = async (url: string, versions: any[], compose = false): Promise<any> => {
+    const pairs = versions.map(version => `${version.tesseraId}:${version.versionId}`).join(",");
+    const response = await fetch(`${url}/app/scene?versions=${pairs}&compose=${compose}`);
+
+    const text = await response.text();
+    assert.equal(response.status, 200, text);
+    return JSON.parse(text);
+};
+
+const named = (answer: any, name: string): any =>
+    (Object.values(answer.nodes) as any[]).find(node => node.name === name);
 
 // ---------------------------------------------------------------------------
 
@@ -234,6 +259,174 @@ test("the app endpoints report what is wrong rather than failing blankly", async
         });
         assert.equal(rubbish.status, 400);
         assert.match(((await rubbish.json()) as any).validationErrors.join(" "), /not a readable Mosaic archive/);
+    } finally {
+        await stopped(running);
+    }
+});
+
+// --- more than one tessera at a time ---------------------------------------
+
+test("two tesserae can be on show at once, each with its own roots", async () => {
+    const running = await started();
+    try {
+        const boxes = await upload(running.url, "instanced-boxes");
+        const house = await upload(running.url, "house-v1");
+
+        const answer = await sceneOf(running.url, [boxes, house]);
+
+        assert.deepEqual(answer.versions.map((version: any) => version.name), ["instanced-boxes", "house-v1"]);
+        assert.ok(answer.versions.every((version: any) => version.roots.length > 0));
+
+        // Every node says which tessera it is written in, and both are represented.
+        const tesserae = new Set((Object.values(answer.nodes) as any[]).map(node => node.tessera));
+        assert.deepEqual([...tesserae].sort(), ["house-v1", "instanced-boxes"]);
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("a version asked for on its own still reads what it imports", async () => {
+    const running = await started();
+    try {
+        await uploadArchive(running.url, "helmet");
+        const plaza = await upload(running.url, "helmet-plaza");
+
+        const answer = await sceneOf(running.url, [plaza]);
+
+        // The helmet was not asked for; it is here because the plaza imports it.
+        assert.deepEqual(answer.imported.map((entry: any) => entry.name), ["helmet"]);
+        assert.deepEqual(answer.versions.map((version: any) => version.name), ["helmet-plaza"]);
+        assert.deepEqual(answer.warnings, []);
+
+        // And a plinth's child is a node written in the other tessera.
+        const plinth = named(answer, "Left plinth") ?? named(answer, "Lone plinth");
+        assert.ok(plinth, "the plaza's own nodes are there");
+
+        const child = answer.nodes[plinth.children[0]];
+        assert.ok(child, "the child a plinth names resolved");
+        assert.equal(child.tessera, "helmet", "and it is written in the imported tessera");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("with both on show, the imported node hangs under the tessera that imports it", async () => {
+    const running = await started();
+    try {
+        const helmet = await uploadArchive(running.url, "helmet");
+        const plaza = await upload(running.url, "helmet-plaza");
+
+        const alone = await sceneOf(running.url, [helmet]);
+        const together = await sceneOf(running.url, [helmet, plaza]);
+
+        const helmetGroup = (answer: any) => answer.versions.find((version: any) => version.name === "helmet");
+        const held = new Set(
+            (Object.values(together.nodes) as any[]).flatMap(node => node.children ?? []));
+
+        // Being a root is judged across everything on show, so the node the plaza holds
+        // as a child stops being a root of the helmet as soon as the plaza is there too.
+        assert.ok(helmetGroup(alone).roots.length > helmetGroup(together).roots.length);
+        assert.ok(helmetGroup(alone).roots.some((id: string) => held.has(id)),
+            "and it is the plaza that holds it");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("a glb of everything on show is built across the tesserae", async () => {
+    const running = await started();
+    try {
+        await uploadArchive(running.url, "helmet");
+        const plaza = await upload(running.url, "helmet-plaza");
+        const boxes = await upload(running.url, "instanced-boxes");
+
+        const answer = await sceneOf(running.url, [plaza, boxes]);
+        const roots = answer.versions.flatMap((version: any) => version.roots);
+
+        const response = await fetch(`${running.url}/app/glb`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+                versions: [plaza, boxes].map(({ tesseraId, versionId }) => ({ tesseraId, versionId })),
+                nodes: roots,
+                includeChildren: true,
+                compose: false,
+            }),
+        });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "model/gltf-binary");
+
+        const { document } = parseGlb(new Uint8Array(await response.arrayBuffer()));
+
+        // Five helmets from the imported tessera and the boxes from the other one, all
+        // drawn from geometry that was written once.
+        assert.ok(document.nodes!.filter(node => node.mesh !== undefined).length >= 7);
+        assert.ok((document.meshes?.length ?? 0) >= 2);
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("the 3D view of an imported node goes through that tessera's own version", async () => {
+    const running = await started();
+    try {
+        await uploadArchive(running.url, "helmet");
+        const plaza = await upload(running.url, "helmet-plaza");
+
+        const answer = await sceneOf(running.url, [plaza]);
+        const imported = (Object.values(answer.nodes) as any[]).find(node => node.tessera === "helmet");
+
+        // Exactly the call the page makes: the node's own tessera and version, which is
+        // not the one on screen.
+        assert.notEqual(imported.tesseraId, plaza.tesseraId);
+
+        const response = await fetch(
+            `${running.url}/Mosaic-api/tesserae/${imported.tesseraId}/versions/${imported.versionId}/nodes?format=glb`,
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ nodes: [imported.id], includeChildren: true }),
+            });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("x-mosaic-missing"), null, "the node is in that version");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("an import naming something the server does not have is reported", async () => {
+    const running = await started();
+    try {
+        const linked = await upload(running.url, "linked-house");
+        const answer = await sceneOf(running.url, [linked]);
+
+        assert.equal(answer.imported.length, 0);
+        assert.equal(answer.warnings.length, 2, "both unresolved imports are named");
+        assert.match(answer.warnings.join(" "), /house-v1\.tsr/);
+        assert.match(answer.warnings.join(" "), /site-survey\.tsr/);
+
+        // The version itself still shows: an import that cannot be followed is missing
+        // context, not a failure.
+        assert.ok(answer.versions[0].roots.length > 0);
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("a scene needs to be told what to show", async () => {
+    const running = await started();
+    try {
+        assert.equal((await fetch(`${running.url}/app/scene?versions=`)).status, 400);
+        assert.equal((await fetch(`${running.url}/app/scene?versions=not-a-pair`)).status, 400);
+
+        const glb = await fetch(`${running.url}/app/glb`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ nodes: ["55555555-5555-4555-8555-555555555555"] }),
+        });
+        assert.equal(glb.status, 400);
     } finally {
         await stopped(running);
     }

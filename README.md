@@ -362,6 +362,15 @@ stored nowhere:
 to it. The nodes it inherits from are read for what they hold and then left out of the answer — a
 type is a source of components, not a thing to draw beside the thing that is of that type.
 
+**Imports are followed.** A version whose archive imports `bench.tsr` is answered from its own rows
+*and* from the tessera published here under the name `bench` — an import names an archive, this server
+holds archives as tesserae, and the file name is the link between the two. So a `core::child` that
+leaves one tessera and lands on a node in another resolves like any other reference, and the two
+datasets stay separately versioned things: the imported tessera is read at its latest version, so
+publishing a new bench changes every courtyard that places one, without republishing any of them. The
+imported archive layers *underneath* the one that imports it, as an older section would. An import
+naming something this server does not have is left out and reported rather than failing the request.
+
 **The subset is taken in the database, not by rebuilding the version and filtering it.** The nodes
 asked for, the references they carry and the rows behind those are each queried by name; collapsing —
 the last write to a reference wins, a `DELETE` removes it — is done in SQL, and `includeChildren`
@@ -395,25 +404,36 @@ mosaic serve scene.duckdb --port 8791     # then open http://127.0.0.1:8791
 ```
 
 Drop `.tsr` files on it and they are published — a new tessera, or a new version of one with that
-name. Then three panels, over one version at a time:
+name. Then four panels:
 
-- a **tree** of the child hierarchy, drawn from a selection over the version's root nodes, each node
-  labelled by its `core::name`;
+- a **tesserae** list of everything the server holds. Tick as many as you like and pick a version of
+  each; what is ticked is what is on show, all of it read as one scene;
+- a **tree** of the child hierarchy, grouped by the versions on show and drawn from a single
+  selection over their root nodes, each node labelled by its `core::name`;
 - a **components** view of whatever node is selected, with each component's type, reference id and
-  value;
+  value, and the tessera the node is written in;
 - a **3D** view, which is [`<model-viewer>`](https://modelviewer.dev) — a viewer that already knows
   PBR materials, textures and image-based lighting — fed the GLB that
   `POST …/versions/{versionId}/nodes?format=glb` builds for the selected node. Selecting a node
-  reloads it; **Show whole version** loads every root.
+  reloads it; **Show everything** loads every root on show.
+
+**This is where imports are worth looking at.** Tick a tessera that imports another and the one it
+imports is read too, ticked or not — it is listed as *via import*, and any of its nodes drawn in the
+tree carries a badge naming it, so a child link crossing from one tessera into another is visible as
+exactly that. Being a root is judged across everything on show, so ticking both a courtyard and the
+bench it places moves the bench out of its own list of roots and under the spot that holds it, rather
+than drawing it twice.
 
 A **compose** checkbox runs both the tree and the 3D view through the flag above, so the difference
 between a node that is-a type and a node carrying that type's geometry is one click.
 
-The page's own two endpoints, `/app/upload` and `/app/scene`, are deliberately **not** part of the
-spec: `mosaic-api.tsp` is the contract, and these exist so the page can upload in one call and read a
-whole scene in another. The 3D view goes through the real `nodes` endpoint, since that is the thing
-being looked at. `<model-viewer>` is loaded from a CDN, so the 3D panel wants the machine to have
-internet; the rest of the page does not.
+The page's own endpoints — `/app/upload`, `/app/tesserae`, `/app/scene` and `/app/glb` — are
+deliberately **not** part of the spec: `mosaic-api.tsp` is the contract, and these exist so the page
+can upload in one call, read a whole scene in another, and ask for one view over *several* versions,
+which is a question the spec's per-version `nodes` operation does not express. Selecting a single
+node still goes through that real endpoint — against the version the node is written in, which for a
+node reached across an import is the imported tessera. `<model-viewer>` is loaded from a CDN, so the
+3D panel wants the machine to have internet; the rest of the page does not.
 
 Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so

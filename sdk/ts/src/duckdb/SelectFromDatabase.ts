@@ -29,6 +29,8 @@ function referencedIds(value: unknown, into: Set<string>): void {
 }
 
 interface Reference {
+    /** The archive the reference is written in, which is where its row is. */
+    fileId: string;
     nodeId: string;
     refId: string;
     type: string;
@@ -36,20 +38,33 @@ interface Reference {
 }
 
 /**
- * Takes a subset of one archive straight out of the database.
+ * Takes a subset of one or more archives straight out of the database.
  *
  * The same thing `selectNodes` does to a file in memory, except that nothing is
  * reconstructed to be thrown away: the nodes, their references and their component rows
  * are each asked for by name, so answering for three nodes costs three nodes rather than
  * the whole version. The collapsing a file would have done -- the last write to a
  * reference wins, and a DELETE removes it -- is done in SQL instead.
+ *
+ * Given several archives it reads across all of them at once, which is what makes a
+ * reference that leaves one archive and lands in another -- an import -- resolve.
  */
 export async function selectNodesFromDatabase(
     database: MosaicDatabase,
-    fileId: string,
+    files: string | string[],
     request: SelectionRequest,
 ): Promise<SelectionResult> {
-    const scope = `file_id = ${literal(fileId)}`;
+    // The archives arrive in layering order: an import sits underneath whatever imports
+    // it, so where two of them write the same reference the later one wins -- the rule
+    // sections already follow inside one archive.
+    const fileIds = typeof files === "string" ? [files] : files;
+    if (fileIds.length === 0) {
+        return { file: emptyFile(), nodeIds: [], missing: [...request.nodes], pulledIn: [] };
+    }
+
+    const scope = `file_id IN (${list(fileIds)})`;
+    /** Which layer a row is on. Later in the list is nearer the top. */
+    const layer = `list_position([${list(fileIds)}], file_id)`;
     const wanted = request.componentTypes && request.componentTypes.length > 0
         ? new Set(request.componentTypes)
         : undefined;
@@ -85,7 +100,7 @@ export async function selectNodesFromDatabase(
             `WITH RECURSIVE ranked AS (
                  SELECT node_id, ref_id, operation,
                         row_number() OVER (PARTITION BY node_id, ref_id
-                                           ORDER BY section_ordinal DESC, ordinal DESC) AS rn
+                                           ORDER BY ${layer} DESC, section_ordinal DESC, ordinal DESC) AS rn
                  FROM mosaic_component_ref
                  WHERE ${scope} AND type = ${literal(type)} AND operation <> 'PASS_THROUGH'
              ),
@@ -132,19 +147,21 @@ export async function selectNodesFromDatabase(
 
         const rows = await database.all(
             `WITH ranked AS (
-                 SELECT node_id, ref_id, type, idx, operation,
+                 SELECT file_id, node_id, ref_id, type, idx, operation,
                         row_number() OVER (PARTITION BY node_id, ref_id
-                                           ORDER BY section_ordinal DESC, ordinal DESC) AS rn,
+                                           ORDER BY ${layer} DESC, section_ordinal DESC, ordinal DESC) AS rn,
+                        min(${layer}) OVER (PARTITION BY node_id, ref_id) AS first_layer,
                         min(section_ordinal) OVER (PARTITION BY node_id, ref_id) AS first_section,
                         min(ordinal) OVER (PARTITION BY node_id, ref_id) AS first_ordinal
                  FROM mosaic_component_ref
                  WHERE ${scope} AND node_id IN (${list(ids)}) AND operation <> 'PASS_THROUGH'
              )
-             SELECT node_id, ref_id, type, idx FROM ranked
+             SELECT file_id, node_id, ref_id, type, idx FROM ranked
              WHERE rn = 1 AND operation <> 'DELETE'
-             ORDER BY node_id, first_section, first_ordinal`);
+             ORDER BY node_id, first_layer, first_section, first_ordinal`);
 
         return rows.map(row => ({
+            fileId: String(row.file_id),
             nodeId: String(row.node_id),
             refId: String(row.ref_id),
             type: String(row.type),
@@ -161,7 +178,11 @@ export async function selectNodesFromDatabase(
 
     // --- the references, and the rows behind them ---------------------------
     const references = (await referencesOf(chosen)).filter(keeps);
+
+    // A row is addressed by archive as well as by type and index: every archive counts
+    // its rows of a type from its own zero, so an index alone names two different rows.
     const values = new Map<string, unknown>();
+    const valueKey = (reference: Reference) => `${reference.fileId} ${reference.type} ${reference.index}`;
 
     /**
      * Reads the rows a set of references points at.
@@ -171,24 +192,26 @@ export async function selectNodesFromDatabase(
      * these sizes the cost is in the round trips and not in the scanning.
      */
     const loadValues = async (needed: Reference[]): Promise<void> => {
-        const byType = new Map<string, Set<number>>();
+        const groups = new Map<string, { fileId: string; type: string; indices: Set<number> }>();
         for (const reference of needed) {
             if (reference.index < 0) continue;
-            const key = `${reference.type} ${reference.index}`;
-            if (values.has(key)) continue;
-            const indices = byType.get(reference.type) ?? new Set<number>();
-            indices.add(reference.index);
-            byType.set(reference.type, indices);
+            if (values.has(valueKey(reference))) continue;
+
+            const key = `${reference.fileId} ${reference.type}`;
+            const group = groups.get(key)
+                ?? { fileId: reference.fileId, type: reference.type, indices: new Set<number>() };
+            group.indices.add(reference.index);
+            groups.set(key, group);
         }
 
-        if (byType.size === 0) return;
+        if (groups.size === 0) return;
 
-        const parts = [...byType].map(([type, indices]) =>
-            `SELECT ${literal(type)} AS type, idx, value FROM ${quoteIdentifier(type)}
-             WHERE ${scope} AND idx IN (${[...indices].join(", ")})`);
+        const parts = [...groups.values()].map(({ fileId, type, indices }) =>
+            `SELECT file_id, ${literal(type)} AS type, idx, value FROM ${quoteIdentifier(type)}
+             WHERE file_id = ${literal(fileId)} AND idx IN (${[...indices].join(", ")})`);
 
         for (const row of await database.all(parts.join(" UNION ALL "))) {
-            values.set(`${String(row.type)} ${Number(row.idx)}`, row.value);
+            values.set(`${String(row.file_id)} ${String(row.type)} ${Number(row.idx)}`, row.value);
         }
     };
 
@@ -204,7 +227,7 @@ export async function selectNodesFromDatabase(
         const candidates = new Set<string>();
 
         for (const reference of frontier) {
-            const value = values.get(`${reference.type} ${reference.index}`);
+            const value = values.get(valueKey(reference));
             if (value === undefined) continue;
             referencedIds(typeof value === "string" ? JSON.parse(value) : value, candidates);
         }
@@ -233,7 +256,7 @@ export async function selectNodesFromDatabase(
     // --- build the file ------------------------------------------------------
     const file = emptyFile();
     const [header] = await database.all(
-        `SELECT mosaic_version FROM mosaic_file WHERE ${scope}`);
+        `SELECT mosaic_version FROM mosaic_file WHERE ${scope} ORDER BY ${layer} DESC LIMIT 1`);
     file.index.header.MosaicVersion = String(header?.mosaic_version ?? "post-alpha");
 
     const byNode = new Map<string, Reference[]>();
@@ -252,7 +275,7 @@ export async function selectNodesFromDatabase(
                 return { type: reference.type, id: reference.refId, index: reference.index };
             }
 
-            const value = values.get(`${reference.type} ${reference.index}`);
+            const value = values.get(valueKey(reference));
             const row = typeof value === "string" ? value : JSON.stringify(value ?? {});
             return {
                 type: reference.type,
@@ -264,9 +287,11 @@ export async function selectNodesFromDatabase(
         return { id, components };
     });
 
+    // A type several archives declare is described once, by whichever of them is nearest
+    // the top: they are the same type, so the topmost declaration stands for all of them.
     const tables = await database.all(
         `SELECT type, filename, format, schema FROM mosaic_component_table
-         WHERE ${scope} AND type IN (${list(usedTypes)})`);
+         WHERE ${scope} AND type IN (${list(usedTypes)}) ORDER BY ${layer}`);
     const schemas = new Map(tables.map(row => [String(row.type), row]));
 
     for (const type of [...usedTypes].sort()) {
@@ -282,7 +307,7 @@ export async function selectNodesFromDatabase(
 
     const [provenance] = await database.all(
         `SELECT section_id, data_version, author FROM mosaic_section
-         WHERE ${scope} ORDER BY ordinal DESC LIMIT 1`);
+         WHERE ${scope} ORDER BY ${layer} DESC, ordinal DESC LIMIT 1`);
 
     file.index.sections.push({
         header: {

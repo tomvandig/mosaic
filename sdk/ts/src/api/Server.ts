@@ -208,6 +208,14 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
                 try {
                     const reply = await app({ store, query: url.searchParams, body: await readBody(incoming), baseUrl });
 
+                    if (reply.bytes) {
+                        response.writeHead(reply.status ?? 200, {
+                            "content-type": reply.contentType ?? "application/octet-stream",
+                            "content-length": String(reply.bytes.byteLength),
+                        });
+                        return response.end(reply.bytes);
+                    }
+
                     if (reply.html !== undefined) {
                         response.writeHead(reply.status ?? 200, {
                             "content-type": "text/html; charset=utf-8",

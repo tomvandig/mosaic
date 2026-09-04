@@ -69,12 +69,49 @@ export class BadRequest extends Error {
     }
 }
 
+export interface VersionRef {
+    tesseraId: string;
+    versionId: string;
+}
+
+/** One archive in a scope, and the version it came from. */
+export interface ScopeEntry extends VersionRef {
+    /** The archive this version became, as it is named in the database. */
+    fileId: string;
+    /** The tessera's name, which is also what an import names it by. */
+    name: string;
+    /** True when nothing asked for it: it is here because something imports it. */
+    imported: boolean;
+}
+
+/** The archives a question is answered from, once imports have been followed. */
+export interface ResolvedScope {
+    /** In layering order: an import comes before whatever imports it. */
+    entries: ScopeEntry[];
+    /** Imports that could not be followed, said rather than silently dropped. */
+    warnings: string[];
+}
+
+/**
+ * The tessera name an import uri points at: `../lib/helmet.tsr?v=2` -> `helmet`.
+ *
+ * An import names an archive, and this server holds archives as tesserae, so the file
+ * name is the link between the two. It is a convention of this server rather than
+ * anything the format says -- a uri that names nothing published here stays unresolved,
+ * and is reported.
+ */
+export function importedTesseraName(uri: string): string {
+    const withoutQuery = uri.split(/[?#]/)[0] ?? "";
+    const last = withoutQuery.split(/[\\/]/).filter(part => part.length > 0).at(-1) ?? "";
+    return decodeURIComponent(last).replace(/\.tsr$/i, "").toLowerCase();
+}
+
 /**
  * The API's data, kept in a Mosaic DuckDB database.
  *
- * Blob bytes live in a directory beside the database rather than in a column: they are
- * whole archives, they are written once and read whole, and keeping them as files is what
- * lets a download be handed over without copying it through SQL.
+ * Blob bytes are a column like everything else. They are what an upload arrives as and
+ * what a download is handed, and nothing else reads them: a version's content is in the
+ * component tables by the time any question is asked of it.
  */
 export class ApiStore {
     private constructor(
@@ -417,7 +454,16 @@ export class ApiStore {
         format: NodeFetchFormat,
         request: SelectionRequest,
     ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
-        const selection = await this.selection(tesseraId, versionId, request);
+        return await this.buildNodes([{ tesseraId, versionId }], format, request);
+    }
+
+    /** The same, over several versions read together. */
+    async buildNodes(
+        refs: VersionRef[],
+        format: NodeFetchFormat,
+        request: SelectionRequest,
+    ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
+        const selection = await this.selectionAcross(refs, request);
 
         if (format === NodeFetchFormat.Tsr) {
             return {
@@ -437,6 +483,79 @@ export class ApiStore {
         };
     }
 
+    // --- imports ------------------------------------------------------------
+
+    /** The uris an archive imports, in the order it lists them. */
+    private async importsOf(fileId: string): Promise<string[]> {
+        const rows = await this.database.all(
+            `SELECT uri FROM mosaic_import WHERE file_id = ${literal(fileId)} ORDER BY ordinal`);
+        return rows.map(row => String(row.uri ?? "")).filter(uri => uri.length > 0);
+    }
+
+    /**
+     * The archives that answer for a set of versions: the versions themselves and,
+     * underneath them, everything they import.
+     *
+     * An import is a reference to another archive, so a version that imports one is only
+     * half a story on its own -- the nodes it points into live over there. Following the
+     * imports here is what lets a selection cross that line. Each import is matched to a
+     * tessera by name; a version of that tessera the caller has already named is the one
+     * used, and otherwise its latest.
+     *
+     * Imports come out before the archive that imports them, so the importing archive
+     * layers over what it imports. A tessera appears once however many times it is
+     * reached, and a cycle stops rather than repeating.
+     */
+    async resolveScope(asked: VersionRef[]): Promise<ResolvedScope> {
+        const tesserae = await this.listTesserae();
+        const byName = new Map(tesserae.map(tessera => [tessera.name.toLowerCase(), tessera]));
+        const byId = new Map(tesserae.map(tessera => [tessera.id, tessera]));
+
+        // A version the caller named wins over the latest, wherever that tessera turns up.
+        const pinned = new Map(asked.map(ref => [ref.tesseraId, ref.versionId]));
+
+        const entries: ScopeEntry[] = [];
+        const placed = new Set<string>();
+        const visiting = new Set<string>();
+        const warnings: string[] = [];
+
+        const visit = async (ref: VersionRef): Promise<void> => {
+            if (placed.has(ref.tesseraId) || visiting.has(ref.tesseraId)) return;
+            visiting.add(ref.tesseraId);
+
+            const fileId = await this.archiveOf(ref.tesseraId, ref.versionId);
+
+            for (const uri of await this.importsOf(fileId)) {
+                const target = byName.get(importedTesseraName(uri));
+                if (!target) {
+                    warnings.push(`import "${uri}" is not published here as a tessera, so it was left out`);
+                    continue;
+                }
+
+                const versionId = pinned.get(target.id) ?? target.latestVersion;
+                if (!versionId) {
+                    warnings.push(`import "${uri}" names the tessera "${target.name}", which has no versions yet`);
+                    continue;
+                }
+
+                await visit({ tesseraId: target.id, versionId });
+            }
+
+            visiting.delete(ref.tesseraId);
+            placed.add(ref.tesseraId);
+            entries.push({
+                ...ref,
+                fileId,
+                name: byId.get(ref.tesseraId)?.name ?? "",
+                imported: !pinned.has(ref.tesseraId),
+            });
+        };
+
+        for (const ref of asked) await visit(ref);
+
+        return { entries, warnings };
+    }
+
     /** The archive a version became, as it is named in the database. */
     private async archiveOf(tesseraId: string, versionId: string): Promise<string> {
         await this.getVersion(tesseraId, versionId);
@@ -445,9 +564,25 @@ export class ApiStore {
         return name;
     }
 
-    /** Takes a subset of a version, in the database. */
+    /** Takes a subset of a version, in the database, imports included. */
     async selection(tesseraId: string, versionId: string, request: SelectionRequest): Promise<SelectionResult> {
-        return await selectNodesFromDatabase(this.database, await this.archiveOf(tesseraId, versionId), request);
+        return await this.selectionAcross([{ tesseraId, versionId }], request);
+    }
+
+    /**
+     * Takes a subset of several versions at once, as one selection.
+     *
+     * Which is the only way to see what an import means: the archives are read together,
+     * so a child reference written in one and landing in another is an ordinary link
+     * rather than a dangling id.
+     */
+    async selectionAcross(
+        refs: VersionRef[],
+        request: SelectionRequest,
+        resolved?: ResolvedScope,
+    ): Promise<SelectionResult> {
+        const scope = resolved ?? await this.resolveScope(refs);
+        return await selectNodesFromDatabase(this.database, scope.entries.map(entry => entry.fileId), request);
     }
 
     /**
@@ -455,20 +590,72 @@ export class ApiStore {
      * starts. Everything else hangs beneath one of them.
      */
     async rootNodeIds(tesseraId: string, versionId: string): Promise<string[]> {
-        const name = await this.archiveOf(tesseraId, versionId);
-        const scope = `file_id = ${literal(name)}`;
+        const [roots] = await this.rootsAcross([{ tesseraId, versionId }]);
+        return roots?.nodes ?? [];
+    }
+
+    /**
+     * Where the trees start, for each version asked for.
+     *
+     * Being a root is judged across the whole scope rather than within one archive: a
+     * node that is a root of the archive it is written in stops being one as soon as
+     * something that imports that archive holds it as a child. That is what makes two
+     * tesserae shown together one tree instead of two.
+     *
+     * Only the versions asked for get roots. An archive pulled in because something
+     * imports it is there to be pointed into, and shows up where it is pointed at.
+     */
+    async rootsAcross(
+        refs: VersionRef[],
+        resolved?: ResolvedScope,
+    ): Promise<Array<ScopeEntry & { nodes: string[] }>> {
+        const { entries } = resolved ?? await this.resolveScope(refs);
+        if (entries.length === 0) return [];
+
+        const everything = `file_id IN (${entries.map(entry => literal(entry.fileId)).join(", ")})`;
+        const answer: Array<ScopeEntry & { nodes: string[] }> = [];
+
+        for (const entry of entries) {
+            if (entry.imported) continue;
+
+            const rows = await this.database.all(
+                `SELECT n.node_id, min(n.node_ordinal) AS first_seen
+                 FROM mosaic_node n
+                 WHERE n.file_id = ${literal(entry.fileId)}
+                   AND n.node_id NOT IN (
+                       SELECT ref_id FROM mosaic_component_ref
+                       WHERE ${everything} AND type = 'core::child' AND operation <> 'DELETE')
+                 GROUP BY n.node_id
+                 ORDER BY first_seen`);
+
+            answer.push({ ...entry, nodes: rows.map(row => String(row.node_id)) });
+        }
+
+        return answer;
+    }
+
+    /**
+     * Which archive each of these nodes is written in, as far as a scope is concerned.
+     *
+     * A node written in more than one of them -- the same node carried by two versions --
+     * is answered with the topmost, since that is the one whose writing stands.
+     */
+    async originsOf(fileIds: string[], nodeIds: string[]): Promise<Map<string, string>> {
+        if (fileIds.length === 0 || nodeIds.length === 0) return new Map();
 
         const rows = await this.database.all(
-            `SELECT DISTINCT n.node_id, min(n.node_ordinal) AS first_seen
-             FROM mosaic_node n
-             WHERE n.${scope}
-               AND n.node_id NOT IN (
-                   SELECT ref_id FROM mosaic_component_ref
-                   WHERE ${scope} AND type = 'core::child' AND operation <> 'DELETE')
-             GROUP BY n.node_id
-             ORDER BY first_seen`);
+            `SELECT DISTINCT node_id, file_id,
+                    list_position([${fileIds.map(literal).join(", ")}], file_id) AS layer
+             FROM mosaic_node
+             WHERE file_id IN (${fileIds.map(literal).join(", ")})
+               AND node_id IN (${nodeIds.map(literal).join(", ")})
+             ORDER BY layer`);
 
-        return rows.map(row => String(row.node_id));
+        // Ordered bottom to top, so the last write of a node id is the topmost archive.
+        const origins = new Map<string, string>();
+        for (const row of rows) origins.set(String(row.node_id), String(row.file_id));
+
+        return origins;
     }
 
     // --- helpers ------------------------------------------------------------
