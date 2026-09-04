@@ -84,6 +84,19 @@ enum MosaicFileDownloadType
   whole_tessera_and_imports_history_condensed
 }
 
+enum NodeFetchFormat
+{
+  glb,
+  tsr
+}
+
+model NodeFetchRequest
+{
+  nodes: uuid[];              // the nodes to fetch, by id
+  componentTypes?: string[];  // only these component types; all of them when left out
+  includeChildren?: boolean;  // take everything beneath them as well
+}
+
 enum CreateTesseraVersionResponseState
 {
   OK,
@@ -137,6 +150,14 @@ namespace MosaicApi {
             @path versionId: uuid,
             @query downloadType: MosaicFileDownloadType
           ): TesseraVersionMosaicFile;
+
+          @route("/nodes")
+          @post op fetchNodes(
+            @path tesseraId: uuid,
+            @path versionId: uuid,
+            @query format: NodeFetchFormat,
+            @body request: NodeFetchRequest
+          ): File;
 
           @route("/query")
           op query is MosaicQueryApi.query;

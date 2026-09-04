@@ -337,6 +337,25 @@ actually on answers `OUT_OF_DATE`, and a blob that is not a readable archive ans
 `VALIDATION_ERROR` with the reason, rather than either being an HTTP error. On success the archive is
 also loaded into the database, so it is queryable and composable immediately.
 
+`POST /versions/{versionId}/nodes` fetches **a set of nodes by id**, built when it is asked for and
+stored nowhere:
+
+```jsonc
+// ?format=glb  or  ?format=tsr
+{
+  "nodes": ["55555555-…", "66666666-…"],   // the nodes to take
+  "componentTypes": ["core::transform"],   // only these; all of them when left out
+  "includeChildren": true                  // and everything beneath them
+}
+```
+
+The answer is a stream of bytes: a `.glb` for a viewer, or a `.tsr` that is a Mosaic archive in its
+own right — one that can be published again as another tessera. Either way the subset is made whole
+first: anything a kept component points at comes along, so a mesh never names an accessor the answer
+does not carry. The component filter applies to the nodes that were asked for, not to what was pulled
+in for them. Nodes the version does not have are named in an `x-mosaic-missing` header, and the number
+built in `x-mosaic-nodes`, so the body stays nothing but the file.
+
 `download-Mosaic` builds what the `downloadType` asks for and answers with a blob url:
 `just_this_version` hands back the archive as uploaded, `whole_tessera_history_intact` federates every
 version up to that one keeping all sections, and the condensed forms collapse them to what is still
@@ -377,10 +396,14 @@ npm install
 npm test
 ```
 
-The first one, [publish-a-tessera](sdk/scenarios/publish-a-tessera/publish-a-tessera.md), writes a
-source document to disk, packs it into an archive, publishes it through the API as a tessera's first
-version, downloads it back byte for byte, composes it into a `.glb`, and checks that a second version
-claiming to follow nothing is answered with `OUT_OF_DATE`.
+[publish-a-tessera](sdk/scenarios/publish-a-tessera/publish-a-tessera.md) writes a source document to
+disk, packs it into an archive, publishes it through the API as a tessera's first version, downloads
+it back byte for byte, composes it into a `.glb`, and checks that a second version claiming to follow
+nothing is answered with `OUT_OF_DATE`.
+
+[fetch-some-nodes](sdk/scenarios/fetch-some-nodes/fetch-some-nodes.md) publishes a tessera and then
+takes pieces of it: one node as a `.glb`, the same node as a `.tsr` that is published again as
+another tessera, a node narrowed to one component type, and a parent with everything beneath it.
 
 ## Status
 

@@ -8,8 +8,11 @@ import { randomUUID } from "node:crypto";
 import { serve, type RunningServer } from "../src/api/Server.ts";
 import { MosaicApiClient, ApiError } from "../src/api/MosaicApiClient.ts";
 import { API_ROUTES } from "../src/api/MosaicApiRoutes.ts";
-import { CreateTesseraVersionResponseState, MosaicFileDownloadType } from "../src/api/MosaicApiTypes.ts";
+import { CreateTesseraVersionResponseState, MosaicFileDownloadType, NodeFetchFormat } from "../src/api/MosaicApiTypes.ts";
 import { LoadMosaicFile } from "../src/MosaicFile.ts";
+import { parseGlb } from "../src/gltf/GltfDocument.ts";
+import { CORE_TYPE } from "../src/core/schemas.ts";
+import { GLTF_TYPE } from "../src/gltf/schemas.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
 import { readExample, resolveExampleSchema } from "./fixtures.ts";
 
@@ -327,4 +330,209 @@ test("a client pointed at nothing fails to connect rather than hanging", async (
         assert.ok(!(error instanceof ApiError), "there is no HTTP answer to make an ApiError from");
         return true;
     });
+});
+
+// ---------------------------------------------------------------------------
+// Fetching a set of nodes, built on demand
+// ---------------------------------------------------------------------------
+
+const WALL_FRONT = "55555555-5555-4555-8555-555555555555";
+const WALL_SIDE = "66666666-6666-4666-8666-666666666666";
+
+/** Publishes an example as the first version of a tessera, and hands back its ids. */
+async function publish(client: MosaicApiClient, example: string) {
+    const tesseraId = randomUUID();
+    await client.createTessera({ body: { id: tesseraId, name: example } });
+
+    const blob = await client.uploadMosaicBlobUrl({ tesseraId });
+    await client.upload({ blobId: blob.blobId, body: await archiveBytes(example) });
+
+    const versionId = randomUUID();
+    const created = await client.createTesseraVersion({
+        tesseraId, body: { id: versionId, previousTesseraVersionId: "", blobId: blob.blobId },
+    });
+    assert.equal(created.state, CreateTesseraVersionResponseState.Ok, JSON.stringify(created));
+
+    return { tesseraId, versionId };
+}
+
+test("fetching nodes as a glb gives something a viewer can open", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "gltf-box");
+
+        const bytes = await client.fetchNodes({
+            tesseraId, versionId,
+            format: NodeFetchFormat.Glb,
+            body: { nodes: [WALL_FRONT] },
+        });
+
+        // A real GLB: the magic, and one wall with the geometry it needs.
+        assert.deepEqual([...bytes.subarray(0, 4)], [0x67, 0x6c, 0x54, 0x46]);
+        const { document, binaryChunk } = parseGlb(bytes);
+        assert.equal(document.nodes!.filter(node => node.mesh !== undefined).length, 1);
+        assert.equal(document.meshes?.length, 1);
+        assert.equal(binaryChunk?.byteLength, 168, "the geometry the mesh names came along");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("fetching the same nodes as a tsr gives an archive that can be published again", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "gltf-box");
+
+        const bytes = await client.fetchNodes({
+            tesseraId, versionId,
+            format: NodeFetchFormat.Tsr,
+            body: { nodes: [WALL_FRONT, WALL_SIDE] },
+        });
+
+        const file = await LoadMosaicFile(bytes);
+        const nodes = file.index.sections[0]!.nodes.map(node => node.id);
+        assert.ok(nodes.includes(WALL_FRONT));
+        assert.ok(nodes.includes(WALL_SIDE));
+
+        // Every reference in it resolves inside it: it is a file, not a fragment.
+        for (const node of file.index.sections[0]!.nodes) {
+            for (const reference of node.components ?? []) {
+                if ((reference.index ?? -1) < 0) continue;
+                assert.doesNotThrow(() => file.readRawComponent(reference.type, reference.index!));
+            }
+        }
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("asking for a subset of component types narrows what comes back", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "gltf-box");
+
+        const bytes = await client.fetchNodes({
+            tesseraId, versionId,
+            format: NodeFetchFormat.Tsr,
+            body: { nodes: [WALL_FRONT], componentTypes: [CORE_TYPE.transform] },
+        });
+
+        const file = await LoadMosaicFile(bytes);
+        const wall = file.index.sections[0]!.nodes.find(node => node.id === WALL_FRONT)!;
+
+        assert.deepEqual(wall.components!.map(c => c.type), [CORE_TYPE.transform]);
+        assert.equal(file.serializedComponents.has(GLTF_TYPE.meshPrimitive), false, "no mesh was asked for");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("asking for children brings the whole subtree", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "instanced-boxes");
+        const row = "50505050-5050-4050-8050-505050505050";
+
+        const alone = await client.fetchNodes({
+            tesseraId, versionId, format: NodeFetchFormat.Tsr, body: { nodes: [row] },
+        });
+        const withChildren = await client.fetchNodes({
+            tesseraId, versionId, format: NodeFetchFormat.Tsr, body: { nodes: [row], includeChildren: true },
+        });
+
+        const without = (await LoadMosaicFile(alone)).index.sections[0]!.nodes.length;
+        const deep = (await LoadMosaicFile(withChildren)).index.sections[0]!.nodes.length;
+        assert.ok(deep > without, `expected more nodes with children: ${deep} vs ${without}`);
+
+        // And as a glb, the boxes beneath it are really placed.
+        const glb = await client.fetchNodes({
+            tesseraId, versionId, format: NodeFetchFormat.Glb, body: { nodes: [row], includeChildren: true },
+        });
+        const { document } = parseGlb(glb);
+        assert.equal(document.nodes!.filter(node => node.mesh !== undefined).length, 2, "two boxes under that row");
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("the server says how many nodes it built, and which were not there", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "gltf-box");
+        const missing = "00000000-0000-4000-8000-000000000000";
+
+        // The headers carry it, so the answer itself stays a plain stream of bytes.
+        const response = await fetch(
+            `${running.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ nodes: [WALL_FRONT, missing] }),
+            });
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get("content-type"), "model/gltf-binary");
+        assert.equal(response.headers.get("x-mosaic-missing"), missing);
+        assert.ok(Number(response.headers.get("x-mosaic-nodes")) > 0);
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("an empty request and an unknown format are refused with a reason", async () => {
+    const running = await started();
+    const { client } = running;
+
+    try {
+        const { tesseraId, versionId } = await publish(client, "gltf-box");
+
+        await assert.rejects(
+            () => client.fetchNodes({ tesseraId, versionId, format: NodeFetchFormat.Glb, body: { nodes: [] } }),
+            (error: unknown) => {
+                assert.ok(error instanceof ApiError);
+                assert.equal(error.status, 400);
+                assert.match(error.message, /at least one id/);
+                return true;
+            },
+        );
+
+        const response = await fetch(
+            `${running.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=obj`,
+            { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nodes: [WALL_FRONT] }) });
+
+        assert.equal(response.status, 400);
+        assert.match((await response.json() as { error: string }).error, /Unknown format "obj"/);
+    } finally {
+        await stopped(running);
+    }
+});
+
+test("a version that is not there is a 404 rather than an empty file", async () => {
+    const running = await started();
+
+    try {
+        await assert.rejects(
+            () => running.client.fetchNodes({
+                tesseraId: randomUUID(), versionId: randomUUID(),
+                format: NodeFetchFormat.Glb, body: { nodes: [WALL_FRONT] },
+            }),
+            (error: unknown) => {
+                assert.ok(error instanceof ApiError);
+                assert.equal(error.status, 404);
+                return true;
+            },
+        );
+    } finally {
+        await stopped(running);
+    }
 });

@@ -59,6 +59,17 @@ export interface MosaicQueryApiResponse {
     nodes: MosaicQueryApiNodeResponse[];
 }
 
+export enum NodeFetchFormat {
+    Glb = "glb",
+    Tsr = "tsr",
+}
+
+export interface NodeFetchRequest {
+    componentTypes?:  string[];
+    includeChildren?: boolean;
+    nodes:            string[];
+}
+
 export interface TesseraDetails {
     history: TesseraVersion[];
     id:      string;

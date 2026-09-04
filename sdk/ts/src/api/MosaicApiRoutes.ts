@@ -71,6 +71,22 @@ export const API_ROUTES = [
         "hasBody": false
     },
     {
+        "operationId": "TesseraVersionRoutes_fetchNodes",
+        "method": "POST",
+        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes",
+        "pathParameters": [
+            "tesseraId",
+            "versionId"
+        ],
+        "queryParameters": [
+            {
+                "name": "format",
+                "required": true
+            }
+        ],
+        "hasBody": true
+    },
+    {
         "operationId": "TesseraVersionRoutes_get_tessera_version",
         "method": "GET",
         "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}",

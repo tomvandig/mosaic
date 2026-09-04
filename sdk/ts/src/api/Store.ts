@@ -3,11 +3,14 @@ import path from "node:path";
 import { MosaicDatabase } from "../duckdb/Export.ts";
 import { LoadMosaicFile, WriteMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { federate } from "../MosaicFileOperations.ts";
+import { selectNodes, type SelectionRequest } from "../Selection.ts";
+import { mosaicToGltf } from "../composition/MosaicToGltf.ts";
+import { writeGlb } from "../composition/GlbWriter.ts";
 import type {
     BlobResponse, CreateTesseraCommand, CreateTesseraVersionCommand, CreateTesseraVersionResponse,
     TesseraDetails, TesseraStatus, TesseraVersion, MosaicProvenanceData,
 } from "./MosaicApiTypes.ts";
-import { CreateTesseraVersionResponseState, MosaicFileDownloadType } from "./MosaicApiTypes.ts";
+import { CreateTesseraVersionResponseState, MosaicFileDownloadType, NodeFetchFormat } from "./MosaicApiTypes.ts";
 
 /**
  * The tables the API keeps beside the ones an archive is loaded into. Tesserae and their
@@ -330,6 +333,48 @@ export class ApiStore {
         const derived = `${tesseraId}-${versionId}-${type}`.replace(/[^A-Za-z0-9-]/g, "_");
         await this.writeBlob(derived, Buffer.from(await WriteMosaicFile(composed!)));
         return derived;
+    }
+
+    /**
+     * Builds a file out of some of a version's nodes, on demand.
+     *
+     * Nothing is stored: the version's archive is read, the subset taken, and the bytes
+     * written straight back to whoever asked. A glb is what a viewer opens; a tsr is the
+     * same subset as a Mosaic archive, which can be published again or composed later.
+     */
+    async fetchNodes(
+        tesseraId: string,
+        versionId: string,
+        format: NodeFetchFormat,
+        request: SelectionRequest,
+    ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
+        const version = await this.getVersion(tesseraId, versionId);
+        void version;
+
+        const [row] = await this.database.all(
+            `SELECT blob_id FROM api_tessera_version
+             WHERE tessera_id = ${literal(tesseraId)} AND version_id = ${literal(versionId)}`);
+        if (!row) throw new NotFound(`Tessera ${tesseraId} has no version ${versionId}`);
+
+        const source = await LoadMosaicFile(this.readBlob(String(row.blob_id)));
+        const selection = selectNodes(source, request);
+
+        if (format === NodeFetchFormat.Tsr) {
+            return {
+                bytes: await WriteMosaicFile(selection.file),
+                contentType: "application/octet-stream",
+                nodeCount: selection.nodeIds.length,
+                missing: selection.missing,
+            };
+        }
+
+        const composed = mosaicToGltf(selection.file);
+        return {
+            bytes: writeGlb(composed.document, composed.binary),
+            contentType: "model/gltf-binary",
+            nodeCount: selection.nodeIds.length,
+            missing: selection.missing,
+        };
     }
 
     // --- helpers ------------------------------------------------------------

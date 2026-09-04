@@ -8,6 +8,8 @@ import type {
     CreateTesseraVersionResponse,
     MosaicFileDownloadType,
     MosaicQueryApiResponse,
+    NodeFetchFormat,
+    NodeFetchRequest,
     TesseraDetails,
     TesseraStatus,
     TesseraVersion,
@@ -83,6 +85,16 @@ export class MosaicApiClient {
     async download(params: { blobId: string }): Promise<Uint8Array> {
         const search = "";
         const response = await this.fetch(`${this.baseUrl}/Mosaic-api/download/${encodeURIComponent(String(params.blobId))}${search}`, { method: "PUT" });
+        await failOnError(response);
+        return new Uint8Array(await response.arrayBuffer()) as Uint8Array;
+    }
+
+    /** POST /Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes (TesseraVersionRoutes_fetchNodes) */
+    async fetchNodes(params: { tesseraId: string; versionId: string; format: NodeFetchFormat; body: NodeFetchRequest }): Promise<Uint8Array> {
+        const query = new URLSearchParams();
+        query.set("format", String(params.format));
+        const search = query.size > 0 ? `?${query}` : "";
+        const response = await this.fetch(`${this.baseUrl}/Mosaic-api/tesserae/${encodeURIComponent(String(params.tesseraId))}/versions/${encodeURIComponent(String(params.versionId))}/nodes${search}`, { method: "POST", body: JSON.stringify(params.body), headers: { "content-type": "application/json" } });
         await failOnError(response);
         return new Uint8Array(await response.arrayBuffer()) as Uint8Array;
     }

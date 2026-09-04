@@ -1,7 +1,10 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { API_ROUTES, type ApiRoute } from "./MosaicApiRoutes.ts";
-import { MosaicFileDownloadType, type CreateTesseraCommand, type CreateTesseraVersionCommand } from "./MosaicApiTypes.ts";
+import {
+    MosaicFileDownloadType, NodeFetchFormat,
+    type CreateTesseraCommand, type CreateTesseraVersionCommand, type NodeFetchRequest,
+} from "./MosaicApiTypes.ts";
 import { ApiStore, BadRequest, NotFound, blobResponse } from "./Store.ts";
 
 export interface ServeOptions {
@@ -33,6 +36,7 @@ interface Reply {
     json?: unknown;
     bytes?: Buffer;
     contentType?: string;
+    headers?: Record<string, string>;
 }
 
 type Handler = (request: Request) => Promise<Reply>;
@@ -116,6 +120,36 @@ const HANDLERS: Record<string, Handler> = {
         return json({ blobUrl: `${baseUrl}/Mosaic-api/download/${blobId}` });
     },
 
+    async TesseraVersionRoutes_fetchNodes(request) {
+        const asked = request.query.get("format") ?? NodeFetchFormat.Glb;
+        const known = Object.values(NodeFetchFormat) as string[];
+        if (!known.includes(asked)) throw new BadRequest(`Unknown format "${asked}"; expected one of ${known.join(", ")}`);
+
+        const body = await readJson<NodeFetchRequest>(request);
+        if (!Array.isArray(body?.nodes) || body.nodes.length === 0) {
+            throw new BadRequest(`Fetching nodes needs a "nodes" array with at least one id`);
+        }
+
+        const built = await request.store.fetchNodes(
+            request.params.tesseraId!, request.params.versionId!, asked as NodeFetchFormat,
+            {
+                nodes: body.nodes,
+                ...(body.componentTypes ? { componentTypes: body.componentTypes } : {}),
+                ...(body.includeChildren !== undefined ? { includeChildren: body.includeChildren } : {}),
+            });
+
+        // The bytes are the answer; what was left out is said in a header, so a client
+        // that asked for a node the version does not have can tell.
+        return {
+            bytes: Buffer.from(built.bytes),
+            contentType: built.contentType,
+            headers: {
+                "x-mosaic-nodes": String(built.nodeCount),
+                ...(built.missing.length > 0 ? { "x-mosaic-missing": built.missing.join(",") } : {}),
+            },
+        };
+    },
+
     // --- not yet ------------------------------------------------------------
     async TesseraVersionRoutes_query() {
         return json({ error: "The query API is not implemented yet" }, 501);
@@ -191,6 +225,7 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
                     response.writeHead(reply.status ?? 200, {
                         "content-type": reply.contentType ?? "application/octet-stream",
                         "content-length": String(reply.bytes.byteLength),
+                        ...reply.headers,
                     });
                     return response.end(reply.bytes);
                 }

@@ -69,7 +69,8 @@ async function tesseraWithBlob(api: Awaited<ReturnType<typeof withServer>>, exam
 test("every operation in the spec has a handler", () => {
     // The query API is the one the spec has and this does not answer.
     assert.deepEqual(unimplementedOperations(), []);
-    assert.equal(API_ROUTES.length, 11);
+    assert.equal(API_ROUTES.length, 12);
+    assert.ok(API_ROUTES.some(route => route.operationId === "TesseraVersionRoutes_fetchNodes"));
 });
 
 test("the routes come from the spec, braces and all", () => {

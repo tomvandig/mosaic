@@ -262,6 +262,61 @@
         }
       }
     },
+    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes": {
+      "post": {
+        "operationId": "TesseraVersionRoutes_fetchNodes",
+        "parameters": [
+          {
+            "name": "tesseraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NodeFetchFormat"
+            },
+            "explode": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeFetchRequest"
+              }
+            }
+          }
+        }
+      }
+    },
     "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/query": {
       "get": {
         "operationId": "TesseraVersionRoutes_query",
@@ -519,6 +574,36 @@
             "items": {
               "$ref": "#/components/schemas/MosaicQueryApiNodeResponse"
             }
+          }
+        }
+      },
+      "NodeFetchFormat": {
+        "type": "string",
+        "enum": [
+          "glb",
+          "tsr"
+        ]
+      },
+      "NodeFetchRequest": {
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          "componentTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "includeChildren": {
+            "type": "boolean"
           }
         }
       },
