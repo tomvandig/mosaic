@@ -357,6 +357,18 @@ stored nowhere:
 }
 ```
 
+**The subset is taken in the database, not by rebuilding the version and filtering it.** The nodes
+asked for, the references they carry and the rows behind those are each queried by name; collapsing —
+the last write to a reference wins, a `DELETE` removes it — is done in SQL, and `includeChildren`
+walks `core::child` with a recursive CTE that touches nothing else. So the cost follows the request
+rather than the size of the version:
+
+| version | rebuild then filter | selected in SQL |
+| --- | --- | --- |
+| 406 nodes | 26 ms | 19 ms |
+| 1606 nodes | 46 ms | 21 ms |
+| 6006 nodes | 127 ms | 22 ms |
+
 The answer is a stream of bytes: a `.glb` for a viewer, or a `.tsr` that is a Mosaic archive in its
 own right — one that can be published again as another tessera. Either way the subset is made whole
 first: anything a kept component points at comes along, so a mesh never names an accessor the answer

@@ -2,6 +2,7 @@ import { MosaicDatabase } from "../duckdb/Export.ts";
 import { LoadMosaicFile, WriteMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { federate } from "../MosaicFileOperations.ts";
 import { readMosaicFile } from "../duckdb/Import.ts";
+import { selectNodesFromDatabase } from "../duckdb/SelectFromDatabase.ts";
 import { selectNodes, type SelectionRequest } from "../Selection.ts";
 import { mosaicToGltf } from "../composition/MosaicToGltf.ts";
 import { writeGlb } from "../composition/GlbWriter.ts";
@@ -403,10 +404,11 @@ export class ApiStore {
     /**
      * Builds a file out of some of a version's nodes, on demand.
      *
-     * Nothing is stored and no blob is read: the version is reconstructed from the
-     * database, the subset taken, and the bytes written straight back to whoever asked.
-     * A glb is what a viewer opens; a tsr is the same subset as a Mosaic archive, which
-     * can be published again or composed later.
+     * The subset is taken in the database: the nodes asked for, the references they carry
+     * and the rows behind those are each queried by name, so the cost follows what was
+     * asked for rather than the size of the version. Nothing is stored and no blob is
+     * read. A glb is what a viewer opens; a tsr is the same subset as a Mosaic archive,
+     * which can be published again or composed later.
      */
     async fetchNodes(
         tesseraId: string,
@@ -414,8 +416,11 @@ export class ApiStore {
         format: NodeFetchFormat,
         request: SelectionRequest,
     ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
-        const source = await this.versionFile(tesseraId, versionId);
-        const selection = selectNodes(source, request);
+        await this.getVersion(tesseraId, versionId);
+        const [name] = (await this.archivesUpTo(tesseraId, versionId)).slice(-1);
+        if (!name) throw new NotFound(`Version ${versionId} of tessera ${tesseraId} is not in the database`);
+
+        const selection = await selectNodesFromDatabase(this.database, name, request);
 
         if (format === NodeFetchFormat.Tsr) {
             return {
