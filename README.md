@@ -353,9 +353,14 @@ stored nowhere:
 {
   "nodes": ["55555555-…", "66666666-…"],   // the nodes to take
   "componentTypes": ["core::transform"],   // only these; all of them when left out
-  "includeChildren": true                  // and everything beneath them
+  "includeChildren": true,                 // and everything beneath them
+  "compose": true                          // resolve inheritance, as composing does
 }
 ```
+
+`compose` makes a node that **is-a** something carry that something's components rather than a link
+to it. The nodes it inherits from are read for what they hold and then left out of the answer — a
+type is a source of components, not a thing to draw beside the thing that is of that type.
 
 **The subset is taken in the database, not by rebuilding the version and filtering it.** The nodes
 asked for, the references they carry and the rows behind those are each queried by name; collapsing —
@@ -380,6 +385,35 @@ built in `x-mosaic-nodes`, so the body stays nothing but the file.
 `just_this_version` hands back the archive as uploaded, `whole_tessera_history_intact` federates every
 version up to that one keeping all sections, and the condensed forms collapse them to what is still
 leading.
+
+### The page it serves
+
+`mosaic serve` also puts a page at `/` for looking at what the server holds:
+
+```bash
+mosaic serve scene.duckdb --port 8791     # then open http://127.0.0.1:8791
+```
+
+Drop `.tsr` files on it and they are published — a new tessera, or a new version of one with that
+name. Then three panels, over one version at a time:
+
+- a **tree** of the child hierarchy, drawn from a selection over the version's root nodes, each node
+  labelled by its `core::name`;
+- a **components** view of whatever node is selected, with each component's type, reference id and
+  value;
+- a **3D** view, which is [`<model-viewer>`](https://modelviewer.dev) — a viewer that already knows
+  PBR materials, textures and image-based lighting — fed the GLB that
+  `POST …/versions/{versionId}/nodes?format=glb` builds for the selected node. Selecting a node
+  reloads it; **Show whole version** loads every root.
+
+A **compose** checkbox runs both the tree and the 3D view through the flag above, so the difference
+between a node that is-a type and a node carrying that type's geometry is one click.
+
+The page's own two endpoints, `/app/upload` and `/app/scene`, are deliberately **not** part of the
+spec: `mosaic-api.tsp` is the contract, and these exist so the page can upload in one call and read a
+whole scene in another. The 3D view goes through the real `nodes` endpoint, since that is the thing
+being looked at. `<model-viewer>` is loaded from a CDN, so the 3D panel wants the machine to have
+internet; the rest of the page does not.
 
 Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so

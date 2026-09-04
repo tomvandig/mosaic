@@ -3,6 +3,7 @@ import { LoadMosaicFile, WriteMosaicFile, type MosaicFile } from "../MosaicFile.
 import { federate } from "../MosaicFileOperations.ts";
 import { readMosaicFile } from "../duckdb/Import.ts";
 import { selectNodesFromDatabase } from "../duckdb/SelectFromDatabase.ts";
+import type { SelectionResult } from "../Selection.ts";
 import { selectNodes, type SelectionRequest } from "../Selection.ts";
 import { mosaicToGltf } from "../composition/MosaicToGltf.ts";
 import { writeGlb } from "../composition/GlbWriter.ts";
@@ -416,11 +417,7 @@ export class ApiStore {
         format: NodeFetchFormat,
         request: SelectionRequest,
     ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
-        await this.getVersion(tesseraId, versionId);
-        const [name] = (await this.archivesUpTo(tesseraId, versionId)).slice(-1);
-        if (!name) throw new NotFound(`Version ${versionId} of tessera ${tesseraId} is not in the database`);
-
-        const selection = await selectNodesFromDatabase(this.database, name, request);
+        const selection = await this.selection(tesseraId, versionId, request);
 
         if (format === NodeFetchFormat.Tsr) {
             return {
@@ -438,6 +435,40 @@ export class ApiStore {
             nodeCount: selection.nodeIds.length,
             missing: selection.missing,
         };
+    }
+
+    /** The archive a version became, as it is named in the database. */
+    private async archiveOf(tesseraId: string, versionId: string): Promise<string> {
+        await this.getVersion(tesseraId, versionId);
+        const [name] = (await this.archivesUpTo(tesseraId, versionId)).slice(-1);
+        if (!name) throw new NotFound(`Version ${versionId} of tessera ${tesseraId} is not in the database`);
+        return name;
+    }
+
+    /** Takes a subset of a version, in the database. */
+    async selection(tesseraId: string, versionId: string, request: SelectionRequest): Promise<SelectionResult> {
+        return await selectNodesFromDatabase(this.database, await this.archiveOf(tesseraId, versionId), request);
+    }
+
+    /**
+     * The nodes of a version that nothing else holds as a child -- where a tree of it
+     * starts. Everything else hangs beneath one of them.
+     */
+    async rootNodeIds(tesseraId: string, versionId: string): Promise<string[]> {
+        const name = await this.archiveOf(tesseraId, versionId);
+        const scope = `file_id = ${literal(name)}`;
+
+        const rows = await this.database.all(
+            `SELECT DISTINCT n.node_id, min(n.node_ordinal) AS first_seen
+             FROM mosaic_node n
+             WHERE n.${scope}
+               AND n.node_id NOT IN (
+                   SELECT ref_id FROM mosaic_component_ref
+                   WHERE ${scope} AND type = 'core::child' AND operation <> 'DELETE')
+             GROUP BY n.node_id
+             ORDER BY first_seen`);
+
+        return rows.map(row => String(row.node_id));
     }
 
     // --- helpers ------------------------------------------------------------

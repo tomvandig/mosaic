@@ -3,6 +3,7 @@ import type { ComponentElement, NodeElement } from "./MosaicIndexFile.ts";
 import { collapseNodesByPath } from "./MosaicFileOperations.ts";
 import { hasValue, indexOf } from "./ComponentReference.ts";
 import { CORE_TYPE } from "./core/schemas.ts";
+import { resolveInheritance } from "./composition/Inheritance.ts";
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -13,6 +14,12 @@ export interface SelectionRequest {
     componentTypes?: string[];
     /** Take everything beneath them, however deep. */
     includeChildren?: boolean;
+    /**
+     * Resolve inheritance before answering, the way composing does: a node that is-a
+     * something carries that something's components, rather than a link to it. The nodes
+     * it inherits from are taken as well, since their components are what it gets.
+     */
+    compose?: boolean;
 }
 
 export interface SelectionResult {
@@ -74,6 +81,23 @@ export function selectNodes(source: MosaicFile, request: SelectionRequest): Sele
             const node = collapsed.get(chosen[at]!)!;
             for (const reference of node.components ?? []) {
                 if (reference.type === CORE_TYPE.child) take(reference.id);
+            }
+        }
+    }
+
+    // --- and whatever they are, if inheritance is to be resolved -------------
+    // An is-a link names its target in the reference id rather than in a value, so the
+    // pass that follows references would never reach it. Those ancestors are taken for
+    // what they carry, not to be part of the answer, so they are noted and dropped once
+    // their components have been copied down.
+    const ancestors = new Set<string>();
+    if (request.compose) {
+        for (let at = 0; at < chosen.length; at++) {
+            const node = collapsed.get(chosen[at]!)!;
+            for (const reference of node.components ?? []) {
+                if (reference.type !== CORE_TYPE.inherit || seen.has(reference.id)) continue;
+                take(reference.id);
+                if (seen.has(reference.id)) ancestors.add(reference.id);
             }
         }
     }
@@ -164,5 +188,36 @@ export function selectNodes(source: MosaicFile, request: SelectionRequest): Sele
         nodes,
     });
 
+    if (request.compose) {
+        composeInPlace(file, ancestors);
+        return {
+            file,
+            nodeIds: chosen.filter(id => !ancestors.has(id)),
+            missing,
+            pulledIn: pulledIn.filter(id => !ancestors.has(id)),
+        };
+    }
+
     return { file, nodeIds: chosen, missing, pulledIn };
+}
+
+/**
+ * Resolves inheritance across a selection, in place.
+ *
+ * The references it copies point at rows of this file, which is why it runs after the
+ * file has been built rather than against the archive it came from.
+ *
+ * `ancestors` are the nodes that were only taken so that inheritance could be resolved.
+ * Once their components have been copied onto the nodes that inherit them they have
+ * nothing left to say, and leaving them in would draw the type beside the thing that is
+ * of that type. Their component rows stay, since the copies point at them.
+ */
+export function composeInPlace(file: MosaicFile, ancestors: ReadonlySet<string> = new Set()): void {
+    const section = file.index.sections[0];
+    if (!section) return;
+
+    const resolved = resolveInheritance(new Map(section.nodes.map(node => [node.id, node])));
+    section.nodes = section.nodes
+        .map(node => resolved.get(node.id) ?? node)
+        .filter(node => !ancestors.has(node.id));
 }

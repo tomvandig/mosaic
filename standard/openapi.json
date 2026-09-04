@@ -604,6 +604,9 @@
           },
           "includeChildren": {
             "type": "boolean"
+          },
+          "compose": {
+            "type": "boolean"
           }
         }
       },

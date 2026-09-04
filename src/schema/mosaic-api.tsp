@@ -95,6 +95,7 @@ model NodeFetchRequest
   nodes: uuid[];              // the nodes to fetch, by id
   componentTypes?: string[];  // only these component types; all of them when left out
   includeChildren?: boolean;  // take everything beneath them as well
+  compose?: boolean;          // resolve inheritance, as composing does, before answering
 }
 
 enum CreateTesseraVersionResponseState

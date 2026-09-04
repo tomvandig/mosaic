@@ -114,6 +114,18 @@ test("children with a filter that does not name the child links", async () => {
     await agree("instanced-boxes", { nodes: [ROW], componentTypes: [CORE_TYPE.transform], includeChildren: true });
 });
 
+test("with compose, so inheritance is resolved", async () => {
+    await agree("typed-boxes", { nodes: ["70000000-7000-4000-8000-700000000003"], compose: true });
+});
+
+test("with compose and children together", async () => {
+    await agree("typed-boxes", { nodes: ["70000000-7000-4000-8000-700000000003"], compose: true, includeChildren: true });
+});
+
+test("without compose, an is-a link is left as a link", async () => {
+    await agree("typed-boxes", { nodes: ["70000000-7000-4000-8000-700000000003"] });
+});
+
 test("a file whose sections layer over each other", async () => {
     // house-v2 raises a wall and deletes its paint in a later section: the database path
     // has to collapse in SQL exactly as reading the file does in memory.

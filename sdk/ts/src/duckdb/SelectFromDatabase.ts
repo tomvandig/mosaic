@@ -1,7 +1,7 @@
 import { MosaicFile } from "../MosaicFile.ts";
 import { Type, type ComponentElement, type NodeElement } from "../MosaicIndexFile.ts";
 import { CORE_TYPE } from "../core/schemas.ts";
-import type { SelectionRequest, SelectionResult } from "../Selection.ts";
+import { composeInPlace, type SelectionRequest, type SelectionResult } from "../Selection.ts";
 import type { MosaicDatabase } from "./Export.ts";
 import { quoteIdentifier } from "./SqlTypes.ts";
 
@@ -76,15 +76,18 @@ export async function selectNodesFromDatabase(
         chosen.push(id);
     };
 
-    if (request.includeChildren) {
-        const seeds = asked.map(id => `(${literal(id)})`).join(", ");
-        const descendants = await database.all(
+    /** Everything reachable from a set of nodes along references of one type. */
+    const walk = async (from: string[], type: string): Promise<string[]> => {
+        if (from.length === 0) return [];
+        const seeds = from.map(id => `(${literal(id)})`).join(", ");
+
+        const rows = await database.all(
             `WITH RECURSIVE ranked AS (
                  SELECT node_id, ref_id, operation,
                         row_number() OVER (PARTITION BY node_id, ref_id
                                            ORDER BY section_ordinal DESC, ordinal DESC) AS rn
                  FROM mosaic_component_ref
-                 WHERE ${scope} AND type = ${literal(CORE_TYPE.child)} AND operation <> 'PASS_THROUGH'
+                 WHERE ${scope} AND type = ${literal(type)} AND operation <> 'PASS_THROUGH'
              ),
              links AS (SELECT node_id, ref_id FROM ranked WHERE rn = 1 AND operation <> 'DELETE'),
              tree(node_id) AS (
@@ -94,10 +97,25 @@ export async function selectNodesFromDatabase(
              )
              SELECT node_id FROM tree`);
 
-        for (const id of asked) take(id);
-        for (const row of descendants) take(String(row.node_id));
-    } else {
-        for (const id of asked) take(id);
+        return rows.map(row => String(row.node_id));
+    };
+
+    for (const id of asked) take(id);
+    if (request.includeChildren) {
+        for (const id of await walk(asked, CORE_TYPE.child)) take(id);
+    }
+
+    // An is-a link names its target in the reference id rather than in a value, so the
+    // pass that follows references would never reach it. Those ancestors are taken for
+    // what they carry, not to be part of the answer, so they are noted and dropped once
+    // their components have been copied down.
+    const ancestors = new Set<string>();
+    if (request.compose) {
+        for (const id of await walk([...chosen], CORE_TYPE.inherit)) {
+            if (seen.has(id)) continue;
+            take(id);
+            ancestors.add(id);
+        }
     }
 
     // Everything reached so far was asked for -- the seeds and, when children were
@@ -277,6 +295,16 @@ export async function selectNodesFromDatabase(
         },
         nodes,
     });
+
+    if (request.compose) {
+        composeInPlace(file, ancestors);
+        return {
+            file,
+            nodeIds: chosen.filter(id => !ancestors.has(id)),
+            missing,
+            pulledIn: pulledIn.filter(id => !ancestors.has(id)),
+        };
+    }
 
     return { file, nodeIds: chosen, missing, pulledIn };
 }

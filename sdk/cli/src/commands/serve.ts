@@ -44,6 +44,7 @@ export async function runServe(argv: string[]): Promise<void> {
     console.log(`Everything it holds, uploads included, is in that database.`);
     console.log();
     console.log(`Listening on ${server.url}`);
+    console.log(`Open that in a browser to upload archives and look at them.`);
     console.log();
     console.log(`Routes (${API_ROUTES.length} in the spec):`);
     for (const route of API_ROUTES) {

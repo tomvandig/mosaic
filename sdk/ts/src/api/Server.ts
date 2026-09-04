@@ -6,6 +6,7 @@ import {
     type CreateTesseraCommand, type CreateTesseraVersionCommand, type NodeFetchRequest,
 } from "./MosaicApiTypes.ts";
 import { ApiStore, BadRequest, NotFound, blobResponse } from "./Store.ts";
+import { appHandlerFor } from "./app/routes.ts";
 
 export interface ServeOptions {
     /** Where the database lives. Created if it is not there. */
@@ -136,6 +137,7 @@ const HANDLERS: Record<string, Handler> = {
                 nodes: body.nodes,
                 ...(body.componentTypes ? { componentTypes: body.componentTypes } : {}),
                 ...(body.includeChildren !== undefined ? { includeChildren: body.includeChildren } : {}),
+                ...(body.compose !== undefined ? { compose: body.compose } : {}),
             });
 
         // The bytes are the answer; what was left out is said in a header, so a client
@@ -200,6 +202,25 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
         void (async () => {
             const url = new URL(incoming.url ?? "/", `http://${incoming.headers.host ?? `${host}:${options.port ?? 0}`}`);
             const baseUrl = `http://${incoming.headers.host ?? `${host}:${options.port ?? 0}`}`;
+
+            const app = appHandlerFor(incoming.method ?? "GET", url.pathname);
+            if (app) {
+                try {
+                    const reply = await app({ store, query: url.searchParams, body: await readBody(incoming), baseUrl });
+
+                    if (reply.html !== undefined) {
+                        response.writeHead(reply.status ?? 200, {
+                            "content-type": "text/html; charset=utf-8",
+                            "content-length": String(Buffer.byteLength(reply.html)),
+                        });
+                        return response.end(reply.html);
+                    }
+
+                    return send(response, reply.status ?? 200, reply.json ?? {});
+                } catch (error) {
+                    return send(response, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+                }
+            }
 
             const found = MATCHERS
                 .map(entry => ({ entry, match: entry.pattern.exec(url.pathname) }))

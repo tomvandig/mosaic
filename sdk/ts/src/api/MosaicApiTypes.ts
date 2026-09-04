@@ -66,6 +66,7 @@ export enum NodeFetchFormat {
 
 export interface NodeFetchRequest {
     componentTypes?:  string[];
+    compose?:         boolean;
     includeChildren?: boolean;
     nodes:            string[];
 }
