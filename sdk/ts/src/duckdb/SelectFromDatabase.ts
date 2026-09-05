@@ -3,7 +3,7 @@ import { Type, type ComponentElement, type NodeElement } from "../MosaicIndexFil
 import { CORE_TYPE } from "../core/schemas.ts";
 import { composeInPlace, type SelectionRequest, type SelectionResult } from "../Selection.ts";
 import type { MosaicDatabase } from "./Export.ts";
-import { quoteIdentifier } from "./SqlTypes.ts";
+import { componentFromRow, quoteIdentifier } from "./SqlTypes.ts";
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -181,7 +181,7 @@ export async function selectNodesFromDatabase(
 
     // A row is addressed by archive as well as by type and index: every archive counts
     // its rows of a type from its own zero, so an index alone names two different rows.
-    const values = new Map<string, unknown>();
+    const values = new Map<string, Record<string, unknown>>();
     const valueKey = (reference: Reference) => `${reference.fileId} ${reference.type} ${reference.index}`;
 
     /**
@@ -204,14 +204,18 @@ export async function selectNodesFromDatabase(
             groups.set(key, group);
         }
 
-        if (groups.size === 0) return;
+        // A component is its columns, and two types have different ones, so each table is
+        // asked for on its own rather than all of them in one union.
+        for (const { fileId, type, indices } of groups.values()) {
+            const columns = await database.componentColumns(type);
 
-        const parts = [...groups.values()].map(({ fileId, type, indices }) =>
-            `SELECT file_id, ${literal(type)} AS type, idx, value FROM ${quoteIdentifier(type)}
-             WHERE file_id = ${literal(fileId)} AND idx IN (${[...indices].join(", ")})`);
+            const rows = await database.all(
+                `SELECT * FROM ${quoteIdentifier(type)}
+                 WHERE file_id = ${literal(fileId)} AND idx IN (${[...indices].join(", ")})`);
 
-        for (const row of await database.all(parts.join(" UNION ALL "))) {
-            values.set(`${String(row.file_id)} ${String(row.type)} ${Number(row.idx)}`, row.value);
+            for (const row of rows) {
+                values.set(`${fileId} ${type} ${Number(row.idx)}`, componentFromRow(columns, row));
+            }
         }
     };
 
@@ -229,7 +233,7 @@ export async function selectNodesFromDatabase(
         for (const reference of frontier) {
             const value = values.get(valueKey(reference));
             if (value === undefined) continue;
-            referencedIds(typeof value === "string" ? JSON.parse(value) : value, candidates);
+            referencedIds(value, candidates);
         }
 
         const fresh = [...candidates].filter(id => !seen.has(id));
@@ -275,12 +279,11 @@ export async function selectNodesFromDatabase(
                 return { type: reference.type, id: reference.refId, index: reference.index };
             }
 
-            const value = values.get(valueKey(reference));
-            const row = typeof value === "string" ? value : JSON.stringify(value ?? {});
             return {
                 type: reference.type,
                 id: reference.refId,
-                index: file.addSerializedComponent(reference.type, row),
+                index: file.addSerializedComponent(
+                    reference.type, JSON.stringify(values.get(valueKey(reference)) ?? {})),
             };
         });
 

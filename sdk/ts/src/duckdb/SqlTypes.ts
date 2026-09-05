@@ -1,10 +1,18 @@
 /**
- * Turning the JSON Schema embedded in an archive into DuckDB columns.
+ * Turning the JSON Schema embedded in an archive into DuckDB columns, and a stored row
+ * back into the component it was.
  *
  * Nothing here is known up front: an archive says which component types it carries and
  * hands over the schema for each, and these functions decide what a table for it looks
  * like. Anything the mapping cannot express -- a nested object, a union, an array of
  * something odd -- becomes JSON, which DuckDB can still be queried through.
+ *
+ * The columns are all there is: a component is stored as its properties and read back
+ * from them, with no copy of the original document beside them. Two consequences are
+ * worth knowing. A property the schema does not declare has nowhere to go, which is why a
+ * schema that does not seal itself is warned about. And a column is null both when a
+ * property was absent and when it was written as null, so a row read back has the
+ * property absent -- null is not a value a component can carry.
  */
 
 export interface ColumnPlan {
@@ -22,11 +30,17 @@ export const FIXED_COLUMNS = {
     fileId: "file_id",
     /** The row's position in its component table, which is what a reference points at. */
     index: "idx",
-    /** The component exactly as the archive stored it. */
-    value: "value",
 } as const;
 
-const RESERVED: ReadonlySet<string> = new Set(Object.values(FIXED_COLUMNS));
+/**
+ * Names a property cannot have.
+ *
+ * The fixed columns, and `value` -- which no table is given any more, but which earlier
+ * builds used for a copy of the whole component. Keeping the name reserved means a
+ * database written by one of those still reads correctly: the leftover column is passed
+ * over rather than handed back as a property nobody wrote.
+ */
+const RESERVED: ReadonlySet<string> = new Set([...Object.values(FIXED_COLUMNS), "value"]);
 
 type Schema = Record<string, any>;
 
@@ -87,26 +101,139 @@ export function columnTypeFor(schema: Schema): string {
     return "JSON";
 }
 
+/** The column a property is stored in, which is its own name unless that is taken. */
+function columnNameFor(property: string, onWarning?: (message: string) => void): string {
+    if (!RESERVED.has(property)) return property;
+
+    // A component property may legitimately be called "idx"; the fixed column keeps the
+    // plain name and the property takes a suffix, which reading undoes.
+    const name = `${property}_`;
+    onWarning?.(`property "${property}" collides with a fixed column and was stored as "${name}"`);
+
+    return name;
+}
+
 /**
  * The columns a component type's table needs, in the order the schema declares them.
- * A schema that describes no properties still gets a table -- it just has nothing but the
- * fixed columns, and the whole component remains readable through `value`.
+ *
+ * A schema that lets a row carry more than it declares is warned about: the columns are
+ * the whole of what is stored, so anything the schema leaves undeclared is dropped.
  */
 export function planColumns(schema: Schema | undefined, onWarning?: (message: string) => void): ColumnPlan[] {
+    if (schema && typeof schema === "object" && schema.additionalProperties !== false) {
+        onWarning?.(`the schema does not set "additionalProperties": false, so a row may carry properties `
+            + `that have no column and are not stored`);
+    }
+
     const properties = schema && typeof schema === "object" ? schema.properties : undefined;
     if (!properties || typeof properties !== "object") return [];
 
-    return Object.entries(properties as Record<string, Schema>).map(([property, propertySchema]) => {
-        let name = property;
-        if (RESERVED.has(name)) {
-            // A component property may legitimately be called "value"; the fixed column
-            // keeps the plain name and the property takes a suffix.
-            name = `${property}_`;
-            onWarning?.(`property "${property}" collides with a fixed column and was stored as "${name}"`);
-        }
+    return Object.entries(properties as Record<string, Schema>).map(([property, propertySchema]) => ({
+        name: columnNameFor(property, onWarning),
+        sqlType: columnTypeFor(propertySchema),
+        property,
+    }));
+}
 
-        return { name, sqlType: columnTypeFor(propertySchema), property };
-    });
+/** The DuckDB type for a value that is in a row rather than in a schema. */
+function typeOfValue(value: unknown): string | undefined {
+    if (typeof value === "string") return "VARCHAR";
+    if (typeof value === "boolean") return "BOOLEAN";
+    if (typeof value === "number") return Number.isInteger(value) ? "BIGINT" : "DOUBLE";
+
+    if (Array.isArray(value)) {
+        const kinds = new Set(value.map(entry => typeOfValue(entry)));
+        if (kinds.size !== 1) return undefined;
+
+        const [kind] = [...kinds];
+        return kind && !kind.endsWith("[]") ? `${kind}[]` : undefined;
+    }
+
+    return undefined;
+}
+
+/** One type widened to hold another, or JSON when nothing holds both. */
+function widen(left: string | undefined, right: string | undefined): string | undefined {
+    if (left === right) return left;
+    if (!left || !right) return undefined;
+
+    // Whole numbers turning up beside fractional ones are all just numbers.
+    if (left === "BIGINT" && right === "DOUBLE") return "DOUBLE";
+    if (left === "DOUBLE" && right === "BIGINT") return "DOUBLE";
+    if (left === "BIGINT[]" && right === "DOUBLE[]") return "DOUBLE[]";
+    if (left === "DOUBLE[]" && right === "BIGINT[]") return "DOUBLE[]";
+
+    return undefined;
+}
+
+/**
+ * The columns a component type needs when nothing declared it.
+ *
+ * An archive can carry rows of a type its own index never mentions. There is no schema to
+ * follow, so the rows are read instead: every property any of them has becomes a column,
+ * typed by what is actually in it, and anything that does not settle on one type is JSON.
+ */
+export function planColumnsFromRows(rows: unknown[], onWarning?: (message: string) => void): ColumnPlan[] {
+    const found = new Map<string, string | undefined>();
+
+    for (const row of rows) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+
+        for (const [property, value] of Object.entries(row as Record<string, unknown>)) {
+            if (value === null) continue;
+            const seen = typeOfValue(value);
+            found.set(property, found.has(property) ? widen(found.get(property), seen) : seen);
+        }
+    }
+
+    return [...found].map(([property, sqlType]) => ({
+        name: columnNameFor(property, onWarning),
+        sqlType: sqlType ?? "JSON",
+        property,
+    }));
+}
+
+/** A property of a component, as it is stored. */
+export interface StoredColumn {
+    /** The column in the table. */
+    name: string;
+    /** The property it stands for, which is the column name unless that was taken. */
+    property: string;
+    /** A JSON column holds a document; every other column holds a value of its own type. */
+    json: boolean;
+}
+
+/** What a component table holds, worked out from the table itself. */
+export function storedColumns(columns: Array<Record<string, unknown>>): StoredColumn[] {
+    return columns
+        .map(column => ({ name: String(column.column_name), type: String(column.data_type) }))
+        .filter(column => !RESERVED.has(column.name))
+        .map(column => ({
+            name: column.name,
+            property: RESERVED.has(column.name.replace(/_$/, "")) ? column.name.replace(/_$/, "") : column.name,
+            json: column.type === "JSON",
+        }));
+}
+
+/**
+ * Reads a stored row back as the component it came from.
+ *
+ * A null column is left out rather than written as null: a property that was absent and
+ * one that was written as null are the same row here, and absent is the one that comes
+ * back. The order is the order the columns were declared in, which is the order the
+ * schema declared the properties in.
+ */
+export function componentFromRow(columns: StoredColumn[], row: Record<string, unknown>): Record<string, unknown> {
+    const component: Record<string, unknown> = {};
+
+    for (const column of columns) {
+        const value = row[column.name];
+        if (value === null || value === undefined) continue;
+
+        component[column.property] = column.json && typeof value === "string" ? JSON.parse(value) : value;
+    }
+
+    return component;
 }
 
 /** The SQL that reads one column's value out of the bound JSON document. */

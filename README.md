@@ -209,10 +209,24 @@ SELECT name, count, min FROM "khronos::gltf::accessor" WHERE type = 'VEC3';
 ```
 
 Columns follow the schema: a string becomes `VARCHAR`, an integer `BIGINT`, an array of numbers
-`DOUBLE[]`, and anything with no scalar equivalent stays `JSON`. Every table also keeps `file_id`,
-`idx` — the row a reference points at — and `value`, the component exactly as it was stored, so a
-nested object is still reachable with `json_extract`. A type whose schema has grown by the time a
-later archive arrives gains the new columns; the rows already there read `NULL` for them.
+`DOUBLE[]`, and anything with no scalar equivalent — a nested object, a union — stays `JSON`, which
+`json_extract` still reaches into. Beyond those a table keeps only `file_id` and `idx`, the row a
+reference points at. A type whose schema has grown by the time a later archive arrives gains the new
+columns; the rows already there read `NULL` for them.
+
+**The columns are the component.** Nothing keeps a copy of the document beside them — a row is read
+back by putting its columns together again, which is what a download, a compose or a node fetch is
+built from. (Storing it twice cost about a third of the file: the DamagedHelmet database went from
+15.2 MB to 10.0 MB when the copy went.) Two things follow:
+
+- **A schema that does not seal itself is warned about.** A property no schema declares has no column
+  to go in, so inserting one warns that `the schema does not set "additionalProperties": false` —
+  every schema Mosaic ships does set it. A type carrying rows that its archive never declared at all
+  has its columns taken from the rows themselves, and says so.
+- **Null is not a value a component can carry.** A column reads `NULL` both for a property that was
+  absent and for one written as `null`, and absent is what comes back. Properties also come back in
+  the order the schema declares them rather than the order they were written in — a row makes the
+  round trip as data, not as text.
 
 Loading is **pre-composition**: sections are appended as written, so no `DELETE` or `PASS_THROUGH` is
 ever applied and inserting the same archive twice keeps both copies, under `name` and `name#2`. A

@@ -8,7 +8,9 @@ import { composeArchive } from "../src/composition/ComposeFs.ts";
 import { mosaicToGltf } from "../src/composition/MosaicToGltf.ts";
 import { collapseNodesByPath } from "../src/MosaicFileOperations.ts";
 import { parseGlb } from "../src/gltf/GltfDocument.ts";
-import { columnTypeFor, planColumns } from "../src/duckdb/SqlTypes.ts";
+import {
+    columnTypeFor, componentFromRow, planColumns, planColumnsFromRows, storedColumns,
+} from "../src/duckdb/SqlTypes.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
 import { CORE_TYPE } from "../src/core/schemas.ts";
 import { GLTF_TYPE } from "../src/gltf/schemas.ts";
@@ -59,11 +61,53 @@ test("an enum says what type its values are", () => {
 
 test("a property that clashes with a fixed column is renamed, and said so", () => {
     const warnings: string[] = [];
-    const columns = planColumns({ properties: { value: { type: "string" }, name: { type: "string" } } }, w => warnings.push(w));
+    const columns = planColumns(
+        { additionalProperties: false, properties: { idx: { type: "string" }, name: { type: "string" } } },
+        w => warnings.push(w));
 
-    assert.deepEqual(columns.map(c => c.name), ["value_", "name"]);
-    assert.deepEqual(columns.map(c => c.property), ["value", "name"]);
+    assert.deepEqual(columns.map(c => c.name), ["idx_", "name"]);
+    assert.deepEqual(columns.map(c => c.property), ["idx", "name"]);
     assert.ok(warnings.some(w => w.includes("collides with a fixed column")));
+
+    // And reading the table back undoes the rename, while a "value" column left behind
+    // by an earlier build -- which kept a copy of the whole component in one -- is passed
+    // over rather than handed back as a property.
+    assert.deepEqual(
+        storedColumns([
+            { column_name: "idx", data_type: "BIGINT" },
+            { column_name: "idx_", data_type: "VARCHAR" },
+            { column_name: "value", data_type: "JSON" },
+            { column_name: "name", data_type: "VARCHAR" },
+        ]).map(column => [column.name, column.property]),
+        [["idx_", "idx"], ["name", "name"]]);
+});
+
+test("a schema that does not seal itself is warned about", () => {
+    const open: string[] = [];
+    planColumns({ properties: { name: { type: "string" } } }, w => open.push(w));
+
+    // The columns are the whole of what is stored, so a row that carries more than the
+    // schema declares loses the rest -- which is worth saying at the point it goes in.
+    assert.ok(open.some(w => w.includes("additionalProperties")), open.join(" · "));
+
+    const sealed: string[] = [];
+    planColumns({ additionalProperties: false, properties: { name: { type: "string" } } }, w => sealed.push(w));
+    assert.deepEqual(sealed, []);
+});
+
+test("a type nothing declared takes its columns from its rows", () => {
+    const warnings: string[] = [];
+    const columns = planColumnsFromRows(
+        [
+            { name: "first", height: 2, tags: ["a", "b"] },
+            { name: "second", height: 2.5, nested: { deep: true } },
+        ],
+        w => warnings.push(w));
+
+    assert.deepEqual(
+        columns.map(column => [column.property, column.sqlType]),
+        [["name", "VARCHAR"], ["height", "DOUBLE"], ["tags", "VARCHAR[]"], ["nested", "JSON"]]);
+    assert.deepEqual(warnings, []);
 });
 
 // ---------------------------------------------------------------------------
@@ -136,10 +180,11 @@ test("a component table takes its columns from the schema in the archive", async
         );
         const byName = Object.fromEntries(columns.map(c => [c.column_name, c.data_type]));
 
-        // The fixed columns, then what the accessor schema declares.
+        // The fixed columns, then what the accessor schema declares. The columns are all
+        // there is: nothing keeps a copy of the component beside them.
         assert.equal(byName.file_id, "VARCHAR");
         assert.equal(byName.idx, "BIGINT");
-        assert.equal(byName.value, "JSON");
+        assert.equal(byName.value, undefined);
         assert.equal(byName.componentType, "BIGINT");
         assert.equal(byName.count, "BIGINT");
         assert.equal(byName.type, "VARCHAR");
@@ -173,18 +218,39 @@ test("component rows land in their table, typed and in order", async () => {
     }
 });
 
-test("the whole component is kept as JSON beside the columns", async () => {
+test("a nested object is a JSON column, and still queryable", async () => {
     const { db, dir } = await withExample("gltf-box");
     try {
         const [row] = await db.all(
-            `SELECT json_extract_string(value, '$.name') AS name,
-                    json_extract(value, '$.pbrMetallicRoughness.roughnessFactor')::DOUBLE AS roughness
+            `SELECT name,
+                    json_extract(pbrMetallicRoughness, '$.roughnessFactor')::DOUBLE AS roughness
              FROM ${JSON.stringify(GLTF_TYPE.material)}`,
         );
 
-        // Nested objects have no column of their own, but are still queryable.
+        // A nested object has no scalar column of its own, so it is stored as JSON --
+        // which is a column like any other, and can be reached into.
         assert.equal(row!.name, "Painted brick");
         assert.equal(row!.roughness, 0.9);
+    } finally {
+        await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("a component is read back from its columns", async () => {
+    const { db, dir } = await withExample("gltf-box");
+    try {
+        const columns = await db.componentColumns(GLTF_TYPE.accessor);
+        const [row] = await db.all(
+            `SELECT * FROM ${JSON.stringify(GLTF_TYPE.accessor)} WHERE idx = 1`);
+
+        // The row is the component again: every column that holds something, under the
+        // property it stands for, and the ones holding nothing left out.
+        const component = componentFromRow(columns, row!);
+        assert.equal(component.name, "indices");
+        assert.equal(component.type, "SCALAR");
+        assert.equal(component.count, 36);
+        assert.ok(!("min" in component), "an absent property does not come back as null");
     } finally {
         await db.close();
         fs.rmSync(dir, { recursive: true, force: true });

@@ -4,7 +4,10 @@ import type { DuckDBConnection, DuckDBInstance } from "@duckdb/node-api";
 import { duckdb } from "./runtime.ts";
 import { LoadMosaicFile, type MosaicFile } from "../MosaicFile.ts";
 import { indexOf, operationOf } from "../ComponentReference.ts";
-import { FIXED_COLUMNS, planColumns, extractionFor, quoteIdentifier, type ColumnPlan } from "./SqlTypes.ts";
+import {
+    FIXED_COLUMNS, planColumns, planColumnsFromRows, storedColumns, extractionFor, quoteIdentifier,
+    type ColumnPlan, type StoredColumn,
+} from "./SqlTypes.ts";
 
 /**
  * The tables that hold the index of every archive put into the database. These are fixed:
@@ -82,6 +85,16 @@ type Row = Record<string, unknown>;
 
 /** A database of Mosaic archives. Rows are only ever appended. */
 export class MosaicDatabase {
+    /**
+     * What each component table holds, as last read from the table itself.
+     *
+     * Every row read goes through this -- the columns are the component -- and the shape
+     * of a table only changes when an archive is inserted, so it is worth not asking the
+     * catalogue again for every selection. Any insert that creates or widens a table
+     * empties it.
+     */
+    private readonly tableColumns = new Map<string, StoredColumn[]>();
+
     private constructor(
         private readonly instance: DuckDBInstance,
         private readonly connection: DuckDBConnection,
@@ -102,6 +115,26 @@ export class MosaicDatabase {
         for (const statement of FIXED_SCHEMA) await connection.run(statement);
 
         return new MosaicDatabase(instance, connection, databasePath);
+    }
+
+    /**
+     * What a component type's table holds, read from the table itself.
+     *
+     * The columns are the component: there is no copy of the original document beside
+     * them, so reading one back means knowing which column stands for which property and
+     * which of them hold JSON.
+     */
+    async componentColumns(type: string): Promise<StoredColumn[]> {
+        const remembered = this.tableColumns.get(type);
+        if (remembered) return remembered;
+
+        const columns = storedColumns(await this.all(
+            `SELECT column_name, data_type FROM information_schema.columns
+             WHERE table_schema = 'main' AND table_name = '${type.replace(/'/g, "''")}'
+             ORDER BY ordinal_position`));
+
+        this.tableColumns.set(type, columns);
+        return columns;
     }
 
     /** Runs a query and returns its rows, with DuckDB's BIGINTs as ordinary numbers. */
@@ -219,9 +252,14 @@ export class MosaicDatabase {
 
         for (const table of file.index.componentTables) {
             const type = table.filename.replace(/\.ndjson$/i, "");
-            const created = await this.ensureComponentTable(type, table.schema, warnings);
+
+            // One plan per type: the same columns are created and then written to, and
+            // whatever the schema is warned about is said once rather than twice.
+            const plan = planColumns(table.schema as Record<string, unknown>, message => warnings.push(`${type}: ${message}`));
+
+            const created = await this.ensureComponentTable(type, plan, warnings);
             if (created) tablesCreated.push(type);
-            inserters.set(type, this.insertStatementFor(type, table.schema, warnings));
+            inserters.set(type, this.insertStatementFor(type, plan));
 
             await this.runWithJson(
                 `INSERT INTO mosaic_component_table
@@ -238,11 +276,17 @@ export class MosaicDatabase {
 
         for (const [type, rows] of file.serializedComponents) {
             if (!inserters.has(type)) {
-                // Rows for a type the index never declared: keep them, with no columns
-                // beyond the fixed ones, rather than dropping data on the floor.
-                warnings.push(`component type "${type}" has rows but no table entry, so it was stored without columns`);
-                if (await this.ensureComponentTable(type, undefined, warnings)) tablesCreated.push(type);
-                inserters.set(type, this.insertStatementFor(type, undefined, warnings));
+                // Rows for a type the index never declared. There is no schema saying what
+                // they hold, so the rows themselves are read for it -- the columns are all
+                // that is stored, and without them the rows would be nothing but an index.
+                warnings.push(
+                    `component type "${type}" has rows but no table entry, so its columns were taken from the rows`);
+
+                const parsed = rows.filter(line => line.trim().length > 0).map(line => JSON.parse(line));
+                const plan = planColumnsFromRows(parsed, message => warnings.push(`${type}: ${message}`));
+
+                if (await this.ensureComponentTable(type, plan, warnings)) tablesCreated.push(type);
+                inserters.set(type, this.insertStatementFor(type, plan));
             }
 
             const sql = inserters.get(type)!;
@@ -322,9 +366,8 @@ export class MosaicDatabase {
     }
 
     /** Creates a component type's table, or widens it if a later archive knows more. */
-    private async ensureComponentTable(type: string, schema: unknown, warnings: string[]): Promise<boolean> {
+    private async ensureComponentTable(type: string, columns: ColumnPlan[], warnings: string[]): Promise<boolean> {
         const table = quoteIdentifier(type);
-        const columns = planColumns(schema as Record<string, any>, message => warnings.push(`${type}: ${message}`));
 
         const existing = await this.all(
             `SELECT column_name FROM information_schema.columns
@@ -332,11 +375,11 @@ export class MosaicDatabase {
         );
 
         if (existing.length === 0) {
+            this.tableColumns.delete(type);
             const declarations = [
                 `${quoteIdentifier(FIXED_COLUMNS.fileId)} VARCHAR`,
                 `${quoteIdentifier(FIXED_COLUMNS.index)} BIGINT`,
                 ...columns.map(column => `${quoteIdentifier(column.name)} ${column.sqlType}`),
-                `${quoteIdentifier(FIXED_COLUMNS.value)} JSON`,
             ];
             await this.connection.run(`CREATE TABLE ${table} (${declarations.join(", ")})`);
             return true;
@@ -347,6 +390,7 @@ export class MosaicDatabase {
         for (const column of columns) {
             if (present.has(column.name)) continue;
             await this.connection.run(`ALTER TABLE ${table} ADD COLUMN ${quoteIdentifier(column.name)} ${column.sqlType}`);
+            this.tableColumns.delete(type);
             warnings.push(`${type}: added column "${column.name}", which an earlier archive did not declare`);
         }
 
@@ -354,21 +398,17 @@ export class MosaicDatabase {
     }
 
     /** The INSERT for one component type, reading each column out of the bound row. */
-    private insertStatementFor(type: string, schema: unknown, warnings: string[]): string {
-        const columns = planColumns(schema as Record<string, any>, message => warnings.push(`${type}: ${message}`));
-
+    private insertStatementFor(type: string, columns: ColumnPlan[]): string {
         const names = [
             quoteIdentifier(FIXED_COLUMNS.fileId),
             quoteIdentifier(FIXED_COLUMNS.index),
             ...columns.map(column => quoteIdentifier(column.name)),
-            quoteIdentifier(FIXED_COLUMNS.value),
         ];
 
         const values = [
             `json_extract_string(j, '$.file_id')`,
             `json_extract(j, '$.idx')::BIGINT`,
             ...columns.map((column: ColumnPlan) => extractionFor(column, "j")),
-            `json_extract(j, '$.row')`,
         ];
 
         return `INSERT INTO ${quoteIdentifier(type)} (${names.join(", ")})

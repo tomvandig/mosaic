@@ -5,8 +5,12 @@ export { composeDatabaseToGlb, glbOutputPathForDatabase, type ComposeDatabaseRes
 export {
     FIXED_COLUMNS,
     planColumns,
+    planColumnsFromRows,
+    componentFromRow,
+    storedColumns,
     columnTypeFor,
     extractionFor,
     quoteIdentifier,
     type ColumnPlan,
+    type StoredColumn,
 } from "./SqlTypes.ts";
