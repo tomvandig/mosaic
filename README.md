@@ -458,10 +458,15 @@ name. Then four panels:
   selection over their root nodes, each node labelled by its `core::name`;
 - a **components** view of whatever node is selected, with each component's type, reference id and
   value, and the tessera the node is written in;
-- a **3D** view, which is [`<model-viewer>`](https://modelviewer.dev) — a viewer that already knows
-  PBR materials, textures and image-based lighting — fed the GLB that
+- a **3D** view, drawn with [three.js](https://threejs.org), fed the GLB that
   `POST …/versions/{versionId}/nodes?format=glb` builds for the selected node. Selecting a node
-  reloads it; **Show everything** loads every root on show.
+  reloads it; **Show everything** loads every root on show. A converted building arrives as tens of
+  thousands of separate meshes — 79,193 in the electrical model of the sample set — and each one
+  would be a draw call, so meshes sharing a material are gathered into a `BatchedMesh`: 79,193 of
+  them become seventeen draws. The batch keeps each distinct geometry once rather than baking a copy
+  per placement, which matters because these files reuse geometry heavily; merging them instead would
+  have turned that model's 28 MB of geometry into 760 MB. The panel also only redraws when something
+  moves.
 
 **This is where imports are worth looking at.** Tick a tessera that imports another and the one it
 imports is read too, ticked or not — it is listed as *via import*, and any of its nodes drawn in the
@@ -478,8 +483,8 @@ deliberately **not** part of the spec: `mosaic-api.tsp` is the contract, and the
 can upload in one call, read a whole scene in another, and ask for one view over *several* versions,
 which is a question the spec's per-version `nodes` operation does not express. Selecting a single
 node still goes through that real endpoint — against the version the node is written in, which for a
-node reached across an import is the imported tessera. `<model-viewer>` is loaded from a CDN, so the
-3D panel wants the machine to have internet; the rest of the page does not.
+node reached across an import is the imported tessera. three.js is loaded from a CDN on first draw,
+so the 3D panel wants the machine to have internet; the rest of the page does not.
 
 Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so

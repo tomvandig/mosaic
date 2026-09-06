@@ -77,7 +77,8 @@ test("the page is served at the root", async () => {
         assert.match(response.headers.get("content-type") ?? "", /text\/html/);
 
         const html = await response.text();
-        assert.match(html, /<model-viewer/, "the 3D view is a model-viewer element");
+        assert.match(html, /<canvas id="viewer">/, "the 3D view is a canvas the renderer draws into");
+        assert.match(html, /"three": "https:/, "three.js is named in the import map");
         assert.match(html, /id="tree"/);
         assert.match(html, /id="components"/);
         assert.match(html, /id="compose"/, "the compose flag is on the page");
