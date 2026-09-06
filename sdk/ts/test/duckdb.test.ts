@@ -12,6 +12,7 @@ import {
     columnTypeFor, componentFromRow, planColumns, planColumnsFromRows, storedColumns,
 } from "../src/duckdb/SqlTypes.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
+import { Type } from "../src/MosaicIndexFile.ts";
 import { CORE_TYPE } from "../src/core/schemas.ts";
 import { GLTF_TYPE } from "../src/gltf/schemas.ts";
 import { readExample, resolveExampleSchema } from "./fixtures.ts";
@@ -289,6 +290,76 @@ test("the defaults of an optional reference are resolved on the way in", async (
         );
 
         assert.deepEqual(rows, [{ idx: -1, operation: "VALUE" }]);
+    } finally {
+        await db.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
+});
+
+test("an archive larger than one insert batch arrives whole and in order", async () => {
+    // Rows go into the database a batch at a time rather than one at a time, so an archive
+    // has to be big enough to cross that boundary before the chunking is exercised at all.
+    // Every example is smaller than one batch, so this builds one that is not.
+    const rows = 5_000;
+    const dir = tempDir();
+
+    const document = {
+        components: {
+            "test::tick": Array.from({ length: rows }, (_, at) => ({ tick: at, label: `row ${at}` })),
+        },
+        index: {
+            header: { MosaicVersion: "post-alpha" },
+            imports: [],
+            componentTables: [{
+                filename: "test::tick.ndjson",
+                type: Type.Ndjson,
+                schema: {
+                    "x-mosaic-id": "test::tick",
+                    type: "object",
+                    additionalProperties: false,
+                    properties: { tick: { type: "integer" }, label: { type: "string" } },
+                },
+            }],
+            sections: [{
+                header: {
+                    id: "many", message: "many rows", dataVersion: "1.0.0",
+                    author: "", timestamp: "2026-01-01T00:00:00.000Z", application: "test",
+                },
+                nodes: Array.from({ length: rows }, (_, at) => ({
+                    id: `node-${at}`,
+                    components: [{ type: "test::tick", id: "tick", index: at }],
+                })),
+            }],
+        },
+    };
+
+    const target = path.join(dir, "many.tsr");
+    fs.writeFileSync(target, await packMosaicSource(document));
+
+    const db = await MosaicDatabase.open(path.join(dir, "mosaic.duckdb"));
+    try {
+        const inserted = await db.insertArchive(target);
+        assert.equal(inserted.nodes, rows);
+        assert.equal(inserted.references, rows);
+        assert.equal(inserted.components["test::tick"], rows);
+
+        // Nothing dropped at a batch edge, nothing written twice, and every row still
+        // paired with the index its reference points at.
+        const [counted] = await db.all(
+            `SELECT (SELECT count(*) FROM mosaic_node) AS nodes,
+                    (SELECT count(*) FROM mosaic_component_ref) AS refs,
+                    (SELECT count(*) FROM "test::tick") AS ticks,
+                    (SELECT count(DISTINCT idx) FROM "test::tick") AS distinct_idx`,
+        );
+        assert.deepEqual(counted, { nodes: rows, refs: rows, ticks: rows, distinct_idx: rows });
+
+        const [mismatched] = await db.all(
+            `SELECT count(*) AS n FROM "test::tick" WHERE tick <> idx OR label <> 'row ' || idx`,
+        );
+        assert.equal(mismatched!.n, 0, "every row kept the index it was written under");
+
+        const [edge] = await db.all(`SELECT tick, label FROM "test::tick" WHERE idx = 2000`);
+        assert.deepEqual(edge, { tick: 2000, label: "row 2000" }, "the row on the batch boundary");
     } finally {
         await db.close();
         fs.rmSync(dir, { recursive: true, force: true });

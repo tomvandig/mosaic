@@ -83,6 +83,32 @@ export interface InsertResult {
 
 type Row = Record<string, unknown>;
 
+/**
+ * How many rows go into one statement.
+ *
+ * Inserting a row at a time is what a row-oriented database is built for and what a
+ * columnar one is worst at: DuckDB plans the statement, opens the append, writes one row
+ * and closes it again. Batching amortizes all of that, and it amortizes the planning too,
+ * since the statement is prepared once and rebound per batch. Bigger batches keep paying
+ * up to a point; past a few thousand the JSON document itself starts to cost more than the
+ * round trip it saves.
+ */
+const BATCH_ROWS = 2_000;
+
+/**
+ * The FROM clause every batched insert shares: one JSON array bound in, one row per
+ * element out. The paths the columns are read by are unchanged from the single-row form,
+ * so `j` still means "the row being written".
+ */
+const FROM_JSON_ROWS = `FROM (SELECT unnest(json_extract(?::JSON, '$[*]')) AS j)`;
+
+/** Collects rows and writes them a batch at a time. */
+interface BatchWriter {
+    add(row: unknown): Promise<void>;
+    /** Writes whatever is left and releases the statement. */
+    done(): Promise<void>;
+}
+
 /** A database of Mosaic archives. Rows are only ever appended. */
 export class MosaicDatabase {
     /**
@@ -223,8 +249,44 @@ export class MosaicDatabase {
     /** Runs a statement with one JSON document bound to it. */
     private async runWithJson(sql: string, payload: unknown): Promise<void> {
         const statement = await this.connection.prepare(sql);
-        statement.bindVarchar(1, JSON.stringify(payload));
-        await statement.run();
+        try {
+            statement.bindVarchar(1, JSON.stringify(payload));
+            await statement.run();
+        } finally {
+            statement.destroySync();
+        }
+    }
+
+    /**
+     * Opens a writer for a batched insert: the statement is prepared once here, and each
+     * batch rebinds it. Rows are written as they accumulate rather than gathered up first,
+     * so inserting an archive with a million references never holds a million objects.
+     */
+    private async batchWriter(sql: string): Promise<BatchWriter> {
+        const statement = await this.connection.prepare(sql);
+        let pending: unknown[] = [];
+
+        const send = async (): Promise<void> => {
+            if (pending.length === 0) return;
+
+            statement.bindVarchar(1, JSON.stringify(pending));
+            pending = [];
+            await statement.run();
+        };
+
+        return {
+            async add(row: unknown): Promise<void> {
+                pending.push(row);
+                if (pending.length >= BATCH_ROWS) await send();
+            },
+            async done(): Promise<void> {
+                try {
+                    await send();
+                } finally {
+                    statement.destroySync();
+                }
+            },
+        };
     }
 
     private async write(file: MosaicFile, fileId: string, source: string, warnings: string[]): Promise<InsertResult> {
@@ -236,15 +298,16 @@ export class MosaicDatabase {
             { row: { file_id: fileId, ordinal: await this.nextOrdinal(), source, version: file.index.header.MosaicVersion } },
         );
 
+        const imports = await this.batchWriter(
+            `INSERT INTO mosaic_import
+             SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.ordinal')::BIGINT,
+                    json_extract_string(j, '$.row.uri'), json_extract_string(j, '$.row.integrity')
+             ${FROM_JSON_ROWS}`);
+
         for (const [ordinal, entry] of file.index.imports.entries()) {
-            await this.runWithJson(
-                `INSERT INTO mosaic_import
-                 SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.ordinal')::BIGINT,
-                        json_extract_string(j, '$.row.uri'), json_extract_string(j, '$.row.integrity')
-                 FROM (SELECT ?::JSON AS j)`,
-                { row: { file_id: fileId, ordinal, uri: entry.uri, integrity: entry.integrity ?? null } },
-            );
+            await imports.add({ row: { file_id: fileId, ordinal, uri: entry.uri, integrity: entry.integrity ?? null } });
         }
+        await imports.done();
 
         // --- component tables, built from the schemas the archive carries --------
         const tablesCreated: string[] = [];
@@ -289,21 +352,39 @@ export class MosaicDatabase {
                 inserters.set(type, this.insertStatementFor(type, plan));
             }
 
-            const sql = inserters.get(type)!;
+            const writer = await this.batchWriter(inserters.get(type)!);
             let written = 0;
 
             for (const [index, line] of rows.entries()) {
                 if (line.trim().length === 0) continue;
-                await this.runWithJson(sql, { file_id: fileId, idx: index, row: JSON.parse(line) });
+                await writer.add({ file_id: fileId, idx: index, row: JSON.parse(line) });
                 written++;
             }
 
+            await writer.done();
             components[type] = written;
         }
 
         // --- sections, nodes and references --------------------------------------
+        // The nodes and their references are the bulk of an archive -- hundreds of
+        // thousands of rows for a converted building -- so both are written in batches,
+        // and the two writers stay open across every section rather than per section.
         let nodeCount = 0;
         let referenceCount = 0;
+
+        const nodeWriter = await this.batchWriter(
+            `INSERT INTO mosaic_node
+             SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.section_ordinal')::BIGINT,
+                    json_extract(j, '$.row.node_ordinal')::BIGINT, json_extract_string(j, '$.row.node_id')
+             ${FROM_JSON_ROWS}`);
+
+        const referenceWriter = await this.batchWriter(
+            `INSERT INTO mosaic_component_ref
+             SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.section_ordinal')::BIGINT,
+                    json_extract_string(j, '$.row.node_id'), json_extract(j, '$.row.ordinal')::BIGINT,
+                    json_extract_string(j, '$.row.type'), json_extract_string(j, '$.row.ref_id'),
+                    json_extract(j, '$.row.idx')::BIGINT, json_extract_string(j, '$.row.operation')
+             ${FROM_JSON_ROWS}`);
 
         for (const [sectionOrdinal, section] of file.index.sections.entries()) {
             await this.runWithJson(
@@ -324,37 +405,28 @@ export class MosaicDatabase {
             );
 
             for (const [nodeOrdinal, node] of section.nodes.entries()) {
-                await this.runWithJson(
-                    `INSERT INTO mosaic_node
-                     SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.section_ordinal')::BIGINT,
-                            json_extract(j, '$.row.node_ordinal')::BIGINT, json_extract_string(j, '$.row.node_id')
-                     FROM (SELECT ?::JSON AS j)`,
+                await nodeWriter.add(
                     { row: { file_id: fileId, section_ordinal: sectionOrdinal, node_ordinal: nodeOrdinal, node_id: node.id } },
                 );
                 nodeCount++;
 
                 for (const [ordinal, reference] of (node.components ?? []).entries()) {
-                    await this.runWithJson(
-                        `INSERT INTO mosaic_component_ref
-                         SELECT json_extract_string(j, '$.row.file_id'), json_extract(j, '$.row.section_ordinal')::BIGINT,
-                                json_extract_string(j, '$.row.node_id'), json_extract(j, '$.row.ordinal')::BIGINT,
-                                json_extract_string(j, '$.row.type'), json_extract_string(j, '$.row.ref_id'),
-                                json_extract(j, '$.row.idx')::BIGINT, json_extract_string(j, '$.row.operation')
-                         FROM (SELECT ?::JSON AS j)`,
-                        {
-                            row: {
-                                file_id: fileId, section_ordinal: sectionOrdinal, node_id: node.id, ordinal,
-                                type: reference.type, ref_id: reference.id,
-                                // The defaults are resolved here, so a query never has to
-                                // remember that an absent index means -1.
-                                idx: indexOf(reference), operation: operationOf(reference),
-                            },
+                    await referenceWriter.add({
+                        row: {
+                            file_id: fileId, section_ordinal: sectionOrdinal, node_id: node.id, ordinal,
+                            type: reference.type, ref_id: reference.id,
+                            // The defaults are resolved here, so a query never has to
+                            // remember that an absent index means -1.
+                            idx: indexOf(reference), operation: operationOf(reference),
                         },
-                    );
+                    });
                     referenceCount++;
                 }
             }
         }
+
+        await nodeWriter.done();
+        await referenceWriter.done();
 
         return {
             fileId, source,
@@ -412,7 +484,7 @@ export class MosaicDatabase {
         ];
 
         return `INSERT INTO ${quoteIdentifier(type)} (${names.join(", ")})
-                SELECT ${values.join(", ")} FROM (SELECT ?::JSON AS j)`;
+                SELECT ${values.join(", ")} ${FROM_JSON_ROWS}`;
     }
 }
 

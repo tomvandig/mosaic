@@ -12,23 +12,52 @@ import { hasValue, indexOf, operationOf } from './ComponentReference.ts';
 // Merge: applies newNode onto oldNode in-place (operation-aware)
 // ---------------------------------------------------------------------------
 
+/**
+ * Applies one node's components onto another's, in place.
+ *
+ * Two components clash when they share a reference id, so the work is finding the one
+ * already there with the same id. That lookup is a map rather than a scan: a node can hold
+ * a great many components -- a converted IFC model hangs every buffer and accessor off one
+ * parent, which is hundreds of thousands of child links on a single node -- and scanning
+ * the list for each of them made this quadratic in the width of the widest node.
+ *
+ * A delete leaves a hole rather than splicing, which would move every position after it;
+ * the holes are closed once at the end, so order is what it would have been.
+ */
 function mergeComponents(oldList: ComponentElement[], newList: ComponentElement[]): ComponentElement[] {
+    const positions = new Map<string, number>();
+    for (const [index, existing] of oldList.entries()) {
+        // First one wins, which is what scanning from the front used to do.
+        if (!positions.has(existing.id)) positions.set(existing.id, index);
+    }
+
+    const removed = new Set<number>();
+
     for (const item of newList) {
-        const idx = oldList.findIndex(x => x.id === item.id);
+        const at = positions.get(item.id);
         const operation = operationOf(item);
 
-        if (idx === -1) {
+        if (at === undefined) {
             if (operation === Operation.Value) {
+                positions.set(item.id, oldList.length);
                 oldList.push({ ...item });
             }
-        } else {
-            if (operation === Operation.Delete) {
-                oldList.splice(idx, 1);
-            } else if (operation === Operation.Value) {
-                oldList[idx] = { ...item };
-            }
+        } else if (operation === Operation.Delete) {
+            removed.add(at);
+            positions.delete(item.id);
+        } else if (operation === Operation.Value) {
+            oldList[at] = { ...item };
         }
     }
+
+    if (removed.size > 0) {
+        let write = 0;
+        for (let read = 0; read < oldList.length; read++) {
+            if (!removed.has(read)) oldList[write++] = oldList[read]!;
+        }
+        oldList.length = write;
+    }
+
     return oldList;
 }
 
