@@ -32,8 +32,16 @@ const GLTF_TYPES: ReadonlySet<string> = new Set(Object.values(GLTF_TYPE));
  */
 const NATIVE_TYPES: ReadonlySet<string> = new Set([...GLTF_TYPES, CORE_TYPE.transform, CORE_TYPE.child]);
 
-/** Expansion is bounded, so a runaway set of links fails loudly instead of hanging. */
-const MAX_NODES = 100_000;
+/**
+ * Expansion is bounded, so a runaway set of links fails loudly instead of hanging.
+ *
+ * A cycle is caught exactly, a few lines down, by looking for the node among its own
+ * ancestors; what this catches is the other way a tree can explode, where no link repeats
+ * but enough nodes are named by enough parents that the expansion multiplies. So the
+ * number only has to be past what real data reaches: a converted IFC building runs to a
+ * few hundred thousand nodes before anything is expanded at all.
+ */
+const MAX_NODES = 2_000_000;
 
 function decodeDataUri(uri: unknown, what: string): Uint8Array {
     if (typeof uri !== "string") throw new Error(`${what} has no uri to read its bytes from`);

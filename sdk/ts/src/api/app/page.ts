@@ -107,8 +107,8 @@ export const APP_PAGE = String.raw`<!doctype html>
 <header>
   <h1>Mosaic</h1>
   <label>upload <input id="file" type="file" accept=".tsr" multiple></label>
-  <label title="Resolve inheritance before answering, the way composing does">
-    <input id="compose" type="checkbox"> compose
+  <label title="Resolve inheritance before answering, the way composing does. A part whose geometry belongs to the type it is-a has none of its own until this is on.">
+    <input id="compose" type="checkbox" checked> compose
   </label>
   <button id="whole">Show everything</button>
   <span class="status" id="status"></span>
@@ -495,7 +495,18 @@ async function intoViewer(saying, pending) {
     viewer.src = viewer.dataset.url;
 
     const nodes = response.headers.get("x-mosaic-nodes");
-    say((nodes ? nodes + " nodes, " : "") + blob.size + " bytes of glb");
+    const meshes = response.headers.get("x-mosaic-meshes");
+
+    // A selection can be all links and no geometry, which looks like a broken viewer
+    // rather than what it is: a part drawing its type's mesh, with compose turned off.
+    if (meshes === "0") {
+      say((nodes ? nodes + " nodes, " : "") + "no geometry in the answer"
+          + (compose() ? "" : " — tick compose if it comes from a type"), true);
+      return;
+    }
+
+    say((nodes ? nodes + " nodes, " : "") + (meshes ? meshes + " meshes, " : "")
+        + blob.size + " bytes of glb");
   } catch (error) {
     say(String(error.message ?? error), true);
   }

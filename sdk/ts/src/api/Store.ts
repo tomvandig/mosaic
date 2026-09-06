@@ -55,6 +55,16 @@ const API_SCHEMA = [
     )`,
 ];
 
+/** What a node fetch answers with: the bytes, and enough to say what is in them. */
+export interface BuiltNodes {
+    bytes: Uint8Array;
+    contentType: string;
+    nodeCount: number;
+    /** Meshes in the answer, for a glb. Absent for a tsr, which is not drawn. */
+    meshCount?: number;
+    missing: string[];
+}
+
 export class NotFound extends Error {
     constructor(what: string) {
         super(what);
@@ -453,16 +463,12 @@ export class ApiStore {
         versionId: string,
         format: NodeFetchFormat,
         request: SelectionRequest,
-    ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
+    ): Promise<BuiltNodes> {
         return await this.buildNodes([{ tesseraId, versionId }], format, request);
     }
 
     /** The same, over several versions read together. */
-    async buildNodes(
-        refs: VersionRef[],
-        format: NodeFetchFormat,
-        request: SelectionRequest,
-    ): Promise<{ bytes: Uint8Array; contentType: string; nodeCount: number; missing: string[] }> {
+    async buildNodes(refs: VersionRef[], format: NodeFetchFormat, request: SelectionRequest): Promise<BuiltNodes> {
         const selection = await this.selectionAcross(refs, request);
 
         if (format === NodeFetchFormat.Tsr) {
@@ -479,6 +485,10 @@ export class ApiStore {
             bytes: writeGlb(composed.document, composed.binary),
             contentType: "model/gltf-binary",
             nodeCount: selection.nodeIds.length,
+            // A selection can be entirely links -- a part whose geometry belongs to the
+            // type it is-a has none of its own until inheritance is resolved -- and a
+            // viewer handed a file with no meshes has nothing to say about why.
+            meshCount: composed.document.meshes?.length ?? 0,
             missing: selection.missing,
         };
     }

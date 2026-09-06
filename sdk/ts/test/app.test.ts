@@ -247,6 +247,30 @@ test("composing through the 3D call gives a node its type's geometry", async () 
     }
 });
 
+test("an answer with no geometry says so, rather than looking like a broken viewer", async () => {
+    const running = await started();
+    try {
+        const { tesseraId, versionId } = await upload(running.url, "typed-boxes");
+        const answer = await scene(running.url, tesseraId, versionId);
+        const box = (Object.values(answer.nodes) as any[]).find(node => node.name === "Near box");
+
+        const ask = async (compose: boolean) => await fetch(
+            `${running.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+            {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ nodes: [box.id], includeChildren: true, compose }),
+            });
+
+        // A node whose geometry belongs to the type it is-a has none of its own, and the
+        // page needs to be able to tell that from a viewer that failed.
+        assert.equal((await ask(false)).headers.get("x-mosaic-meshes"), "0");
+        assert.equal((await ask(true)).headers.get("x-mosaic-meshes"), "1");
+    } finally {
+        await stopped(running);
+    }
+});
+
 test("the app endpoints report what is wrong rather than failing blankly", async () => {
     const running = await started();
     try {

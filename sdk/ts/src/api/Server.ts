@@ -147,6 +147,7 @@ const HANDLERS: Record<string, Handler> = {
             contentType: built.contentType,
             headers: {
                 "x-mosaic-nodes": String(built.nodeCount),
+                ...(built.meshCount !== undefined ? { "x-mosaic-meshes": String(built.meshCount) } : {}),
                 ...(built.missing.length > 0 ? { "x-mosaic-missing": built.missing.join(",") } : {}),
             },
         };
@@ -212,6 +213,7 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
                         response.writeHead(reply.status ?? 200, {
                             "content-type": reply.contentType ?? "application/octet-stream",
                             "content-length": String(reply.bytes.byteLength),
+                            ...reply.headers,
                         });
                         return response.end(reply.bytes);
                     }

@@ -19,6 +19,7 @@ export interface AppReply {
     html?: string;
     bytes?: Buffer;
     contentType?: string;
+    headers?: Record<string, string>;
 }
 
 interface AppRequest {
@@ -229,7 +230,14 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
             compose: asked.compose ?? false,
         });
 
-        return { bytes: Buffer.from(built.bytes), contentType: built.contentType };
+        return {
+            bytes: Buffer.from(built.bytes),
+            contentType: built.contentType,
+            headers: {
+                "x-mosaic-nodes": String(built.nodeCount),
+                ...(built.meshCount !== undefined ? { "x-mosaic-meshes": String(built.meshCount) } : {}),
+            },
+        };
     },
 };
 
