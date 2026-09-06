@@ -130,6 +130,38 @@ something wrong.
 The conversion lives in the SDK under [`sdk/ts/src/gltf/`](sdk/ts/src/gltf/), which also owns the
 glTF-derived component schemas; the CLI commands are a thin wrapper over it.
 
+## Importing IFC
+
+`mosaic` converts an IFC model the same way, reading `.ifc` files of either IFC4 or IFC2X3:
+
+```bash
+mosaic ifc      <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]
+mosaic ifc-pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]
+```
+
+Parsing and meshing are [web-ifc](https://github.com/ThatOpen/engine_web-ifc)'s job: it resolves
+placements, subtracts openings and tessellates, and reports the result in metres and Y-up, which is
+already glTF's convention. What the converter does is decide what all of it becomes in Mosaic.
+
+The spatial tree becomes the node tree. IFC says the hierarchy with relationship objects like every
+other fact — a storey holds its walls through an `IfcRelContainedInSpatialStructure` — but Mosaic has
+a parent-child link that a viewer, a selection and a composition all read, so `IfcRelAggregates`,
+`IfcRelNests` and `IfcRelContainedInSpatialStructure` become `core::child`.
+
+Everything else becomes a component. `ifc4::entity` carries the class, the `GlobalId` and every
+direct attribute; `ifc4::propertySet` and `ifc4::quantitySet` carry the properties and the measured
+numbers; `ifc4::units` says what the file's numbers are in. Every remaining relationship gets a
+component type of its own — `ifc4::rel::IfcRelDefinesByType`, `ifc4::rel::IfcRelVoidsElement`, one
+table per class — and the link is the *reference*: the component sits on the related node and its
+reference name is the id of the node at the other end. One row serves every link a relationship
+makes, so an aggregate with four hundred parts is one row and four hundred references.
+
+A node's id comes from `IfcRoot.GlobalId`, so re-exporting the model from the authoring tool and
+converting it again leaves every id another archive was pointing at exactly where it was.
+
+The conversion lives in its own package, [`sdk/ifc4/`](sdk/ifc4/), which
+[documents the mapping in full](sdk/ifc4/README.md).
+
 ## Composing a renderable GLB
 
 `mosaic compose` reads an archive together with everything it imports and writes a binary glTF:
@@ -453,6 +485,26 @@ Two things to know. **The query API is not implemented** — it answers 501, del
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so
 `mosaic compose scene.duckdb` will not run while a server is holding it; stop the server first.
 
+## A worked example
+
+[`examples/`](examples/) holds the **Meadowbank campus**: three buildings and a site as fourteen
+archives, **9,138 nodes and 56,298 components drawn with 4,109 vertices**. It is shaped like a real
+BIM project — a structural, an architectural and a services model per building, each owned and
+published separately, federated by a coordination model that names their roots across the imports.
+
+```bash
+cd examples
+npm run build                              # regenerates every archive, deterministically
+mosaic compose campus/campus.tsr           # 9,205 glTF nodes sharing 31 meshes
+```
+
+It is the format's own argument, at size. Parts hold a name, a placement, an is-a link, what they are
+on the project and how much of them there is; geometry, material, classification, fire rating and
+unit rate all arrive through `core::inherit`, three links deep — family, type, variant. So the whole
+campus runs on **59 type property sets and 163 quantity rows**, and a change to a type is a change to
+every part that is one. See [examples/README.md](examples/README.md) for the queries that fall out
+of that.
+
 ## Tests
 
 The TypeScript SDK is tested end to end: each case builds a real `.mosaic` archive from an example
@@ -467,6 +519,15 @@ npm test
 The runner is Node's built-in `node:test` with native TypeScript execution, so there is no test
 framework or build step to configure. Example datasets live in [`sdk/ts/test-data/`](sdk/ts/test-data/)
 and are documented in the README there.
+
+The IFC converter is tested the same way, from its own package, against a hand-written IFC4 file
+small enough to read in one sitting:
+
+```bash
+cd sdk/ifc4
+npm install
+npm test
+```
 
 ## Scenarios
 

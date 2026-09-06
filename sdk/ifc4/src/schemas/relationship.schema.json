@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "ifc4::rel::IfcRelationship",
+  "title": "IFC relationship",
+  "description": "One IfcRelationship, as the relationship object itself. The link is the reference rather than the row: the component sits on each related node and its reference name is the id of the node the relationship relates it to. One row serves every link a single relationship object makes, so an IfcRelAggregates with four hundred parts is one row and four hundred references.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expressId", "ifcType"],
+  "properties": {
+    "expressId": { "type": "integer", "description": "The line number the relationship had in the file." },
+    "ifcType": { "type": "string", "description": "The relationship class, such as IfcRelContainedInSpatialStructure." },
+    "globalId": { "type": "string", "description": "IfcRoot.GlobalId of the relationship object." },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "relating": { "type": "string", "description": "Which attribute the reference points at, such as RelatingStructure. The node holding the component is on the Related side. Absent when the relationship has only one end -- a virtual space boundary bounds a space and no element -- and then the reference names the relationship itself rather than another node." },
+    "attributes": {
+      "type": "object",
+      "description": "Any further attribute the relationship carries in its own right, such as IfcRelSpaceBoundary.PhysicalOrVirtualBoundary."
+    }
+  }
+}

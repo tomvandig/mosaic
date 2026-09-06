@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "ifc4::propertySet",
+  "title": "IFC property set",
+  "description": "An IfcPropertySet, flattened to the values it holds. One row per property set in the file, however many objects share it: IFC lets a single set define hundreds of elements, and the reference on each of those nodes points back at the one row.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expressId", "name", "properties"],
+  "properties": {
+    "expressId": { "type": "integer", "description": "The line number the property set had in the file." },
+    "globalId": { "type": "string", "description": "IfcRoot.GlobalId of the property set." },
+    "name": { "type": "string", "description": "The set's name, such as Pset_WallCommon. This is also the name of the reference that points at this row." },
+    "description": { "type": "string" },
+    "properties": {
+      "type": "object",
+      "description": "Property name to value. A single value becomes a string, number or boolean; an enumerated or list property becomes an array; a bounded property becomes an object with lowerBound, upperBound and setPointValue; a complex property becomes a nested object."
+    }
+  }
+}

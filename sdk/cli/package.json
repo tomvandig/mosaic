@@ -11,8 +11,10 @@
     "start": "npm run build && node dist/mosaic.cjs"
   },
   "dependencies": {
+    "mosaic-ifc4": "file:../ifc4",
     "mosaic-ts": "file:../ts",
-    "quicktype-core": "^23.0.171"
+    "quicktype-core": "^23.0.171",
+    "web-ifc": "^0.0.77"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

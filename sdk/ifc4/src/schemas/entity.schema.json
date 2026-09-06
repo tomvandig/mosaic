@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "ifc4::entity",
+  "title": "IFC entity",
+  "description": "The IFC entity a node came from: what it is, how the file identified it, and every direct attribute that carries a value of its own. Attributes that point at other lines are not here -- those become links between nodes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ifcType", "expressId"],
+  "properties": {
+    "ifcType": {
+      "type": "string",
+      "description": "The IFC class, spelled as the schema spells it: IfcWall, IfcBuildingStorey."
+    },
+    "expressId": {
+      "type": "integer",
+      "description": "The line number the entity had in the file it was read from. Unique within that file and meaningless outside it."
+    },
+    "globalId": {
+      "type": "string",
+      "description": "IfcRoot.GlobalId, the 22-character identifier IFC intends to be unique everywhere. Absent on entities that are not rooted, such as IfcMaterial."
+    },
+    "name": { "type": "string", "description": "IfcRoot.Name." },
+    "description": { "type": "string", "description": "IfcRoot.Description." },
+    "objectType": { "type": "string", "description": "IfcObject.ObjectType." },
+    "longName": { "type": "string", "description": "The longer name a spatial element or project carries." },
+    "tag": { "type": "string", "description": "IfcElement.Tag, normally the mark the authoring tool assigned." },
+    "predefinedType": { "type": "string", "description": "The PredefinedType enumeration label, such as SOLIDWALL." },
+    "attributes": {
+      "type": "object",
+      "description": "Every other direct attribute that holds a value, keyed by its IFC attribute name. Ownership, placement and representation attributes are left out: the first says nothing about the thing, and the other two are already the node's transform and mesh."
+    }
+  }
+}

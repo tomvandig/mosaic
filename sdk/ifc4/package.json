@@ -1,0 +1,24 @@
+{
+  "name": "mosaic-ifc4",
+  "version": "0.1.0",
+  "description": "Convert IFC4 models into Mosaic archives",
+  "main": "src/index.ts",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --experimental-transform-types --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "mosaic-ts": "file:../ts",
+    "web-ifc": "^0.0.77"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}

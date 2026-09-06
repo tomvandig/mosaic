@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "ifc4::units",
+  "title": "IFC unit assignment",
+  "description": "What the numbers in the file were written in. This describes the properties and quantities, not the geometry: the mesh coordinates are metres whatever the file used, because that is what the geometry engine reports.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "expressId": { "type": "integer", "description": "The line number of the IfcUnitAssignment." },
+    "geometryUnit": {
+      "type": "string",
+      "description": "The unit the converted mesh coordinates are in. Always METRE."
+    },
+    "assignments": {
+      "type": "object",
+      "description": "Unit type to the unit named for it, such as { \"LENGTHUNIT\": \"MILLI METRE\", \"AREAUNIT\": \"SQUARE_METRE\" }. A conversion-based unit is named along with the factor it converts by."
+    }
+  }
+}

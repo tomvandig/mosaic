@@ -1,0 +1,118 @@
+ISO-10303-21;
+HEADER;
+FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
+FILE_NAME('cottage.ifc','2026-09-05T12:00:00',('Mosaic'),('Mosaic'),'mosaic-ifc4 fixture','mosaic-ifc4','');
+FILE_SCHEMA(('IFC4'));
+ENDSEC;
+DATA;
+/* --- owner history ------------------------------------------------------- */
+#1=IFCPERSON($,$,'Mosaic',$,$,$,$,$);
+#2=IFCORGANIZATION($,'Mosaic',$,$,$);
+#3=IFCPERSONANDORGANIZATION(#1,#2,$);
+#4=IFCAPPLICATION(#2,'0.1','Mosaic','mosaic');
+#5=IFCOWNERHISTORY(#3,#4,$,.ADDED.,$,$,$,0);
+
+/* --- units and context --------------------------------------------------- */
+#10=IFCDIRECTION((1.,0.,0.));
+#11=IFCDIRECTION((0.,0.,1.));
+#12=IFCCARTESIANPOINT((0.,0.,0.));
+#13=IFCAXIS2PLACEMENT3D(#12,#11,#10);
+#20=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);
+#21=IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.);
+#22=IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.);
+#23=IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.);
+#24=IFCUNITASSIGNMENT((#20,#21,#22,#23));
+#30=IFCGEOMETRICREPRESENTATIONCONTEXT($,'Model',3,1.E-05,#13,$);
+
+/* --- spatial structure --------------------------------------------------- */
+#31=IFCPROJECT('0Project0000000000ZZ01',#5,'Meadowbank','A one-room test project',$,'Mosaic fixture','Test',(#30),#24);
+#40=IFCLOCALPLACEMENT($,#13);
+#41=IFCSITE('0Site000000000000ZZ001',#5,'Meadow',$,$,#40,$,'Green meadow',.ELEMENT.,$,$,0.,$,$);
+#42=IFCLOCALPLACEMENT(#40,#13);
+#43=IFCBUILDING('0Building00000000ZZ001',#5,'Cottage',$,$,#42,$,'The cottage',.ELEMENT.,0.,0.,$);
+#44=IFCLOCALPLACEMENT(#42,#13);
+#45=IFCBUILDINGSTOREY('0Storey0000000000ZZ001',#5,'Ground floor',$,$,#44,$,'Ground floor',.ELEMENT.,0.);
+
+/* --- wall A has a solid of its own, so its opening can be cut out of it --- */
+#50=IFCCARTESIANPOINT((0.,0.));
+#51=IFCAXIS2PLACEMENT2D(#50,$);
+#52=IFCRECTANGLEPROFILEDEF(.AREA.,'Wall 200',#51,4.,0.2);
+#53=IFCEXTRUDEDAREASOLID(#52,#13,#11,3.);
+#54=IFCSHAPEREPRESENTATION(#30,'Body','SweptSolid',(#53));
+#55=IFCPRODUCTDEFINITIONSHAPE($,$,(#54));
+
+/* --- walls B and C share one solid, so the conversion must store it once -- */
+#56=IFCEXTRUDEDAREASOLID(#52,#13,#11,3.);
+#57=IFCSHAPEREPRESENTATION(#30,'Body','SweptSolid',(#56));
+#58=IFCPRODUCTDEFINITIONSHAPE($,$,(#57));
+
+/* --- a colour on wall A's solid, so the conversion has two materials ------ */
+#59=IFCCOLOURRGB($,0.72,0.7,0.66);
+#60=IFCSURFACESTYLESHADING(#59,0.);
+#61=IFCSURFACESTYLE('Concrete',.BOTH.,(#60));
+#62=IFCSTYLEDITEM(#53,(#61),$);
+
+/* --- three walls ---------------------------------------------------------- */
+#70=IFCLOCALPLACEMENT(#44,#13);
+#71=IFCWALL('0WallA00000000000ZZ001',#5,'Wall A','South wall',$,#70,#55,'W-01',.SOLIDWALL.);
+#72=IFCCARTESIANPOINT((0.,6.,0.));
+#73=IFCAXIS2PLACEMENT3D(#72,#11,#10);
+#74=IFCLOCALPLACEMENT(#44,#73);
+#75=IFCWALL('0WallB00000000000ZZ001',#5,'Wall B','North wall',$,#74,#58,'W-02',.SOLIDWALL.);
+#76=IFCCARTESIANPOINT((0.,12.,0.));
+#77=IFCAXIS2PLACEMENT3D(#76,#11,#10);
+#78=IFCLOCALPLACEMENT(#44,#77);
+#79=IFCWALL('0WallC00000000000ZZ001',#5,'Wall C','Garden wall',$,#78,#58,'W-03',.SOLIDWALL.);
+
+/* --- an opening cut out of wall A ---------------------------------------- */
+#80=IFCCARTESIANPOINT((0.,0.));
+#81=IFCAXIS2PLACEMENT2D(#80,$);
+#82=IFCRECTANGLEPROFILEDEF(.AREA.,'Opening',#81,1.,0.4);
+#83=IFCEXTRUDEDAREASOLID(#82,#13,#11,2.1);
+#84=IFCSHAPEREPRESENTATION(#30,'Body','SweptSolid',(#83));
+#85=IFCPRODUCTDEFINITIONSHAPE($,$,(#84));
+#86=IFCLOCALPLACEMENT(#70,#13);
+#87=IFCOPENINGELEMENT('0Opening000000000ZZ001',#5,'Doorway',$,$,#86,#85,'O-01',.OPENING.);
+#88=IFCRELVOIDSELEMENT('0Voids00000000000ZZ001',#5,'Doorway void',$,#71,#87);
+
+/* --- the wall type, with a property set of its own ------------------------ */
+#90=IFCPROPERTYSINGLEVALUE('FireRating',$,IFCLABEL('EI60'),$);
+#91=IFCPROPERTYSINGLEVALUE('ThermalTransmittance',$,IFCREAL(0.24),$);
+#92=IFCPROPERTYSET('0PsetType00000000ZZ001',#5,'Pset_WallCommon','Type properties',(#90,#91));
+#93=IFCWALLTYPE('0WallType00000000ZZ001',#5,'WT-200 loadbearing','200mm concrete',$,(#92),$,'WT-200',$,.SOLIDWALL.);
+#94=IFCRELDEFINESBYTYPE('0DefType00000000ZZ01',#5,$,$,(#71,#75,#79),#93);
+
+/* --- an instance property set, shared by every wall ----------------------- */
+#100=IFCPROPERTYSINGLEVALUE('IsExternal',$,IFCBOOLEAN(.T.),$);
+#101=IFCPROPERTYSINGLEVALUE('LoadBearing',$,IFCBOOLEAN(.T.),$);
+#102=IFCPROPERTYSINGLEVALUE('Reference',$,IFCIDENTIFIER('WA-200'),$);
+#103=IFCPROPERTYSET('0PsetInst00000000ZZ01',#5,'Pset_WallCommon','Instance properties',(#100,#101,#102));
+#104=IFCRELDEFINESBYPROPERTIES('0DefProp00000000ZZ01',#5,$,$,(#71,#75,#79),#103);
+
+/* --- quantities, on wall A only ------------------------------------------ */
+#110=IFCQUANTITYLENGTH('Length',$,$,4.,$);
+#111=IFCQUANTITYAREA('NetSideArea',$,$,11.7,$);
+#112=IFCQUANTITYVOLUME('NetVolume',$,$,2.34,$);
+#113=IFCELEMENTQUANTITY('0Qto000000000000ZZ001',#5,'Qto_WallBaseQuantities','As modelled','BIM',(#110,#111,#112));
+#114=IFCRELDEFINESBYPROPERTIES('0DefQto000000000ZZ01',#5,$,$,(#71),#113);
+
+/* --- material ------------------------------------------------------------ */
+#120=IFCMATERIAL('Concrete C30/37','Structural concrete','Concrete');
+#121=IFCRELASSOCIATESMATERIAL('0Assoc0000000000ZZ001',#5,$,$,(#71,#75,#79),#120);
+
+/* --- a space, so the storey has a second kind of child -------------------- */
+#130=IFCLOCALPLACEMENT(#44,#13);
+#131=IFCSPACE('0Space00000000000ZZ001',#5,'Living room',$,$,#130,$,'Living room',.ELEMENT.,.INTERNAL.,0.);
+
+/* --- a group, so a relationship points somewhere outside the tree --------- */
+#140=IFCGROUP('0Group00000000000ZZ001',#5,'External walls','Walls on the envelope',$);
+#141=IFCRELASSIGNSTOGROUP('0Assign000000000ZZ01',#5,$,$,(#71,#75),$,#140);
+
+/* --- the decomposition and containment tree ------------------------------ */
+#150=IFCRELAGGREGATES('0AggSite00000000ZZ001',#5,$,$,#31,(#41));
+#151=IFCRELAGGREGATES('0AggBldg00000000ZZ001',#5,$,$,#41,(#43));
+#152=IFCRELAGGREGATES('0AggStry00000000ZZ001',#5,$,$,#43,(#45));
+#153=IFCRELAGGREGATES('0AggSpce00000000ZZ001',#5,$,$,#45,(#131));
+#154=IFCRELCONTAINEDINSPATIALSTRUCTURE('0Contain00000000ZZ01',#5,$,$,(#71,#75,#79),#45);
+ENDSEC;
+END-ISO-10303-21;

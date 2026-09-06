@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "ifc4::quantitySet",
+  "title": "IFC element quantity",
+  "description": "An IfcElementQuantity: the measured quantities of a thing, kept apart from its property set because a quantity is always a number with a kind, and asking for every volume in a model is a question worth being able to ask directly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["expressId", "name", "quantities"],
+  "properties": {
+    "expressId": { "type": "integer", "description": "The line number the quantity set had in the file." },
+    "globalId": { "type": "string", "description": "IfcRoot.GlobalId of the quantity set." },
+    "name": { "type": "string", "description": "The set's name, such as Qto_WallBaseQuantities. This is also the name of the reference that points at this row." },
+    "description": { "type": "string" },
+    "methodOfMeasurement": { "type": "string", "description": "How the quantities were arrived at, when the file says." },
+    "quantities": {
+      "type": "object",
+      "description": "Quantity name to its number, such as { \"NetVolume\": 2.34 }."
+    },
+    "kinds": {
+      "type": "object",
+      "description": "Quantity name to what it measures: Length, Area, Volume, Count, Weight or Time."
+    }
+  }
+}
