@@ -33,9 +33,22 @@ export const APP_PAGE = String.raw`<!doctype html>
 </script>
 <style>
   :root {
-    color-scheme: dark;
-    --bg: #14161a; --panel: #1c1f26; --line: #2b303b; --ink: #e7eaf0;
-    --dim: #97a0b0; --accent: #7fb3ff; --warn: #ffb86b;
+    color-scheme: light;
+
+    /* Paper, and the things you find at the edge of the sea. The greens and blues carry
+       meaning -- a type, a link, a warning -- and the sand is what they sit on. */
+    --bg: #f4efe4;          /* paper */
+    --panel: #fbf7ee;       /* a lighter sheet of it */
+    --sunk: #ede6d7;        /* where something is pressed into the page */
+    --line: #e0d6c2;        /* dry sand */
+    --ink: #33322d;         /* not quite black, the way ink on paper never is */
+    --dim: #8c8474;         /* driftwood */
+    --accent: #16867c;      /* shallow water */
+    --accent-soft: #d7ebe6;
+    --warn: #d1603d;        /* terracotta */
+    --warn-soft: #f7e2d6;
+    --sand: #e2a84c;
+    --stage: #efe9dc;       /* the 3d panel, a shade off the paper around it */
   }
   * { box-sizing: border-box; }
   body {
@@ -52,9 +65,11 @@ export const APP_PAGE = String.raw`<!doctype html>
   label { display: flex; gap: 6px; align-items: center; color: var(--dim); }
   select, button, input[type=file] { font: inherit; color: var(--ink); }
   select, button {
-    background: #262b35; border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px;
   }
-  button:hover:not(:disabled) { border-color: var(--accent); cursor: pointer; }
+  button:hover:not(:disabled) {
+    border-color: var(--accent); background: var(--accent-soft); color: var(--accent); cursor: pointer;
+  }
   button:disabled { opacity: .5; }
   main { display: grid; grid-template-columns: 320px 1fr 340px; min-height: 0; }
   .column { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
@@ -73,17 +88,17 @@ export const APP_PAGE = String.raw`<!doctype html>
     display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center;
     padding: 3px 12px; color: var(--ink); white-space: nowrap;
   }
-  .tessera:hover { background: #222732; }
+  .tessera:hover { background: var(--sunk); }
   .tessera select { padding: 1px 4px; font-size: 11px; max-width: 130px; }
   .tessera .badge { justify-self: end; }
   .badge {
     font-size: 10px; letter-spacing: .04em; color: var(--warn);
-    border: 1px solid #4a3f2c; border-radius: 999px; padding: 0 6px;
+    border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 0 6px;
   }
-  .badge.other { color: var(--accent); border-color: #2f4a6d; }
+  .badge.other { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
   .group {
     display: flex; gap: 8px; align-items: center;
-    padding: 6px 12px 3px; color: var(--dim); font-size: 11px;
+    padding: 6px 12px 3px; color: var(--accent); font-size: 11px;
     text-transform: uppercase; letter-spacing: .07em;
   }
   .group:not(:first-child) { border-top: 1px solid var(--line); margin-top: 4px; }
@@ -91,14 +106,14 @@ export const APP_PAGE = String.raw`<!doctype html>
     display: flex; align-items: center; gap: 6px; padding: 3px 12px; cursor: pointer;
     white-space: nowrap; border-left: 2px solid transparent;
   }
-  .node:hover { background: #222732; }
-  .node[aria-selected=true] { background: #263349; border-left-color: var(--accent); }
+  .node:hover { background: var(--sunk); }
+  .node[aria-selected=true] { background: var(--accent-soft); border-left-color: var(--accent); }
   .twisty { width: 12px; color: var(--dim); flex: none; }
   .twisty[data-leaf=true] { visibility: hidden; }
   .name { overflow: hidden; text-overflow: ellipsis; }
-  .count { color: var(--dim); font-size: 11px; }
+  .count { color: var(--sand); font-size: 11px; font-variant-numeric: tabular-nums; }
   .kids[hidden] { display: none; }
-  .stage { flex: 1; min-height: 0; position: relative; background: #0e1014; }
+  .stage { flex: 1; min-height: 0; position: relative; background: var(--stage); }
   #viewer { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   .stats {
     margin-left: auto; color: var(--dim); font-size: 10px;
@@ -109,7 +124,8 @@ export const APP_PAGE = String.raw`<!doctype html>
   .component .ref { color: var(--dim); font-size: 11px; }
   pre {
     margin: 6px 0 0; white-space: pre-wrap; word-break: break-word;
-    font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #cfd6e4;
+    background: var(--sunk); border-radius: 6px; padding: 6px 8px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: var(--ink);
     max-height: 220px; overflow: auto;
   }
   .empty { color: var(--dim); padding: 14px 12px; }
@@ -721,12 +737,36 @@ function build(THREE, orbit, gltf, environment) {
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  // The look the model-viewer element was set to, kept, so changing the renderer does not
-  // silently restyle every model.
-  renderer.toneMapping = THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.1;
+
+  // A converted building is nearly all white surfaces -- the architectural model's two
+  // materials are #f6f7f4 and #94979c, both fully rough. Under a neutral curve everything
+  // facing the light lands on the ceiling of the range at once and the model reads as a
+  // silhouette. AgX rolls the highlights off instead of clipping them, which is what keeps
+  // a white wall in sun distinguishable from a white wall in shade.
+  renderer.toneMapping = THREE.AgXToneMapping ?? THREE.NeutralToneMapping ?? THREE.ACESFilmicToneMapping;
+  // Against a dark panel the model had to be bright to be seen. Against paper the opposite
+  // holds: a white building lit to the top of the range is the same value as the page it
+  // sits on. Exposed down, the lit faces land clearly under the paper and the shadows have
+  // somewhere to go.
+  renderer.toneMappingExposure = 0.72;
+
+  // Shadows are the one per-frame cost this renderer takes on, and they buy the most: with
+  // no cast shadow a floor slab and the floor below it are the same white. The scene draws
+  // in a couple of dozen calls, so the depth pass is a couple of dozen more, and only on a
+  // frame that redraws at all.
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // A shadow is only as dark as the light that fills it, so most of the strength comes
+  // from the rig below. What the map itself decides is how sharp the edge is.
+  renderer.shadowMap.autoUpdate = true;
 
   const scene = new THREE.Scene();
+
+  // The same paper the page is on. It is read off the stylesheet rather than written
+  // twice, so the panel and the page cannot drift apart.
+  const paper = getComputedStyle(document.documentElement).getPropertyValue("--stage").trim();
+  scene.background = new THREE.Color(paper || "#efe9dc");
+
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
 
   const controls = new orbit.OrbitControls(camera, canvas);
@@ -740,18 +780,27 @@ function build(THREE, orbit, gltf, environment) {
   scene.environment = pmrem.fromScene(new environment.RoomEnvironment(), 0.04).texture;
   pmrem.dispose();
 
-  // The environment on its own lights every face equally, so anything with a direction to
-  // it -- a sloped roof, a reveal, a beam seen end on -- flattens out. One key light across
-  // it puts that back. It does little for a model whose materials are already near white,
-  // which a converted building's often are, and a lot for one that is not. Neither light
-  // casts a shadow: a shadow map over a whole building is the sort of per-frame cost this
-  // renderer exists to avoid.
-  scene.environmentIntensity = 0.55;
+  // The environment lights every face equally, which is what makes an unlit model legible
+  // and also what makes it flat: with nothing but ambient light a wall, the roof above it
+  // and the slab below are the same value. It is turned down to a fill, and the shape comes
+  // from the key light instead.
+  //
+  // How dark a shadow goes is decided here rather than in the shadow map: a shadow is the
+  // absence of the key, so what is left in it is whatever the fill puts there. These are
+  // set low against a strong key for that reason.
+  scene.environmentIntensity = 0.22;
 
-  const key = new THREE.DirectionalLight(0xffffff, 1.8);
-  key.position.set(1, 2, 1.5);
-  scene.add(key);
-  scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x2a2e36, 0.45));
+  // Warm key, cool fill, which is the oldest trick there is for reading form: the two sides
+  // of an edge differ in hue as well as in brightness, so the edge survives even where the
+  // brightness has nowhere left to go. Against paper the cool fill also keeps the shadows
+  // from going muddy -- they read as blue-grey rather than as dirt.
+  const key = new THREE.DirectionalLight(0xfff1dc, 3.4);
+  key.castShadow = true;
+  key.shadow.mapSize.set(4096, 4096);
+  key.shadow.bias = -0.0004;
+  scene.add(key, key.target);
+
+  scene.add(new THREE.HemisphereLight(0xcfe0f2, 0x9a8f7d, 0.34));
 
   // The model lives in here, so emptying it cannot take the lights with it.
   const content = new THREE.Group();
@@ -759,10 +808,22 @@ function build(THREE, orbit, gltf, environment) {
 
   const loader = new gltf.GLTFLoader();
 
+  // --- ambient occlusion ----------------------------------------------------
+  // A key light separates surfaces that face different ways, and a converted building is
+  // mostly surfaces that face the same way: one wall of a stairwell is the same white as
+  // the wall opposite. What tells them apart is how enclosed they are, which is what
+  // occlusion measures -- the crease where a slab meets a wall goes dark, the open face
+  // stays light, and the model reads as having an inside.
+
   // --- drawing only when something moved ------------------------------------
   // The old element rotated the model forever, so it redrew sixty times a second whether
   // or not anything had changed. Nothing here draws until it has to.
   let pending = true;
+  // What the last model came to, kept for the readout. The renderer's own count includes
+  // the shadow pass, which draws the whole scene a second time, so reading it would say a
+  // building of thirty-one batches took sixty-two draws.
+  let drawn = 0;
+  let triangles = 0;
   const invalidate = () => { pending = true; };
   controls.addEventListener("change", invalidate);
 
@@ -773,8 +834,11 @@ function build(THREE, orbit, gltf, environment) {
     pending = false;
 
     renderer.render(scene, camera);
-    $("stats").textContent = renderer.info.render.calls + " draws · "
-      + renderer.info.render.triangles.toLocaleString() + " triangles";
+
+    // The count includes the depth pass and the fullscreen passes, so what is reported is
+    // the geometry: one draw per batch, which is the number worth watching.
+    $("stats").textContent = drawn + (drawn === 1 ? " draw · " : " draws · ")
+      + triangles.toLocaleString() + " triangles";
   }
 
   function resize() {
@@ -896,24 +960,47 @@ function build(THREE, orbit, gltf, environment) {
         batch.computeBoundingBox();
         batch.computeBoundingSphere();
 
+        // A building shadows itself: the slab over a room, the fin beside a window. There
+        // is nothing else in the scene for it to fall on.
+        batch.castShadow = true;
+        batch.receiveShadow = true;
+
         out.add(batch);
       } catch (error) {
         // A batch that refuses is one this file does not fit. Drawing those meshes one at
         // a time is slow; dropping them would be wrong.
         for (const mesh of group.meshes) {
-          out.add(new THREE.Mesh(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), mesh.material));
+          const one = new THREE.Mesh(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), mesh.material);
+          one.castShadow = true;
+          one.receiveShadow = true;
+          out.add(one);
         }
       }
     }
 
     for (const mesh of awkward) {
-      out.add(new THREE.Mesh(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), mesh.material));
+      const one = new THREE.Mesh(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), mesh.material);
+      one.castShadow = true;
+      one.receiveShadow = true;
+      out.add(one);
     }
 
     // A batch copies what it is handed and everything else here was cloned, so the file's
     // own buffers are finished with.
     root.traverse(object => { if (object.isMesh && object.geometry) object.geometry.dispose(); });
 
+    // Counted here, where the instances are still to hand: a batch draws its geometry once
+    // per placement, which is not something the object can be asked afterwards.
+    let drawnTriangles = 0;
+    for (const group of groups.values()) {
+      for (const mesh of group.meshes) {
+        const geometry = mesh.geometry;
+        const count = geometry.index ? geometry.index.count : (geometry.attributes.position?.count ?? 0);
+        drawnTriangles += count / 3;
+      }
+    }
+
+    out.userData.triangles = Math.round(drawnTriangles);
     out.userData.summary = instances.toLocaleString() + " meshes in " + out.children.length
       + (out.children.length === 1 ? " draw" : " draws");
 
@@ -953,6 +1040,25 @@ function build(THREE, orbit, gltf, environment) {
 
     controls.target.copy(middle);
     controls.update();
+
+    // The key light is placed on the model rather than on the world, so its shadow camera
+    // covers exactly what is being looked at. An orthographic box any bigger than the model
+    // spends its texels on empty space, and the shadow goes soft and blocky.
+    key.target.position.copy(middle);
+    key.position.copy(middle).add(new THREE.Vector3(0.7, 1.15, 0.5).normalize().multiplyScalar(radius * 2.5));
+
+    const frustum = key.shadow.camera;
+    frustum.left = -radius;
+    frustum.right = radius;
+    frustum.top = radius;
+    frustum.bottom = -radius;
+    frustum.near = radius * 0.1;
+    frustum.far = radius * 6;
+    frustum.updateProjectionMatrix();
+
+    // Both biases scale with the model: a building is tens of metres and a fitting is
+    // millimetres, and a bias that suits one stripes or detaches the other.
+    key.shadow.normalBias = radius * 0.01;
   }
 
   async function show(bytes) {
@@ -966,12 +1072,15 @@ function build(THREE, orbit, gltf, environment) {
     clear();
 
     const file = await new Promise((resolve, reject) => loader.parse(bytes, "", resolve, reject));
-    const drawn = collapse(file.scene);
-    content.add(drawn);
-    look(drawn);
+    const model = collapse(file.scene);
+    content.add(model);
+    look(model);
+
+    drawn = model.children.length;
+    triangles = model.userData.triangles ?? 0;
     invalidate();
 
-    return drawn.userData.summary;
+    return model.userData.summary;
   }
 
   return { show, clear };
