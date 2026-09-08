@@ -749,7 +749,7 @@ function build(THREE, orbit, gltf, environment, utils) {
   // holds: a white building lit to the top of the range is the same value as the page it
   // sits on. Exposed down, the lit faces land clearly under the paper and the shadows have
   // somewhere to go.
-  renderer.toneMappingExposure = 0.72;
+  renderer.toneMappingExposure = 0.82;
 
   // Shadows are the one per-frame cost this renderer takes on, and they buy the most: with
   // no cast shadow a floor slab and the floor below it are the same white. The scene draws
