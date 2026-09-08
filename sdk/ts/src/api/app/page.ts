@@ -722,6 +722,7 @@ async function viewer() {
       import("three/addons/controls/OrbitControls.js"),
       import("three/addons/loaders/GLTFLoader.js"),
       import("three/addons/environments/RoomEnvironment.js"),
+      import("three/addons/utils/BufferGeometryUtils.js"),
     ]);
   } catch (error) {
     throw new Error("the 3D view needs three.js from the CDN, which did not load: "
@@ -732,7 +733,7 @@ async function viewer() {
   return stage;
 }
 
-function build(THREE, orbit, gltf, environment) {
+function build(THREE, orbit, gltf, environment, utils) {
   const canvas = $("viewer");
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -807,6 +808,28 @@ function build(THREE, orbit, gltf, environment) {
   scene.add(content);
 
   const loader = new gltf.GLTFLoader();
+
+  /**
+   * How far two faces have to turn away from each other before the line between them is
+   * drawn. A drawing shows the edges of things, not the triangles they are made of: a flat
+   * wall is one surface however it was tessellated, and only where it turns -- a corner, a
+   * reveal, the lip of a slab -- is there a line to draw.
+   */
+  const EDGE_ANGLE = 30;
+
+  /**
+   * Past this many placed segments the edges are left off.
+   *
+   * Edges are computed once per distinct geometry but drawn once per placement, so a file
+   * that points many nodes at one mesh multiplies them: the electrical model's 332,602
+   * distinct segments become 6,478,240 placed ones, which is 148 MB of lines wrapped around
+   * 28 MB of building. Below the budget they are worth their weight; above it the drawing
+   * costs more than the thing it is drawn on, and the model is better off without.
+   */
+  const EDGE_BUDGET = 4000000;
+
+  /** Dark grey rather than black: a line that reads as drawn rather than as a hole. */
+  const EDGE_COLOUR = 0x5f5a54;
 
   // --- ambient occlusion ----------------------------------------------------
   // A key light separates surfaces that face different ways, and a converted building is
@@ -985,6 +1008,56 @@ function build(THREE, orbit, gltf, environment) {
       out.add(one);
     }
 
+    // --- the edges ----------------------------------------------------------
+    // Computed per distinct geometry and then placed, which is the same economy the batches
+    // make: the same box seen nine times is one set of edges and nine placements of it.
+    const edgesOf = new Map();
+    let placed = 0;
+
+    for (const mesh of [...groups.values()].flatMap(group => group.meshes).concat(awkward)) {
+      let edges = edgesOf.get(mesh.geometry.uuid);
+      if (edges === undefined) {
+        edges = new THREE.EdgesGeometry(mesh.geometry, EDGE_ANGLE);
+        edgesOf.set(mesh.geometry.uuid, edges);
+      }
+      placed += edges.attributes.position.count / 2;
+    }
+
+    let drawnEdges = 0;
+    if (placed > 0 && placed <= EDGE_BUDGET) {
+      const baked = [];
+      for (const mesh of [...groups.values()].flatMap(group => group.meshes).concat(awkward)) {
+        const edges = edgesOf.get(mesh.geometry.uuid);
+        if (!edges || edges.attributes.position.count === 0) continue;
+        baked.push(edges.clone().applyMatrix4(mesh.matrixWorld));
+      }
+
+      // One buffer for every line in the model, so the whole drawing is a single call.
+      const merged = baked.length === 1 ? baked[0] : utils.mergeGeometries(baked);
+      if (baked.length > 1) for (const one of baked) one.dispose();
+
+      if (merged) {
+        const lines = new THREE.LineSegments(merged, new THREE.LineBasicMaterial({
+          color: EDGE_COLOUR,
+          // Not tone mapped: the line is a drawn mark at a chosen weight, and it should be
+          // that weight whatever the exposure is doing to the surfaces underneath it.
+          toneMapped: false,
+        }));
+        lines.frustumCulled = false;
+        out.add(lines);
+        drawnEdges = Math.round(merged.attributes.position.count / 2);
+      }
+    }
+
+    for (const edges of edgesOf.values()) edges.dispose();
+
+    // The faces are pushed back a hair so the lines sit on them rather than fight them.
+    for (const group of groups.values()) {
+      group.material.polygonOffset = true;
+      group.material.polygonOffsetFactor = 1;
+      group.material.polygonOffsetUnits = 1;
+    }
+
     // A batch copies what it is handed and everything else here was cloned, so the file's
     // own buffers are finished with.
     root.traverse(object => { if (object.isMesh && object.geometry) object.geometry.dispose(); });
@@ -1002,7 +1075,10 @@ function build(THREE, orbit, gltf, environment) {
 
     out.userData.triangles = Math.round(drawnTriangles);
     out.userData.summary = instances.toLocaleString() + " meshes in " + out.children.length
-      + (out.children.length === 1 ? " draw" : " draws");
+      + (out.children.length === 1 ? " draw" : " draws")
+      + (drawnEdges > 0 ? " · " + drawnEdges.toLocaleString() + " edges"
+         : placed > EDGE_BUDGET ? " · edges left off, " + Math.round(placed).toLocaleString() + " is too many"
+         : "");
 
     return out;
   }
