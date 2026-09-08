@@ -197,8 +197,15 @@ components are written one of two ways:
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
   know Mosaic still renders the file.
 
-Composing writes **a glTF node per child relation**, so naming the same node from three parents
-places it three times. The copies share their mesh, so the geometry is stored once no matter how
+Composing writes **a glTF node per child relation**, and only for the nodes a picture needs: one
+that carries no geometry, no transform, no children and no components is left out. That is not a
+rounding: a Mosaic node holding a bufferView is a real node of the archive, but by the time the
+scene is written that bufferView is already in the document's own array, so there is nothing left
+for the node to be. On a converted building those are most of the nodes there are — 104,927 of the
+architectural model's 153,549 — and a loader builds an object for every one it is given. Nodes that
+carry components are always written, since the components are what they are for.
+
+Naming the same node from three parents places it three times. The copies share their mesh, so the geometry is stored once no matter how
 often it appears — three helmets come to 32 nodes, one mesh, and the same 3.7 MB binary chunk as one
 helmet would. A node placed twice brings its whole subtree along each time. Links that would expand
 forever are refused: a cycle is reported with the path that closes it.
@@ -455,12 +462,21 @@ name. Then four panels:
 - a **tesserae** list of everything the server holds. Tick as many as you like and pick a version of
   each; what is ticked is what is on show, all of it read as one scene;
 - a **tree** of the child hierarchy, grouped by the versions on show and drawn from a single
-  selection over their root nodes, each node labelled by its `core::name`;
+  selection over their root nodes, each node labelled by its `core::name`. It asks for three
+  component types and no others — `core::child`, `core::name` and `core::inherit` — because those
+  are what it draws. A converted building carries far more: reading the architectural model's tree
+  with everything meant loading 387,983 component rows to show a list of names, and with those three
+  it loads none;
 - a **components** view of whatever node is selected, with each component's type, reference id and
-  value, and the tessera the node is written in;
+  value, and the tessera the node is written in. Since the tree no longer carries any of that, this
+  asks for the one node it is about, when it is selected;
 - a **3D** view, drawn with [three.js](https://threejs.org), fed the GLB that
   `POST …/versions/{versionId}/nodes?format=glb` builds for the selected node. Selecting a node
-  reloads it; **Show everything** loads every root on show. A converted building arrives as tens of
+  reloads it; **Show everything** loads every root on show. It asks only for the components a glb has
+  somewhere to put — the glTF namespace, plus `core::transform` and `core::child` — because
+  everything else rides along as extension data on the node and none of it is drawable: that is the
+  architectural model's glb at 62.7 MB rather than 251.4 MB, with the same 20,978 meshes in it. A
+  converted building arrives as tens of
   thousands of separate meshes — 79,193 in the electrical model of the sample set — and each one
   would be a draw call, so meshes sharing a material are gathered into a `BatchedMesh`: 79,193 of
   them become seventeen draws. The batch keeps each distinct geometry once rather than baking a copy
@@ -481,10 +497,21 @@ between a node that is-a type and a node carrying that type's geometry is one cl
 The page's own endpoints — `/app/upload`, `/app/tesserae`, `/app/scene` and `/app/glb` — are
 deliberately **not** part of the spec: `mosaic-api.tsp` is the contract, and these exist so the page
 can upload in one call, read a whole scene in another, and ask for one view over *several* versions,
-which is a question the spec's per-version `nodes` operation does not express. Selecting a single
+which is a question the spec's per-version `nodes` operation does not express. `/app/scene` takes
+`components=` to name the component types worth returning, `nodes=` to ask about particular nodes
+rather than the roots, and `children=false` to stop it descending; left out, all three keep the whole
+scene. `/app/glb` takes the same `componentTypes` the `nodes` operation does. Selecting a single
 node still goes through that real endpoint — against the version the node is written in, which for a
 node reached across an import is the imported tessera. three.js is loaded from a CDN on first draw,
 so the 3D panel wants the machine to have internet; the rest of the page does not.
+
+Everything the server answers with is **gzipped** when the client says it takes gzip and there is
+more than about a kilobyte of it. That matters more than it sounds: these answers are mostly
+repetition — a scene is the same few keys over a hundred thousand nodes, a glb is long runs of
+similar floats — so the architectural model's tree goes from 64.6 MB on the wire to a fraction of
+it. Compression is at the fastest level deliberately; on a body this size the slower levels spend
+hundreds of milliseconds to find another few percent, which is the wrong trade for something a
+browser is waiting on.
 
 Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so

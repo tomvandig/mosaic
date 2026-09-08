@@ -1,4 +1,6 @@
 import http from "node:http";
+import zlib from "node:zlib";
+import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { API_ROUTES, type ApiRoute } from "./MosaicApiRoutes.ts";
 import {
@@ -210,25 +212,18 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
                     const reply = await app({ store, query: url.searchParams, body: await readBody(incoming), baseUrl });
 
                     if (reply.bytes) {
-                        response.writeHead(reply.status ?? 200, {
-                            "content-type": reply.contentType ?? "application/octet-stream",
-                            "content-length": String(reply.bytes.byteLength),
-                            ...reply.headers,
-                        });
-                        return response.end(reply.bytes);
+                        return await deliver(incoming, response, reply.status ?? 200, reply.bytes,
+                            reply.contentType ?? "application/octet-stream", reply.headers);
                     }
 
                     if (reply.html !== undefined) {
-                        response.writeHead(reply.status ?? 200, {
-                            "content-type": "text/html; charset=utf-8",
-                            "content-length": String(Buffer.byteLength(reply.html)),
-                        });
-                        return response.end(reply.html);
+                        return await deliver(incoming, response, reply.status ?? 200, reply.html,
+                            "text/html; charset=utf-8");
                     }
 
-                    return send(response, reply.status ?? 200, reply.json ?? {});
+                    return send(incoming, response, reply.status ?? 200, reply.json ?? {});
                 } catch (error) {
-                    return send(response, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+                    return send(incoming, response, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
                 }
             }
 
@@ -238,13 +233,13 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
 
             if (!found) {
                 const pathExists = MATCHERS.some(entry => entry.pattern.test(url.pathname));
-                return send(response, pathExists ? 405 : 404, {
+                return send(incoming, response, pathExists ? 405 : 404, {
                     error: pathExists ? `${incoming.method} is not allowed on ${url.pathname}` : `No route for ${url.pathname}`,
                 });
             }
 
             const handler = HANDLERS[found.entry.route.operationId];
-            if (!handler) return send(response, 501, { error: `${found.entry.route.operationId} is not implemented` });
+            if (!handler) return send(incoming, response, 501, { error: `${found.entry.route.operationId} is not implemented` });
 
             const params = Object.fromEntries(
                 found.entry.names.map((name, index) => [name, decodeURIComponent(found.match![index + 1]!)]));
@@ -253,17 +248,13 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
                 const reply = await handler({ store, params, query: url.searchParams, body: await readBody(incoming), baseUrl });
 
                 if (reply.bytes) {
-                    response.writeHead(reply.status ?? 200, {
-                        "content-type": reply.contentType ?? "application/octet-stream",
-                        "content-length": String(reply.bytes.byteLength),
-                        ...reply.headers,
-                    });
-                    return response.end(reply.bytes);
+                    return await deliver(incoming, response, reply.status ?? 200, reply.bytes,
+                        reply.contentType ?? "application/octet-stream", reply.headers);
                 }
 
-                return send(response, reply.status ?? 200, reply.json ?? {});
+                return send(incoming, response, reply.status ?? 200, reply.json ?? {});
             } catch (error) {
-                return send(response, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
+                return send(incoming, response, statusFor(error), { error: error instanceof Error ? error.message : String(error) });
             }
         })();
     });
@@ -287,8 +278,74 @@ export async function serve(options: ServeOptions): Promise<RunningServer> {
     };
 }
 
-function send(response: http.ServerResponse, status: number, body: unknown): void {
-    const text = JSON.stringify(body);
-    response.writeHead(status, { "content-type": "application/json", "content-length": String(Buffer.byteLength(text)) });
-    response.end(text);
+/**
+ * Below this a body is not worth compressing: the gzip header and the work of producing
+ * it come to more than the bytes saved.
+ */
+const COMPRESS_OVER = 1400;
+
+/**
+ * The level everything is compressed at.
+ *
+ * These bodies are mostly repetition -- a scene is the same few keys over a hundred
+ * thousand nodes, and a glb is long runs of similar floats -- so the fastest level already
+ * takes most of what there is to take: a converted building's glb goes to 16% of itself at
+ * level 1 and 12% at level 6, for three times the cpu. On a body this size that difference
+ * is hundreds of milliseconds spent while a browser waits, to save a few percent.
+ */
+const COMPRESSION = zlib.constants.Z_BEST_SPEED;
+
+const gzip = promisify(zlib.gzip);
+
+/** Whether the client said it would take gzip. */
+function acceptsGzip(incoming: http.IncomingMessage): boolean {
+    const header = incoming.headers["accept-encoding"];
+    const offered = Array.isArray(header) ? header.join(",") : header ?? "";
+    return /\bgzip\b/i.test(offered);
+}
+
+/**
+ * Writes a response, compressed when the client will take it and there is enough of it to
+ * be worth compressing.
+ *
+ * Everything the server answers with goes through here, because the things worth
+ * compressing are the big ones: a scene of a converted building is tens of megabytes of
+ * repeated keys and ids, and the glb behind it is not far off.
+ */
+async function deliver(
+    incoming: http.IncomingMessage,
+    response: http.ServerResponse,
+    status: number,
+    body: Buffer | string,
+    contentType: string,
+    extra: Record<string, string> = {},
+): Promise<void> {
+    const raw = Buffer.isBuffer(body) ? body : Buffer.from(body);
+
+    // Vary is set either way: a cache holding the compressed answer must not hand it to a
+    // client that never asked for one.
+    const headers: Record<string, string> = { "content-type": contentType, vary: "accept-encoding", ...extra };
+
+    if (raw.byteLength < COMPRESS_OVER || !acceptsGzip(incoming)) {
+        response.writeHead(status, { ...headers, "content-length": String(raw.byteLength) });
+        response.end(raw);
+        return;
+    }
+
+    const packed = await gzip(raw, { level: COMPRESSION });
+    response.writeHead(status, {
+        ...headers,
+        "content-encoding": "gzip",
+        "content-length": String(packed.byteLength),
+    });
+    response.end(packed);
+}
+
+async function send(
+    incoming: http.IncomingMessage,
+    response: http.ServerResponse,
+    status: number,
+    body: unknown,
+): Promise<void> {
+    await deliver(incoming, response, status, JSON.stringify(body), "application/json");
 }

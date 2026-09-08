@@ -154,6 +154,33 @@ export const APP_PAGE = String.raw`<!doctype html>
 <script type="module">
 const $ = id => document.getElementById(id);
 
+/**
+ * The components the tree is built out of: a node's name, its children, and the is-a link
+ * that a composed tree follows. Nothing else is looked at to draw it.
+ *
+ * A converted building carries far more than this -- property sets, quantity sets, every
+ * IFC entity and relationship -- and asking for all of it to draw a list of names meant
+ * reading every one of them out of the database, packing each into the answer, and
+ * parsing it again in here. None of it is on screen until a node is clicked, and that is
+ * when it is now fetched.
+ */
+const TREE_COMPONENTS = ["core::child", "core::inherit", "core::name"];
+
+/**
+ * The components a glb has somewhere to put: the glTF namespace, plus the transform that
+ * places a node and the child link that parents it.
+ *
+ * Everything else rides along as extension data on the node it belongs to, which for a
+ * converted building is most of the file -- and none of it is drawable. Asking for only
+ * these is asking for the geometry.
+ */
+const GEOMETRY_COMPONENTS = [
+  "khronos::gltf::buffer", "khronos::gltf::bufferView", "khronos::gltf::accessor",
+  "khronos::gltf::meshPrimitive", "khronos::gltf::image", "khronos::gltf::sampler",
+  "khronos::gltf::texture", "khronos::gltf::material",
+  "core::transform", "core::child",
+];
+
 const state = {
   tesserae: [],
   // Which tesserae are on show, and which version of each.
@@ -162,6 +189,11 @@ const state = {
   scene: null,
   selected: null,
   expanded: new Set(),
+  // What a node carries, fetched when it is selected and kept for as long as the scene
+  // it belongs to. Keyed by node id.
+  components: new Map(),
+  // The glb the tree was read from, kept so that redrawing costs nothing.
+  glb: null,
 };
 
 function say(message, isError = false) {
@@ -267,6 +299,94 @@ function drawTesserae() {
 
 // --- the tree, out of one selection over everything on show ----------------
 
+/**
+ * The glb the tree and the picture are both read from.
+ *
+ * The two used to be separate questions: a json scene for the hierarchy and a glb for the
+ * geometry, each its own request and each its own pass over the archive. They are the same
+ * question. A glb already carries the hierarchy -- that is what its nodes and their
+ * children are -- so asking for it once answers both, and the bytes are parsed twice in
+ * here rather than built twice over there.
+ *
+ * What the tree needs on top of the geometry is the names, which arrive as core::name
+ * components riding in the MOSAIC_components extension. On the architectural model they
+ * cost 5.2 MB against the 49.0 MB the glb was, which is the whole price of not asking a
+ * second time for 64.6 MB of json.
+ */
+const TREE_FROM_GLB = [...GEOMETRY_COMPONENTS, "core::name"];
+
+/** The magic and chunk type a glb starts with, as the little-endian words they are. */
+const GLB_MAGIC = 0x46546c67;
+const GLB_JSON_CHUNK = 0x4e4f534a;
+
+/**
+ * The json chunk of a glb, without a gltf loader.
+ *
+ * A glb is a twelve byte header and then chunks, the first of which is the document. That
+ * is little enough to read here, and reading it here is what keeps the tree working on a
+ * machine that cannot reach the CDN: three.js is only needed to draw.
+ */
+function gltfOf(bytes) {
+  const view = new DataView(bytes);
+  if (bytes.byteLength < 20 || view.getUint32(0, true) !== GLB_MAGIC) {
+    throw new Error("the answer is not a glb");
+  }
+
+  const length = view.getUint32(12, true);
+  if (view.getUint32(16, true) !== GLB_JSON_CHUNK) {
+    throw new Error("the first chunk of a glb should be its json");
+  }
+
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(bytes, 20, length)));
+}
+
+/**
+ * The scene the tree draws, out of a glTF document.
+ *
+ * Nodes are keyed by their position in the glTF array rather than by the id of the Mosaic
+ * node they came from, because composing writes a node per child relation: something held
+ * by two parents is two nodes here, and drawing it twice is the point. The Mosaic id is
+ * kept alongside, which is what the components panel goes on to ask about.
+ */
+function sceneFromGltf(gltf, versions) {
+  const gltfNodes = gltf.nodes ?? [];
+  const nodes = {};
+
+  for (let index = 0; index < gltfNodes.length; index++) {
+    const node = gltfNodes[index];
+    const carried = node.extensions?.MOSAIC_components?.components ?? [];
+    const named = carried.find(component => component.type === "core::name");
+
+    nodes[String(index)] = {
+      id: String(index),
+      // The name of a glTF node is the id of the Mosaic node it was written from.
+      nodeId: node.name ?? null,
+      name: named?.name ?? null,
+      children: (node.children ?? []).map(String),
+      drawn: node.mesh !== undefined,
+    };
+  }
+
+  const scene = gltf.scenes?.[gltf.scene ?? 0]?.nodes ?? [];
+  const roots = scene.map(String);
+
+  return {
+    // One glb is one answer over everything on show, so the tree is one group. Which
+    // tessera each node came from is not written into a glb, so a node reached across an
+    // import is drawn as an ordinary child here, without the badge naming where it lives.
+    versions: [{
+      tesseraId: versions[0]?.tesseraId ?? null,
+      versionId: versions[0]?.versionId ?? null,
+      name: versions.length === 1 ? (state.tesserae.find(t => t.id === versions[0].tesseraId)?.name ?? "") : "on show",
+      roots,
+    }],
+    imported: [],
+    warnings: [],
+    roots,
+    nodes,
+  };
+}
+
 async function loadScene() {
   const versions = shownVersions();
   drawTesserae();
@@ -274,31 +394,47 @@ async function loadScene() {
   if (versions.length === 0) {
     state.scene = null;
     state.selected = null;
+    state.glb = null;
     $("tree").innerHTML = '<p class="empty">Tick a tessera to show it.</p>';
     $("components").innerHTML = '<p class="empty">Select a node.</p>';
     $("warnings").hidden = true;
+    try { (await viewer()).clear(); } catch {}
     say("");
     return;
   }
 
   say("reading…");
   try {
-    const query = new URLSearchParams({
-      versions: versions.map(pair => pair.tesseraId + ":" + pair.versionId).join(","),
-      compose: String(compose()),
+    const response = await call("/app/glb", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        versions,
+        nodes: null,
+        includeChildren: true,
+        compose: compose(),
+        componentTypes: TREE_FROM_GLB,
+      }),
     });
 
-    state.scene = await (await call("/app/scene?" + query)).json();
+    const bytes = await response.arrayBuffer();
+    state.glb = bytes;
+
+    state.scene = sceneFromGltf(gltfOf(bytes), versions);
     state.selected = null;
+    state.components.clear();
 
     drawTesserae();
     drawTree();
     drawWarnings();
     $("components").innerHTML = '<p class="empty">Select a node.</p>';
 
-    const brought = (state.scene.imported ?? []).map(entry => entry.name);
-    say(state.scene.roots.length + " roots, " + Object.keys(state.scene.nodes).length + " nodes"
-        + (brought.length ? " · imports: " + brought.join(", ") : ""));
+    // The same bytes, drawn. Nothing is fetched twice.
+    const drawing = await viewer();
+    const summary = await drawing.show(bytes);
+
+    say(state.scene.roots.length + " roots, " + Object.keys(state.scene.nodes).length + " nodes, "
+        + (bytes.byteLength / 1048576).toFixed(1) + " MB of glb — " + summary);
   } catch (error) {
     say(String(error.message ?? error), true);
   }
@@ -313,7 +449,7 @@ function drawWarnings() {
 }
 
 function labelOf(node) {
-  return node.name ?? node.id.slice(0, 8) + "…";
+  return node.name ?? (node.nodeId ? node.nodeId.slice(0, 8) + "…" : "node " + node.id);
 }
 
 function drawTree() {
@@ -354,9 +490,12 @@ function drawTree() {
     name.className = "name";
     name.textContent = labelOf(node);
 
+    // How many children, and nothing about how many components: the tree is read with
+    // three component types, so a count of them would be a count of what was asked for
+    // rather than of what the node carries. The panel says that, once it has asked.
     const count = document.createElement("span");
     count.className = "count";
-    count.textContent = node.components.length + (children.length ? " · " + children.length : "");
+    count.textContent = children.length ? String(children.length) : "";
 
     row.append(twisty, name, count);
 
@@ -409,7 +548,37 @@ function select(id) {
   showNode(id);
 }
 
-function drawComponents(id) {
+/**
+ * What a node carries, read the first time it is asked for and kept afterwards.
+ *
+ * The tree was read with only the three component types it draws, so this is where the
+ * rest of a node -- its property sets, its quantities, whatever else it was given -- is
+ * read: for the one node being looked at, rather than for every node in the building
+ * against the chance that one of them is clicked.
+ */
+async function componentsOf(id) {
+  if (state.components.has(id)) return state.components.get(id);
+
+  const versions = shownVersions();
+  const node = state.scene?.nodes[id];
+  if (versions.length === 0 || !node?.nodeId) return [];
+
+  // The tree knows a node by its place in the glb; the archive knows it by its id.
+  const query = new URLSearchParams({
+    versions: versions.map(pair => pair.tesseraId + ":" + pair.versionId).join(","),
+    compose: String(compose()),
+    nodes: node.nodeId,
+    children: "false",
+  });
+
+  const answer = await (await call("/app/scene?" + query)).json();
+  const carried = answer.nodes?.[node.nodeId]?.components ?? [];
+
+  state.components.set(id, carried);
+  return carried;
+}
+
+async function drawComponents(id) {
   const node = state.scene?.nodes[id];
   const panel = $("components");
   panel.innerHTML = "";
@@ -427,12 +596,30 @@ function drawComponents(id) {
   }
   panel.append(header);
 
-  if (node.components.length === 0) {
+  const waiting = document.createElement("p");
+  waiting.className = "empty";
+  waiting.textContent = "reading what it carries…";
+  panel.append(waiting);
+
+  let carried;
+  try {
+    carried = await componentsOf(id);
+  } catch (error) {
+    waiting.textContent = String(error.message ?? error);
+    return;
+  }
+
+  // Something else may have been clicked while that was in flight, and the panel is
+  // about whatever is selected now rather than about what was selected when it was asked.
+  if (state.selected !== id) return;
+  waiting.remove();
+
+  if (carried.length === 0) {
     panel.insertAdjacentHTML("beforeend", '<p class="empty">This node carries nothing.</p>');
     return;
   }
 
-  for (const component of node.components) {
+  for (const component of carried) {
     const block = document.createElement("div");
     block.className = "component";
 
@@ -457,44 +644,45 @@ function drawComponents(id) {
 }
 
 /**
- * One node in the viewer, asked for through the API's own nodes endpoint.
+ * One node on its own, asked for through the API's own nodes endpoint.
  *
- * The version asked is the one the node is written in, which for a node reached across an
- * import is the imported tessera rather than the one on screen. The endpoint follows that
- * version's own imports, so whatever the node points at comes with it.
+ * Everything on show is already drawn, so this is for narrowing to one part of it. It is
+ * a fresh selection rather than a filter of what is loaded: the answer follows the
+ * version's imports, so whatever the node points at comes with it.
  */
 async function showNode(id) {
   const node = state.scene?.nodes[id];
-  if (!node?.tesseraId || !node?.versionId) return;
+  const [version] = shownVersions();
+  if (!node?.nodeId || !version) return;
 
   await intoViewer(
     "asking the api for " + labelOf(node) + "…",
-    call("/Mosaic-api/tesserae/" + node.tesseraId + "/versions/" + node.versionId + "/nodes?format=glb", {
+    call("/Mosaic-api/tesserae/" + version.tesseraId + "/versions/" + version.versionId + "/nodes?format=glb", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ nodes: [id], includeChildren: true, compose: compose() }),
+      body: JSON.stringify({
+        nodes: [node.nodeId], includeChildren: true, compose: compose(),
+        componentTypes: GEOMETRY_COMPONENTS,
+      }),
     }));
 }
 
 /**
- * Everything on show at once.
+ * Everything on show, again.
  *
- * This one cannot go through the nodes endpoint: that endpoint answers for a single
- * version, and this is a question about several. It goes to the page's own /app/glb,
- * which is the same selection over a set of versions.
+ * The bytes are the ones the tree was read from, so this asks for nothing: it draws what
+ * is already here, which is what "everything" means once a node has been looked at alone.
  */
 async function showEverything() {
-  const versions = shownVersions();
-  const roots = (state.scene?.versions ?? []).flatMap(group => group.roots);
-  if (versions.length === 0 || roots.length === 0) return;
+  if (!state.glb) return;
 
-  await intoViewer(
-    "building a glb of everything on show…",
-    call("/app/glb", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ versions, nodes: roots, includeChildren: true, compose: compose() }),
-    }));
+  say("drawing " + (state.glb.byteLength / 1048576).toFixed(1) + " MB of glb…");
+  try {
+    const summary = await (await viewer()).show(state.glb);
+    say(Object.keys(state.scene?.nodes ?? {}).length + " nodes — " + summary);
+  } catch (error) {
+    say(String(error.message ?? error), true);
+  }
 }
 
 // --- the 3D view ------------------------------------------------------------

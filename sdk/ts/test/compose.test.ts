@@ -10,7 +10,7 @@ import { parseGlb } from "../src/gltf/GltfDocument.ts";
 import { convertGltfFile } from "../src/gltf/GltfConvertFs.ts";
 import { GLTF_TYPE } from "../src/gltf/schemas.ts";
 import { CORE_TYPE } from "../src/core/schemas.ts";
-import { mosaicToGltf, MOSAIC_COMPONENTS_EXTENSION, MOSAIC_ELEMENT_EXTENSION } from "../src/composition/MosaicToGltf.ts";
+import { mosaicToGltf, MOSAIC_COMPONENTS_EXTENSION } from "../src/composition/MosaicToGltf.ts";
 import { writeGlb } from "../src/composition/GlbWriter.ts";
 import { composeArchive, composeArchiveToGlb, loadWithImports, glbOutputPath } from "../src/composition/ComposeFs.ts";
 import { DATA_DIR, examplePath, readExample, resolveExampleSchema } from "./fixtures.ts";
@@ -114,16 +114,21 @@ test("a GLB with no geometry is written without a binary chunk", async () => {
 // Composition
 // ---------------------------------------------------------------------------
 
-test("composing an archive gives a node for every Mosaic node", async () => {
+test("composing an archive gives a node for every Mosaic node that draws", async () => {
     const out = await stageBox();
     const composed = await composeArchive(path.join(out, "box.tsr"));
 
-    // 1 buffer + 2 bufferViews + 2 accessors + 1 material + 2 walls.
-    assert.equal(composed.document.nodes?.length, 8);
+    // The archive has eight nodes: 1 buffer + 2 bufferViews + 2 accessors + 1 material,
+    // and 2 walls. The first six are in the document's own arrays by the time the scene is
+    // written, and hold nothing else, so only the walls are worth a node.
+    assert.equal(composed.document.nodes?.length, 2);
 
     const file = await LoadMosaicFile(fs.readFileSync(path.join(out, "box.tsr")));
-    const ids = file.index.sections[0]!.nodes.map(n => n.id).sort();
-    assert.deepEqual(composed.document.nodes!.map(n => n.name).sort(), ids, "each glTF node should keep its Mosaic id");
+    const ids = file.index.sections[0]!.nodes.map(n => n.id);
+    const written = composed.document.nodes!.map(n => n.name);
+
+    assert.equal(new Set(written).size, 2);
+    for (const name of written) assert.ok(ids.includes(name!), `${name} should be a Mosaic node id`);
 });
 
 test("glTF-namespace components are written natively", async () => {
@@ -159,15 +164,22 @@ test("components outside the glTF namespace travel as an extension", async () =>
     assert.deepEqual(carried[0].value, { name: "North wall", height: 2.4, loadBearing: true });
 });
 
-test("a node hoisted into a glTF array records where it went", async () => {
+test("a node that only holds a hoisted element is not written into the scene", async () => {
     const out = await stageBox();
     const { document } = await composeArchive(path.join(out, "box.tsr"));
 
-    const hoisted = document.nodes!.filter(n => (n as any).extensions?.[MOSAIC_ELEMENT_EXTENSION]);
-    assert.equal(hoisted.length, 6, "1 buffer + 2 bufferViews + 2 accessors + 1 material");
+    // The buffer, the two bufferViews, the two accessors and the material are all Mosaic
+    // nodes, and all of them are already in the document's own arrays. A glb is a picture,
+    // so what is left is what draws.
+    const file = await LoadMosaicFile(fs.readFileSync(path.join(out, "box.tsr")));
+    const all = file.index.sections[0]!.nodes.map(n => n.id);
 
-    const accessorNodes = hoisted.filter(n => (n as any).extensions[MOSAIC_ELEMENT_EXTENSION].type === GLTF_TYPE.accessor);
-    assert.deepEqual(accessorNodes.map(n => (n as any).extensions[MOSAIC_ELEMENT_EXTENSION].index).sort(), [0, 1]);
+    const written = new Set(document.nodes!.map(n => n.name));
+    assert.ok(written.size < all.length, "not every Mosaic node needs a glTF node");
+    for (const node of document.nodes!) {
+        const drawn = (node as any).mesh !== undefined || (node.children ?? []).length > 0;
+        assert.ok(drawn, `${node.name} is in the scene but draws nothing and holds nothing`);
+    }
 });
 
 test("buffers become one binary chunk with the bufferViews shifted to match", async () => {
@@ -246,10 +258,11 @@ test("composing follows imports and merges them underneath the importing file", 
     const composed = await composeArchive(path.join(out, "annotations.tsr"));
 
     assert.deepEqual(composed.sources.map(s => path.basename(s)), ["box.tsr", "annotations.tsr"]);
-    // The 8 nodes of the import, plus the annotated one.
-    assert.equal(composed.document.nodes?.length, 9);
+    // The two walls of the import that draw, plus the annotated node -- which draws
+    // nothing but carries components, so it is written for them.
+    assert.equal(composed.document.nodes?.length, 3);
     assert.equal(composed.document.meshes?.length, 1, "geometry came through the import");
-    assert.deepEqual(composed.document.extensionsUsed?.sort(), [MOSAIC_COMPONENTS_EXTENSION, MOSAIC_ELEMENT_EXTENSION]);
+    assert.deepEqual(composed.document.extensionsUsed?.sort(), [MOSAIC_COMPONENTS_EXTENSION]);
 });
 
 test("an import that is not on disk is skipped and reported", async () => {
@@ -329,9 +342,9 @@ test("composing writes a .glb and defaults its name from the input", async () =>
     const result = await composeArchiveToGlb(path.join(out, "box.tsr"));
     assert.equal(result.outputPath, path.join(out, "box.glb"));
     assert.equal(fs.statSync(result.outputPath).size, result.byteLength);
-    assert.equal(result.nodeCount, 8);
+    assert.equal(result.nodeCount, 2, "the two walls; the rest of the archive is already in the arrays");
     assert.equal(result.meshCount, 1);
-    assert.equal(result.binaryLength, 168);
+    assert.equal(result.binaryLength, 168, "the geometry is untouched by any of this");
 });
 
 test("textures compose back into images, samplers and textures", async () => {

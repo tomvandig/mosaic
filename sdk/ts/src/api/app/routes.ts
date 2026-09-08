@@ -41,6 +41,15 @@ function required(query: URLSearchParams, name: string): string {
  * A single pair may also be given as `tesseraId` and `versionId`, which is the same
  * request with one version in it.
  */
+/** A comma-separated query parameter, as a list; absent and empty both mean "no list". */
+function listIn(query: URLSearchParams, name: string): string[] | undefined {
+    const raw = query.get(name);
+    if (raw === null) return undefined;
+
+    const items = raw.split(",").map(entry => entry.trim()).filter(entry => entry.length > 0);
+    return items.length > 0 ? items : undefined;
+}
+
 function versionsIn(query: URLSearchParams): VersionRef[] {
     const listed = query.get("versions");
     if (!listed) return [{ tesseraId: required(query, "tesseraId"), versionId: required(query, "versionId") }];
@@ -108,25 +117,40 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
     },
 
     /**
-     * A whole scene as the page needs it: which nodes are roots, and for every node its
-     * name, its children and its components.
+     * A scene as the page needs it: which nodes are roots, and for every node its name,
+     * its children and its components.
      *
      * Several versions can be asked for at once, and whatever they import comes with
      * them, so this is one selection over everything on show. A child reference that
      * leaves one tessera and lands in another is therefore an ordinary link here: the
      * node it names is in the answer, marked with the tessera it is written in.
      *
-     * It is one selection over the roots with everything beneath them, so what the tree
-     * shows is exactly what a fetch of those nodes would give -- the same call the 3D
-     * view makes, read as data instead of as a file.
+     * Three optional parameters decide how much of it comes back, because "the whole
+     * scene" is rarely what is wanted:
+     *
+     * - `components` names the component types to keep. A tree needs a node's name and
+     *   its children and nothing else, and asking for only those is the difference
+     *   between reading every property set in the building and reading none of them.
+     * - `nodes` asks about particular nodes instead of the roots, which is how one node's
+     *   components are fetched when someone selects it.
+     * - `children=false` stops the answer descending, for that same one-node case.
+     *
+     * Left out, all three keep the old behaviour: every root, everything beneath it, and
+     * every component those nodes carry.
      */
     async "GET /app/scene"({ store, query }) {
         const refs = versionsIn(query);
         const compose = query.get("compose") === "true";
+        const componentTypes = listIn(query, "components");
+        const includeChildren = query.get("children") !== "false";
 
         const scope = await store.resolveScope(refs);
-        const roots = await store.rootsAcross(refs, scope);
-        const seeds = roots.flatMap(entry => entry.nodes);
+        const asked = listIn(query, "nodes");
+
+        // Roots are only worked out when the answer is about the roots; asking for named
+        // nodes skips that query rather than paying for an answer nobody reads.
+        const roots = asked ? [] : await store.rootsAcross(refs, scope);
+        const seeds = asked ?? roots.flatMap(entry => entry.nodes);
 
         const versions = roots.map(entry => ({
             tesseraId: entry.tesseraId,
@@ -147,8 +171,9 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
 
         const selection = await store.selectionAcross(refs, {
             nodes: seeds,
-            includeChildren: true,
+            includeChildren,
             compose,
+            ...(componentTypes ? { componentTypes } : {}),
         }, scope);
 
         const file = selection.file;
@@ -210,7 +235,10 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
     async "POST /app/glb"({ store, body }) {
         if (body.byteLength === 0) throw new BadRequest(`This request needs a JSON body`);
 
-        let asked: { versions?: VersionRef[]; nodes?: string[]; compose?: boolean; includeChildren?: boolean };
+        let asked: {
+            versions?: VersionRef[]; nodes?: string[] | null; compose?: boolean;
+            includeChildren?: boolean; componentTypes?: string[];
+        };
         try {
             asked = JSON.parse(body.toString("utf-8"));
         } catch (error) {
@@ -220,14 +248,26 @@ export const APP_HANDLERS: Record<string, (request: AppRequest) => Promise<AppRe
         if (!Array.isArray(asked?.versions) || asked.versions.length === 0) {
             throw new BadRequest(`A glb needs a "versions" array with at least one tessera and version`);
         }
-        if (!Array.isArray(asked?.nodes) || asked.nodes.length === 0) {
-            throw new BadRequest(`A glb needs a "nodes" array with at least one id`);
+        // No nodes named means everything on show. The page asks that way because it has
+        // not read the archive yet -- the glb is what tells it where the trees start, so it
+        // cannot name the roots in the request that fetches them.
+        const scope = await store.resolveScope(asked.versions);
+        const nodes = Array.isArray(asked.nodes) && asked.nodes.length > 0
+            ? asked.nodes
+            : (await store.rootsAcross(asked.versions, scope)).flatMap(entry => entry.nodes);
+
+        if (nodes.length === 0) {
+            throw new BadRequest(`Nothing to build a glb from: no nodes were named and the versions have no roots`);
         }
 
         const built = await store.buildNodes(asked.versions, NodeFetchFormat.Glb, {
-            nodes: asked.nodes,
+            nodes,
             includeChildren: asked.includeChildren ?? true,
             compose: asked.compose ?? false,
+            // A glb only has somewhere to put the glTF components and a transform; the
+            // rest travels as extension data on the node, which is most of the bytes of a
+            // converted building. A caller that only wants to look at it says so here.
+            ...(Array.isArray(asked.componentTypes) ? { componentTypes: asked.componentTypes } : {}),
         });
 
         return {

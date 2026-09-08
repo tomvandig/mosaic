@@ -134,16 +134,31 @@ export async function selectNodesFromDatabase(
     }
 
     // Everything reached so far was asked for -- the seeds and, when children were
-    // wanted, their descendants -- so the component filter applies to all of it. Only
-    // nodes dragged in later, because something kept refers to them, keep everything.
-    const askedFor = new Set(chosen);
+    // wanted, their descendants -- so the component filter applies to all of it, and can
+    // be asked for as part of the question. Only nodes dragged in later, because something
+    // kept refers to them, keep everything, and those are read without it below.
+    //
+    // A child link is kept whatever was asked for when the children were wanted: they are
+    // what the answer was walked along, and dropping them would hand back a tree with no
+    // branches.
+    const keep = wanted
+        ? new Set([...wanted, ...(request.includeChildren ? [CORE_TYPE.child] : [])])
+        : undefined;
 
     /**
      * The references a set of nodes carries, after collapsing: a PASS_THROUGH changes
      * nothing, the last write to a reference wins, and a DELETE takes it away.
+     *
+     * `types`, when given, keeps only those, and keeps them here rather than in the answer.
+     * Which is the whole difference at the size these files reach: the architectural model
+     * carries 590,184 references and a tree wants three types of them, 202,201, so
+     * filtering afterwards means ranking 387,983 rows and copying them out of the database
+     * in order to throw them away.
      */
-    const referencesOf = async (ids: string[]): Promise<Reference[]> => {
+    const referencesOf = async (ids: string[], types?: ReadonlySet<string>): Promise<Reference[]> => {
         if (ids.length === 0) return [];
+
+        const only = types && types.size > 0 ? `AND type IN (${list(types)})` : "";
 
         const rows = await database.all(
             `WITH ranked AS (
@@ -154,7 +169,7 @@ export async function selectNodesFromDatabase(
                         min(section_ordinal) OVER (PARTITION BY node_id, ref_id) AS first_section,
                         min(ordinal) OVER (PARTITION BY node_id, ref_id) AS first_ordinal
                  FROM mosaic_component_ref
-                 WHERE ${scope} AND node_id IN (${list(ids)}) AND operation <> 'PASS_THROUGH'
+                 WHERE ${scope} AND node_id IN (${list(ids)}) AND operation <> 'PASS_THROUGH' ${only}
              )
              SELECT file_id, node_id, ref_id, type, idx FROM ranked
              WHERE rn = 1 AND operation <> 'DELETE'
@@ -169,15 +184,8 @@ export async function selectNodesFromDatabase(
         }));
     };
 
-    /** Whether this selection keeps a reference at all. */
-    const keeps = (reference: Reference): boolean => {
-        if (!wanted || !askedFor.has(reference.nodeId)) return true;
-        if (request.includeChildren && reference.type === CORE_TYPE.child) return true;
-        return wanted.has(reference.type);
-    };
-
     // --- the references, and the rows behind them ---------------------------
-    const references = (await referencesOf(chosen)).filter(keeps);
+    const references = await referencesOf(chosen, keep);
 
     // A row is addressed by archive as well as by type and index: every archive counts
     // its rows of a type from its own zero, so an index alone names two different rows.

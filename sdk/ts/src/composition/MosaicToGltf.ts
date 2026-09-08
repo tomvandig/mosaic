@@ -9,8 +9,6 @@ import type { GltfDocument } from "../gltf/GltfDocument.ts";
 
 /** Carries the Mosaic components that have no native glTF form. */
 export const MOSAIC_COMPONENTS_EXTENSION = "MOSAIC_components";
-/** Records which glTF array entry a Mosaic node was hoisted into. */
-export const MOSAIC_ELEMENT_EXTENSION = "MOSAIC_element";
 
 export interface ComposeResult {
     document: GltfDocument;
@@ -435,17 +433,6 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
     }
 
     // --- nodes ------------------------------------------------------------
-    /** Where a component of each type ended up, for the MOSAIC_element pointer. */
-    const hoistedInto: Record<string, Map<string, number> | undefined> = {
-        [GLTF_TYPE.buffer]: undefined,
-        [GLTF_TYPE.bufferView]: bufferViewIndex,
-        [GLTF_TYPE.accessor]: accessorIndex,
-        [GLTF_TYPE.material]: materialIndex,
-        [GLTF_TYPE.image]: imageIndex,
-        [GLTF_TYPE.sampler]: samplerIndex,
-        [GLTF_TYPE.texture]: textureIndex,
-    };
-
     const gltfNodes: NonNullable<GltfDocument["nodes"]> = [];
     const extensionsUsed = new Set<string>();
 
@@ -469,20 +456,10 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
             }
         }
 
-        // A node that was hoisted into one of the glTF arrays keeps a pointer to where it went.
-        const hoisted = carried.find(c => c.ref.type in hoistedInto);
-        if (hoisted) {
-            // Every buffer folds into the one GLB chunk, so it has no array of its own.
-            const index = hoistedInto[hoisted.ref.type]?.get(node.id) ?? 0;
-            gltfNode.extensions = { [MOSAIC_ELEMENT_EXTENSION]: { type: hoisted.ref.type, index } };
-            extensionsUsed.add(MOSAIC_ELEMENT_EXTENSION);
-        }
-
         // Anything outside the glTF namespace travels as extension data.
         const foreign = carried.filter(c => !NATIVE_TYPES.has(c.ref.type));
         if (foreign.length > 0) {
             gltfNode.extensions = {
-                ...(gltfNode.extensions as object | undefined),
                 [MOSAIC_COMPONENTS_EXTENSION]: {
                     components: foreign.map(({ ref, row }) => ({ name: ref.id, type: ref.type, value: row })),
                 },
@@ -500,8 +477,19 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
      * Writes a node, and beneath it a fresh node for every child relation. A node named by
      * two parents is written twice: glTF gives a node one parent, so the way to place one
      * thing in two places is two nodes sharing a mesh, which costs no extra geometry.
+     *
+     * A node with no mesh, nothing beneath it that draws, and no components to carry is
+     * left out, and the answer is `undefined` rather than an index. A glb is a picture: a
+     * Mosaic node holding a bufferView is a real node of the archive, but by now that
+     * bufferView is in the document's own array, so there is nothing left for the node to
+     * be in a scene. A transform alone does not save one either -- it would move nothing.
+     * On a converted building those are most of the nodes there are, 104,927 of the
+     * architectural model's 153,549, and a loader builds an object for every one it gets.
+     *
+     * Indices are handed out here as nodes are written, so leaving one out costs nothing
+     * elsewhere: its parent simply never names it, and nothing needs renumbering.
      */
-    function emit(id: string, ancestors: string[]): number {
+    function emit(id: string, ancestors: string[]): number | undefined {
         const loop = ancestors.indexOf(id);
         if (loop !== -1) {
             throw new Error(`Child links form a cycle: ${[...ancestors.slice(loop), id].join(" -> ")}`);
@@ -518,14 +506,31 @@ export function mosaicToGltf(file: MosaicFile): ComposeResult {
         const children = childIds.get(id);
         if (children) {
             const beneath = [...ancestors, id];
-            gltfNode.children = children.map(child => emit(child, beneath));
+            const drawn = children
+                .map(child => emit(child, beneath))
+                .filter((at): at is number => at !== undefined);
+
+            if (drawn.length > 0) gltfNode.children = drawn;
+        }
+
+        // Components that have no native form are carried on the node, so a node holding
+        // those is holding something, even with nothing to draw. What is left out is only
+        // the node that pointed at an array entry, and that pointer is gone.
+        if (gltfNode.mesh === undefined && gltfNode.children === undefined
+            && gltfNode.extensions === undefined) {
+            // Nothing was written after this one -- every child that got here took itself
+            // back off the end too -- so the last entry is still this node's.
+            gltfNodes.pop();
+            return undefined;
         }
 
         return index;
     }
 
     // A node nobody names is a root; every other node appears beneath its parent.
-    const roots = nodes.filter(node => !referenced.has(node.id)).map(node => emit(node.id, []));
+    const roots = nodes.filter(node => !referenced.has(node.id))
+        .map(node => emit(node.id, []))
+        .filter((at): at is number => at !== undefined);
 
     const unreachable = nodes.filter(node => !emitted.has(node.id));
     if (unreachable.length > 0) {
