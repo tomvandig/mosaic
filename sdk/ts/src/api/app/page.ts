@@ -805,6 +805,27 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
   key.shadow.bias = -0.0004;
   scene.add(key, key.target);
 
+  /**
+   * The ground, which is there to catch shadows and for nothing else.
+   *
+   * A lit material cannot be the same colour as the background, however carefully the
+   * colour is copied across: what a MeshStandardMaterial draws is its colour times the
+   * light falling on it, and with a key light at three and a half that lands nowhere near
+   * the paper it was meant to match. A ShadowMaterial draws only the shadow and is clear
+   * everywhere else, so what shows through it is the background itself -- the right colour
+   * by construction rather than by agreement, and it stays right if the paper changes.
+   *
+   * Where it sits is decided in look(), with the model, because a floor eleven storeys up
+   * and a helmet on the origin do not share a ground.
+   */
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(1, 1),
+    new THREE.ShadowMaterial({ opacity: 0.28 }));
+
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
   scene.add(new THREE.HemisphereLight(0xcfe0f2, 0x9a8f7d, 0.34));
 
   // The model lives in here, so emptying it cannot take the lights with it.
@@ -1251,13 +1272,25 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     // covers exactly what is being looked at. An orthographic box any bigger than the model
     // spends its texels on empty space, and the shadow goes soft and blocky.
     key.target.position.copy(middle);
-    key.position.copy(middle).add(new THREE.Vector3(0.7, 1.15, 0.5).normalize().multiplyScalar(radius * 2.5));
 
+    // Lower than overhead: at this elevation a shadow is about as long as the thing that
+    // casts it, which is what gives a row of columns or a stand of trees any depth. Raise
+    // the middle number to lift the sun and shorten them.
+    key.position.copy(middle).add(new THREE.Vector3(-0.7, 0.62, 0.5).normalize().multiplyScalar(radius * 2.5));
+
+    // Under the model, and wide enough that a shadow has somewhere to fall. It is clear
+    // except where it is shadowed, so its size costs nothing to look at.
+    ground.position.set(middle.x, 36, middle.z);
+    ground.scale.set(radius * 12, radius * 12, 1);
+
+    // Wider than the model, because a low sun throws a shadow well past it, and a shadow
+    // that leaves this box is a shadow that stops in mid air.
+    const reach = radius * 2;
     const frustum = key.shadow.camera;
-    frustum.left = -radius;
-    frustum.right = radius;
-    frustum.top = radius;
-    frustum.bottom = -radius;
+    frustum.left = -reach;
+    frustum.right = reach;
+    frustum.top = reach;
+    frustum.bottom = -reach;
     frustum.near = radius * 0.1;
     frustum.far = radius * 6;
     frustum.updateProjectionMatrix();
