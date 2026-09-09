@@ -195,6 +195,9 @@ const GEOMETRY_COMPONENTS = [
   "khronos::gltf::meshPrimitive", "khronos::gltf::image", "khronos::gltf::sampler",
   "khronos::gltf::texture", "khronos::gltf::material",
   "core::transform", "core::child",
+  // An SVG is drawable too, though a glb has nowhere native to put one: it rides on its
+  // node as extension data and is turned into geometry in here.
+  "w3c::svg",
 ];
 
 const state = {
@@ -450,7 +453,7 @@ async function loadScene() {
     const summary = await drawing.show(bytes);
 
     say(state.scene.roots.length + " roots, " + Object.keys(state.scene.nodes).length + " nodes, "
-        + (bytes.byteLength / 1048576).toFixed(1) + " MB of glb — " + summary);
+        + (bytes.byteLength / 1048576).toFixed(1) + " MB of glb — " + summary.text);
   } catch (error) {
     say(String(error.message ?? error), true);
   }
@@ -695,7 +698,7 @@ async function showEverything() {
   say("drawing " + (state.glb.byteLength / 1048576).toFixed(1) + " MB of glb…");
   try {
     const summary = await (await viewer()).show(state.glb);
-    say(Object.keys(state.scene?.nodes ?? {}).length + " nodes — " + summary);
+    say(Object.keys(state.scene?.nodes ?? {}).length + " nodes — " + summary.text);
   } catch (error) {
     say(String(error.message ?? error), true);
   }
@@ -723,6 +726,7 @@ async function viewer() {
       import("three/addons/loaders/GLTFLoader.js"),
       import("three/addons/environments/RoomEnvironment.js"),
       import("three/addons/utils/BufferGeometryUtils.js"),
+      import("three/addons/loaders/SVGLoader.js"),
     ]);
   } catch (error) {
     throw new Error("the 3D view needs three.js from the CDN, which did not load: "
@@ -733,7 +737,7 @@ async function viewer() {
   return stage;
 }
 
-function build(THREE, orbit, gltf, environment, utils) {
+function build(THREE, orbit, gltf, environment, utils, svg) {
   const canvas = $("viewer");
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -808,6 +812,7 @@ function build(THREE, orbit, gltf, environment, utils) {
   scene.add(content);
 
   const loader = new gltf.GLTFLoader();
+  const svgLoader = new svg.SVGLoader();
 
   /**
    * How far two faces have to turn away from each other before the line between them is
@@ -904,6 +909,102 @@ function build(THREE, orbit, gltf, environment, utils) {
   }
 
   /**
+   * The drawings a node carries, as geometry.
+   *
+   * An SVG arrives whole, as the markup it was written as, because that is what it is --
+   * a description of a drawing rather than a mesh taken apart into buffers. Turning it
+   * into triangles is this renderer's business and nobody else's, so it happens here, at
+   * the last moment, with three's own reader.
+   *
+   * SVG counts y downwards and a scene counts it up, so the whole thing is flipped once
+   * rather than every path being corrected.
+   */
+  function drawingsOn(object) {
+    const carried = object.userData?.gltfExtensions?.MOSAIC_components?.components ?? [];
+    const drawings = carried.filter(component => component.type === "w3c::svg" && component.value?.svg);
+    if (drawings.length === 0) return null;
+
+    // Everything of one colour is gathered and merged, for the same reason the meshes are:
+    // a real drawing is not a handful of shapes. A floor plan of this building is 56,798
+    // paths, which one mesh apiece makes 77,259 draw calls -- and it is 38 colours, which
+    // merged makes 38. What a drawing has a lot of is paths, not palettes.
+    const groups = new Map();
+
+    const gather = (geometry, colour, opacity) => {
+      if (!geometry || !geometry.attributes.position || geometry.attributes.position.count === 0) return;
+
+      // Merging needs one attribute layout, so what could not merge is kept apart.
+      const layout = Object.keys(geometry.attributes).sort().join(",");
+      const key = colour.getHexString() + "|" + opacity.toFixed(3) + "|" + layout
+        + "|" + (geometry.index ? "indexed" : "flat");
+
+      let group = groups.get(key);
+      if (!group) {
+        group = { colour, opacity, pieces: [] };
+        groups.set(key, group);
+      }
+      group.pieces.push(geometry);
+    };
+
+    for (const drawing of drawings) {
+      let parsed;
+      try {
+        parsed = svgLoader.parse(drawing.value.svg);
+      } catch (error) {
+        // A drawing that will not parse is one drawing, not the whole model: it is said
+        // once and the rest of the file is still worth showing.
+        console.warn("mosaic: an svg on " + (object.name ?? "a node") + " could not be read:",
+                     error.message ?? error);
+        continue;
+      }
+
+      for (const path of parsed.paths) {
+        // A fill and a stroke are different drawings of the same path; both are wanted.
+        const style = path.userData?.style ?? {};
+
+        if (style.fill !== undefined && style.fill !== "none") {
+          for (const shape of svg.SVGLoader.createShapes(path)) {
+            gather(new THREE.ShapeGeometry(shape), path.color, style.fillOpacity ?? 1);
+          }
+        }
+
+        if (style.stroke !== undefined && style.stroke !== "none") {
+          const colour = new THREE.Color().setStyle(style.stroke);
+          for (const piece of path.subPaths) {
+            gather(svg.SVGLoader.pointsToStroke(piece.getPoints(), style), colour, style.strokeOpacity ?? 1);
+          }
+        }
+      }
+    }
+
+    const group = new THREE.Group();
+
+    for (const { colour, opacity, pieces } of groups.values()) {
+      const merged = pieces.length === 1 ? pieces[0] : utils.mergeGeometries(pieces);
+      if (!merged) continue;
+      if (pieces.length > 1) for (const piece of pieces) piece.dispose();
+
+      group.add(new THREE.Mesh(merged, new THREE.MeshBasicMaterial({
+        color: colour,
+        side: THREE.DoubleSide,
+        // A drawing is a drawing: it is the colour it says it is, not the colour the
+        // lighting would make of it.
+        toneMapped: false,
+        transparent: opacity < 1,
+        opacity,
+      })));
+    }
+
+    if (group.children.length === 0) return null;
+
+    // Flipped, then placed where its node is.
+    group.scale.y = -1;
+    group.applyMatrix4(object.matrixWorld);
+
+    return group;
+  }
+
+  /**
    * The whole file rebuilt as one batch per material.
    *
    * This is the change that matters for a big model. A converted building arrives as tens
@@ -928,6 +1029,14 @@ function build(THREE, orbit, gltf, environment, utils) {
     const groups = new Map();
     const awkward = [];
     let instances = 0;
+
+    // A drawing hangs off a node that carries no mesh at all, so this pass is its own.
+    const drawings = [];
+    root.updateMatrixWorld(true);
+    root.traverse(object => {
+      const drawn = drawingsOn(object);
+      if (drawn) drawings.push(drawn);
+    });
 
     root.traverse(object => {
       if (!object.isMesh || !object.geometry) return;
@@ -1008,6 +1117,8 @@ function build(THREE, orbit, gltf, environment, utils) {
       out.add(one);
     }
 
+    for (const drawing of drawings) out.add(drawing);
+
     // --- the edges ----------------------------------------------------------
     // Computed per distinct geometry and then placed, which is the same economy the batches
     // make: the same box seen nine times is one set of edges and nine placements of it.
@@ -1073,11 +1184,25 @@ function build(THREE, orbit, gltf, environment, utils) {
       }
     }
 
+    // A drawing is triangles too, once it has been turned into some: they are counted
+    // here rather than left out, or the card would call a floor plan empty.
+    for (const drawing of drawings) {
+      drawing.traverse(one => {
+        if (!one.isMesh || !one.geometry) return;
+        const geometry = one.geometry;
+        const count = geometry.index ? geometry.index.count : (geometry.attributes.position?.count ?? 0);
+        drawnTriangles += count / 3;
+      });
+    }
+
     out.userData.triangles = Math.round(drawnTriangles);
     out.userData.summary = instances.toLocaleString() + " meshes in " + out.children.length
       + (out.children.length === 1 ? " draw" : " draws")
       + (drawnEdges > 0 ? " · " + drawnEdges.toLocaleString() + " edges"
          : placed > EDGE_BUDGET ? " · edges left off, " + Math.round(placed).toLocaleString() + " is too many"
+         : "")
+      + (drawings.length > 0
+         ? " · " + drawings.length + (drawings.length === 1 ? " drawing" : " drawings")
          : "");
 
     return out;
@@ -1090,13 +1215,18 @@ function build(THREE, orbit, gltf, environment, utils) {
     // Everything else here had its world matrix baked in, so its geometry is already
     // where it belongs.
     const box = new THREE.Box3();
+    at.updateMatrixWorld(true);
 
     at.traverse(object => {
       if (object.isBatchedMesh) {
         if (object.boundingBox) box.union(object.boundingBox);
       } else if (object.isMesh && object.geometry) {
         object.geometry.computeBoundingBox();
-        box.union(object.geometry.boundingBox);
+        // Through the object's own matrix, which is identity for anything whose placement
+        // was baked in and is not for a drawing: an svg is positioned by the group it is
+        // in, so measuring its geometry where it sits in the file would put it at the
+        // origin and leave the camera looking at the wrong place.
+        box.union(object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
       }
     });
 
@@ -1152,11 +1282,13 @@ function build(THREE, orbit, gltf, environment, utils) {
     content.add(model);
     look(model);
 
-    drawn = model.children.length;
+    // What the card counts is draws, and a drawing is a group of them rather than one.
+    drawn = 0;
+    model.traverse(one => { if (one.isMesh || one.isLine || one.isLineSegments) drawn++; });
     triangles = model.userData.triangles ?? 0;
     invalidate();
 
-    return model.userData.summary;
+    return { text: model.userData.summary, drawn };
   }
 
   return { show, clear };
@@ -1171,21 +1303,22 @@ async function intoViewer(saying, pending) {
     const nodes = response.headers.get("x-mosaic-nodes");
     const meshes = response.headers.get("x-mosaic-meshes");
 
-    // A selection can be all links and no geometry, which looks like a broken viewer
-    // rather than what it is: a part drawing its type's mesh, with compose turned off.
-    if (meshes === "0") {
-      try { (await viewer()).clear(); } catch {}
-      say((nodes ? nodes + " nodes, " : "") + "no geometry in the answer"
-          + (compose() ? "" : " — tick compose if it comes from a type"), true);
-      return;
-    }
-
     const drawing = await viewer();
     say("drawing " + (bytes.byteLength / 1048576).toFixed(1) + " MB of glb…");
     const summary = await drawing.show(bytes);
 
+    // A selection can be all links and no geometry, which looks like a broken viewer
+    // rather than what it is: a part drawing its type's mesh, with compose turned off.
+    // What decides it is what came out of the drawing, not what the meshes header said --
+    // an SVG is drawable and is not a mesh, so a file can have none and still show.
+    if (summary.drawn === 0) {
+      say((nodes ? nodes + " nodes, " : "") + "nothing to draw in the answer"
+          + (compose() ? "" : " — tick compose if it comes from a type"), true);
+      return;
+    }
+
     say((nodes ? nodes + " nodes, " : "") + (meshes ? meshes + " meshes, " : "")
-        + bytes.byteLength + " bytes of glb — " + summary);
+        + bytes.byteLength + " bytes of glb — " + summary.text);
   } catch (error) {
     say(String(error.message ?? error), true);
   }

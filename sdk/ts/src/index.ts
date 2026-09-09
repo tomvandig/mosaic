@@ -6,5 +6,6 @@ export { NO_COMPONENT_INDEX, indexOf, operationOf, hasValue } from "./ComponentR
 export { selectNodes, type SelectionRequest, type SelectionResult } from "./Selection.ts";
 export * from "./core/index.ts";
 export * from "./gltf/index.ts";
+export * from "./svg/index.ts";
 export * from "./composition/index.ts";
 export * from "./MosaicIndexFile.ts";

@@ -2,6 +2,7 @@ import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE } from "./commands/pack.js";
 import { runGltf, runGltfPack, GLTF_USAGE, GLTF_PACK_USAGE } from "./commands/gltf.js";
 import { runIfc, runIfcPack, IFC_USAGE, IFC_PACK_USAGE } from "./commands/ifc.js";
+import { runSvgPack, SVG_PACK_USAGE } from "./commands/svg.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
@@ -43,6 +44,11 @@ const COMMANDS: Record<string, Command> = {
         usage: IFC_PACK_USAGE,
         summary: "Convert an IFC model straight into a .tsr archive",
         run: runIfcPack
+    },
+    "svg-pack": {
+        usage: SVG_PACK_USAGE,
+        summary: "Pack an SVG into a .tsr archive of one node",
+        run: runSvgPack
     },
     compose: {
         usage: COMPOSE_USAGE,

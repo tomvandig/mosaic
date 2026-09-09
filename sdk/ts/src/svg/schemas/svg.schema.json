@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "w3c::svg",
+  "title": "SVG",
+  "description": "A piece of SVG, carried whole as the markup it was written as. The document is not taken apart into paths and shapes the way glTF geometry is taken apart into accessors: an SVG is already a description of a drawing, and the thing worth keeping is that description. What reads it decides what to do with it -- a viewer turns it into geometry, a report embeds it, a diff shows it changed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["svg"],
+  "properties": {
+    "svg": {
+      "type": "string",
+      "description": "The SVG document, as markup."
+    },
+    "source": {
+      "type": "string",
+      "description": "What the markup was read from, when it came from a file."
+    }
+  }
+}

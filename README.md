@@ -193,7 +193,7 @@ components are written one of two ways:
   is the id of the child node, so one node can hold many children and a later section can drop a
   single link with a `DELETE` on that name. Composing turns those links into glTF `children`, and a
   node that is someone's child is left out of the scene's root list.
-- **As an extension**, for everything else, including `core::name`. The components ride along under `MOSAIC_components` on
+- **As an extension**, for everything else, including `core::name` and `w3c::svg`. The components ride along under `MOSAIC_components` on
   the node, listed in `extensionsUsed` but never in `extensionsRequired`, so a viewer that does not
   know Mosaic still renders the file.
 
@@ -516,6 +516,21 @@ browser is waiting on.
 Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
 one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so
 `mosaic compose scene.duckdb` will not run while a server is holding it; stop the server first.
+
+## Drawings
+
+`mosaic svg-pack drawing.svg` packs an SVG into an archive of one node, named after the file
+and given a made-up id the way a converted glTF node is. There is no conversion in the sense the
+glTF and IFC readers convert — those take a file apart into the components that describe it, because
+a mesh is not one thing but buffers and accessors and primitives. An SVG is already a description of
+a drawing, so taking it apart would only lose it. It travels whole, under `w3c::svg`: a W3C format
+rather than a Khronos one, so it gets a namespace of its own beside `khronos::gltf`.
+
+A glb has nowhere native to put a drawing, so it rides on its node as `MOSAIC_components` extension
+data — and a node carrying one is written into the scene even though it has no mesh, since it is
+carrying something. The viewer asks for `w3c::svg` alongside the glTF components and turns the
+markup into geometry with three's own SVG reader, at the last moment, which is the only place that
+decision belongs. Note that reader draws paths and shapes but not `<text>`.
 
 ## A worked example
 
