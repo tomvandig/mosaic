@@ -2,6 +2,7 @@ import child from "./schemas/child.schema.json" with { type: "json" };
 import name from "./schemas/name.schema.json" with { type: "json" };
 import transform from "./schemas/transform.schema.json" with { type: "json" };
 import inherit from "./schemas/inherit.schema.json" with { type: "json" };
+import edges from "./schemas/edges.schema.json" with { type: "json" };
 
 /** Component types Mosaic itself defines, outside any vendor namespace. */
 export const CORE_TYPE = {
@@ -27,6 +28,12 @@ export const CORE_TYPE = {
      * with this node's own components winning any clash.
      */
     inherit: "core::inherit",
+    /**
+     * Whether the edges of this node's geometry are drawn. A building reads by its edges
+     * and a tree does not: every leaf meets its neighbour at an angle, so edging one draws
+     * a black smudge. Absent, edges are drawn; false covers everything beneath the node.
+     */
+    edges: "core::edges",
 } as const;
 
 export type CoreComponentType = (typeof CORE_TYPE)[keyof typeof CORE_TYPE];
@@ -36,6 +43,7 @@ export const CORE_SCHEMAS: Record<CoreComponentType, unknown> = {
     [CORE_TYPE.name]: name,
     [CORE_TYPE.transform]: transform,
     [CORE_TYPE.inherit]: inherit,
+    [CORE_TYPE.edges]: edges,
 };
 
 /** The value every core::child and core::name component carries: nothing. */

@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "x-mosaic-id": "core::edges",
+  "title": "Edges",
+  "description": "Whether the edges of a node's geometry are worth drawing. A drawing of a building wants the line where two faces meet at an angle -- a corner, a reveal, the lip of a slab -- because that is what makes it readable. A tree or a scanned prop does not: its faces meet at an angle everywhere, so every leaf earns a line and the result is a black smudge. Left off, edges are drawn. Set false on a node and nothing beneath it is edged either, so one component covers a whole model.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "draw": {
+      "type": "boolean",
+      "default": true,
+      "description": "False to leave this node and everything under it unedged."
+    }
+  }
+}

@@ -746,3 +746,38 @@ test("an is-a link two steps up comes along, so a query need only look at the no
 test("a missing input archive is reported by name", async () => {
     await assert.rejects(() => composeArchiveToGlb("no-such.tsr"), /no-such\.tsr does not exist/);
 });
+
+test("every core component type brings a schema that agrees with its name", async () => {
+    const { CORE_TYPE, CORE_SCHEMAS } = await import("../src/core/schemas.ts");
+
+    // A type without a schema is a type nothing can validate, and a schema filed under the
+    // wrong name is worse: it would validate the wrong thing quietly.
+    for (const type of Object.values(CORE_TYPE)) {
+        const schema = (CORE_SCHEMAS as Record<string, any>)[type];
+        assert.ok(schema, `${type} has no schema`);
+        assert.equal(schema["x-mosaic-id"], type, `${type} is filed under the wrong id`);
+    }
+
+    assert.equal(CORE_TYPE.edges, "core::edges");
+    assert.equal((CORE_SCHEMAS as Record<string, any>)[CORE_TYPE.edges].properties.draw.type, "boolean");
+});
+
+test("a component saying not to draw edges travels into the glb", async () => {
+    const out = await stageBox();
+    const file = await LoadMosaicFile(fs.readFileSync(path.join(out, "box.tsr")));
+
+    // Said of a node that has geometry, which is where it has to survive to.
+    const drawn = file.index.sections[0]!.nodes.find(n =>
+        (n.components ?? []).some(c => c.type === GLTF_TYPE.meshPrimitive))!;
+
+    file.serializedComponents.set(CORE_TYPE.edges, [JSON.stringify({ draw: false })]);
+    drawn.components!.push({ type: CORE_TYPE.edges, id: "edges", index: 0 });
+
+    const composed = mosaicToGltf(file);
+    const node = composed.document.nodes!.find(n => n.name === drawn.id)! as any;
+    const said = node.extensions[MOSAIC_COMPONENTS_EXTENSION].components
+        .find((c: any) => c.type === CORE_TYPE.edges);
+
+    assert.ok(said, "the viewer has something to read");
+    assert.equal(said.value.draw, false);
+});

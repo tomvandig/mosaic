@@ -198,6 +198,8 @@ const GEOMETRY_COMPONENTS = [
   // An SVG is drawable too, though a glb has nowhere native to put one: it rides on its
   // node as extension data and is turned into geometry in here.
   "w3c::svg",
+  // Not geometry, but about how geometry is drawn, so it comes with it.
+  "core::edges",
 ];
 
 const state = {
@@ -930,6 +932,55 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
   }
 
   /**
+   * Keeps alpha-masked geometry from vanishing into the distance.
+   *
+   * Leaves are not modelled leaf by leaf: a tree is a few dozen cards, each with a picture
+   * of leaves and an alpha channel saying which parts of the card are there. The card is
+   * drawn where the alpha is above a threshold and discarded where it is not.
+   *
+   * That threshold is what breaks when the camera pulls back. A minified texture is read
+   * from a mip level, and a mip level is an average -- of a card that is mostly empty, so
+   * its alpha averages down. The tree here is cut at 0.514, which the averages fall under
+   * within a few steps, and then every fragment of every card is discarded at once: the
+   * leaves do not thin out with distance, they disappear between one zoom and the next.
+   *
+   * So the cut is lowered, which keeps the cards alive as they average down, and coverage
+   * is left to the multisampling instead: alphaToCoverage turns the alpha into how much of
+   * the pixel the card covers, which is the honest answer and fades rather than pops. It
+   * needs the multisampled buffer the canvas already has.
+   */
+  function foliage(material) {
+    if (!material || !(material.alphaTest > 0)) return;
+
+    material.alphaTest = Math.min(material.alphaTest, 0.15);
+    material.alphaToCoverage = true;
+    material.needsUpdate = true;
+
+    // While here: a leaf card seen edge on is exactly the case anisotropy is for.
+    const map = material.map;
+    if (map && map.anisotropy < 4) {
+      map.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
+      map.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Whether this node's geometry should be edged.
+   *
+   * The answer can be given on the node itself or on anything above it, so one component
+   * on a model covers the whole of it rather than every mesh inside it. The nearest answer
+   * wins, which lets a model say no and one part of it say yes again.
+   */
+  function wantsEdges(object) {
+    for (let at = object; at; at = at.parent) {
+      const carried = at.userData?.gltfExtensions?.MOSAIC_components?.components ?? [];
+      const said = carried.find(component => component.type === "core::edges");
+      if (said) return said.value?.draw !== false;
+    }
+    return true;
+  }
+
+  /**
    * The drawings a node carries, as geometry.
    *
    * An SVG arrives whole, as the markup it was written as, because that is what it is --
@@ -1135,6 +1186,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       const one = new THREE.Mesh(mesh.geometry.clone().applyMatrix4(mesh.matrixWorld), mesh.material);
       one.castShadow = true;
       one.receiveShadow = true;
+      for (const material of [].concat(one.material ?? [])) foliage(material);
       out.add(one);
     }
 
@@ -1146,7 +1198,12 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     const edgesOf = new Map();
     let placed = 0;
 
-    for (const mesh of [...groups.values()].flatMap(group => group.meshes).concat(awkward)) {
+    // Only what asked to be edged. A geometry shared between a node that wants edges and
+    // one that does not is still computed once; what differs is how often it is placed.
+    const toEdge = [...groups.values()].flatMap(group => group.meshes).concat(awkward)
+      .filter(wantsEdges);
+
+    for (const mesh of toEdge) {
       let edges = edgesOf.get(mesh.geometry.uuid);
       if (edges === undefined) {
         edges = new THREE.EdgesGeometry(mesh.geometry, EDGE_ANGLE);
@@ -1158,7 +1215,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     let drawnEdges = 0;
     if (placed > 0 && placed <= EDGE_BUDGET) {
       const baked = [];
-      for (const mesh of [...groups.values()].flatMap(group => group.meshes).concat(awkward)) {
+      for (const mesh of toEdge) {
         const edges = edgesOf.get(mesh.geometry.uuid);
         if (!edges || edges.attributes.position.count === 0) continue;
         baked.push(edges.clone().applyMatrix4(mesh.matrixWorld));
@@ -1188,6 +1245,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       group.material.polygonOffset = true;
       group.material.polygonOffsetFactor = 1;
       group.material.polygonOffsetUnits = 1;
+      foliage(group.material);
     }
 
     // A batch copies what it is handed and everything else here was cloned, so the file's

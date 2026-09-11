@@ -1,5 +1,5 @@
 {
-  "description": "The models of the test3 database, imported and placed. Nothing is restated: each placement is a node with a transform that names a node inside an imported archive with a core::child reference, so composing writes the model once per placement while its geometry stays single. The drawing is the underfloor heating plan of the eleventh floor, so it hangs under the node that places that floor rather than beside it: move the floor and the drawing goes with it. It is laid flat by a quarter turn about X and then turned another quarter about Y, because the plan sits across its sheet while the floor runs up the model -- 1,600 x 1,320 units of plan against a floor of 26.5 x 31.0 m -- and mirrored, which is what the negative scale on x is for: two turns cannot make a mirror between them, since a rotation keeps handedness. Its scale and offset were fitted rather than read off the drawing, which does not say what scale it is: they put the plan within 0.3 m of the floor on every edge, at about 1:56. If the true scale is known, the scale here is the number to change, and the offset then wants recomputing from it. The tree is a game asset measuring 2,072 x 2,430 x 2,106 in its own units, brought down to about twelve metres, and it and the helmet stand on the eleventh floor beside the building rather than on the ground thirty-six metres below it. Pack it with:  mosaic pack s1-together.mosaic.json s1-together.tsr  -- the imports resolve by name against whatever holds them, and all of them must be there or composing stops at the first one it cannot find.",
+  "description": "The models of the test3 database, imported and placed. Nothing is restated: each placement is a node with a transform that names a node inside an imported archive with a core::child reference, so composing writes the model once per placement while its geometry stays single. The drawing is the underfloor heating plan of the eleventh floor, so it hangs under the node that places that floor rather than beside it: move the floor and the drawing goes with it. It is laid flat by a quarter turn about X and then turned another quarter about Y, because the plan sits across its sheet while the floor runs up the model -- 1,600 x 1,320 units of plan against a floor of 26.5 x 31.0 m -- and mirrored, which is what the negative scale on x is for: two turns cannot make a mirror between them, since a rotation keeps handedness. Its scale and offset were fitted rather than read off the drawing, which does not say what scale it is: they put the plan within 0.3 m of the floor on every edge, at about 1:56. If the true scale is known, the scale here is the number to change, and the offset then wants recomputing from it. The tree is a game asset measuring 2,072 x 2,430 x 2,106 in its own units, brought down to about twelve metres, and it and the helmet stand on the eleventh floor beside the building rather than on the ground thirty-six metres below it. Pack it with:  mosaic pack s1-together.mosaic.json s1-together.tsr  -- the imports resolve by name against whatever holds them, and all of them must be there or composing stops at the first one it cannot find. Three of the imported nodes are given a core::edges component saying not to draw their edges: the two that make up the tree and the one that is the helmet. A building reads by its edges and those do not -- every leaf of a tree meets its neighbour at an angle, so edging one draws a smudge rather than a tree. The component is written onto the imported nodes themselves rather than onto the nodes that place them, which is what layering over an import is for: the archive that owns the tree is not touched, and this file has the last word on it.",
   "components": {
     "core::transform": [
       {
@@ -91,6 +91,11 @@
           -0.006
         ]
       }
+    ],
+    "core::edges": [
+      {
+        "draw": false
+      }
     ]
   },
   "index": {
@@ -157,6 +162,25 @@
               },
               "minItems": 3,
               "maxItems": 3
+            }
+          }
+        }
+      },
+      {
+        "filename": "core::edges.ndjson",
+        "type": "NDJSON",
+        "schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "x-mosaic-id": "core::edges",
+          "title": "Edges",
+          "description": "Whether the edges of a node's geometry are worth drawing. A drawing of a building wants the line where two faces meet at an angle -- a corner, a reveal, the lip of a slab -- because that is what makes it readable. A tree or a scanned prop does not: its faces meet at an angle everywhere, so every leaf earns a line and the result is a black smudge. Left off, edges are drawn. Set false on a node and nothing beneath it is edged either, so one component covers a whole model.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "draw": {
+              "type": "boolean",
+              "default": true,
+              "description": "False to leave this node and everything under it unedged."
             }
           }
         }
@@ -323,6 +347,36 @@
               {
                 "type": "core::child",
                 "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba"
+              }
+            ]
+          },
+          {
+            "id": "7a2b9f4e-f687-44b7-a452-8d6e40b17b42",
+            "components": [
+              {
+                "type": "core::edges",
+                "id": "edges",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "cc60c4b9-ab65-4e0f-ad00-117be28e697c",
+            "components": [
+              {
+                "type": "core::edges",
+                "id": "edges",
+                "index": 0
+              }
+            ]
+          },
+          {
+            "id": "d6c1d2ba-9376-4461-8c56-27c496c1d2ba",
+            "components": [
+              {
+                "type": "core::edges",
+                "id": "edges",
+                "index": 0
               }
             ]
           }
