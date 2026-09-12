@@ -2,7 +2,7 @@
 
 # mosaic
 
-Mosaic is a file format supporting **incremental collaboration on geometric and structured data**. Many files may be combined to form a bigger picture, a composed ECS, but in the composition they **retain their identity and lineage**.
+Mosaic is a file format supporting **incremental collaboration on geometric and structured data**. Many files may be combined to form a bigger composed picture but in the composition they **retain their identity and lineage**.
 
 This repository holds the format's specification and the tooling used to work with it:
 
@@ -57,8 +57,8 @@ npm install
 npm run compile-json-spec
 ```
 
-The TypeSpec compiler reads [`mosaic-json-file.tsp`](src/mosaic-json-file.tsp) and writes JSON
-Schema to [`standard/`](standard/), as configured in
+The TypeSpec compiler reads [`mosaic-json-file.tsp`](src/mosaic-json-file.tsp) and writes
+[`standard/mosaic-index-file.schema.json`](standard/mosaic-index-file.schema.json), as configured in
 [`tspconfig.yaml`](src/tspconfig.yaml). Commit the regenerated output alongside the spec change.
 
 ## Generating code from component schemas
@@ -322,8 +322,8 @@ about routes:
 
 ```bash
 cd src
-npm run compile-api-spec     # mosaic-api.tsp -> standard/openapi.json
-npm run gen-api-sdk          # openapi.json  -> sdk/ts/src/api/
+npm run compile-api-spec     # mosaic-api.tsp -> standard/mosaic-api.openapi3.json
+npm run gen-api-sdk          # mosaic-api.openapi3.json -> sdk/ts/src/api/
 ```
 
 The second step generates three files:

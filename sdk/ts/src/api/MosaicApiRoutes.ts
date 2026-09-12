@@ -1,4 +1,4 @@
-// Generated from standard/openapi.json by src/scripts/gen-api-sdk.mjs.
+// Generated from standard/mosaic-api.openapi3.json by src/scripts/gen-api-sdk.mjs.
 // Run "npm run gen-api-sdk" in src after changing mosaic-api.tsp.
 
 /** One operation of the API, as the spec declares it. */

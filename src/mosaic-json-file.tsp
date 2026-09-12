@@ -70,7 +70,10 @@ model MosaicDataSection
     nodes: MosaicNode[];
 }
 
+// The $id is the file name the schema is published under, so a $ref to it from anywhere
+// else resolves to the file that is actually there.
 @jsonSchema
+@id("mosaic-index-file.schema.json")
 model MosaicIndexFile {
     header: MosaicFileHeader;
     "imports": ImportNode[];
