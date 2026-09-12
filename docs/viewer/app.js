@@ -4133,6 +4133,38 @@ function writeGlb(document2, binary) {
 }
 
 // src/viewer/ArchiveSource.ts
+function mergedFrom(graph, url, memo = /* @__PURE__ */ new Map()) {
+  const done = memo.get(url);
+  if (done) return done;
+  const archive = graph.get(url);
+  if (!archive) throw new Error(`${url} is not in the graph`);
+  let beneath;
+  for (const dep of archive.imports) {
+    const imported = mergedFrom(graph, dep, memo);
+    beneath = beneath ? federate(beneath, imported, true) : imported;
+  }
+  const merged = beneath ? federate(beneath, archive.alone, true) : archive.alone;
+  memo.set(url, merged);
+  return merged;
+}
+function ownNodesOf(alone) {
+  const own = /* @__PURE__ */ new Set();
+  for (const section of alone.index.sections) {
+    for (const node of section.nodes) own.add(node.id);
+  }
+  return own;
+}
+function versionFrom(graph, top, about) {
+  const archive = graph.get(top);
+  if (!archive) throw new Error(`${top} is not in the graph`);
+  return {
+    ...about,
+    top,
+    graph,
+    file: mergedFrom(graph, top),
+    own: ownNodesOf(archive.alone)
+  };
+}
 var ArchiveSource = class {
   kind = "archives";
   held = /* @__PURE__ */ new Map();
@@ -4161,18 +4193,13 @@ var ArchiveSource = class {
    * shows as it is, and one that does not shows what it has.
    */
   async add(name, bytes) {
-    const file = await LoadMosaicFile(bytes);
-    const own = /* @__PURE__ */ new Set();
-    for (const section of file.index.sections) {
-      for (const node of section.nodes) own.add(node.id);
-    }
-    return this.put(name.replace(/\.tsr$/i, ""), {
-      versionId: crypto.randomUUID(),
-      message: "dropped in",
-      alone: file,
-      file,
-      own
-    });
+    const alone = await LoadMosaicFile(bytes);
+    const url = "dropped:" + name;
+    const graph = /* @__PURE__ */ new Map([[url, { url, name, alone, imports: [] }]]);
+    return this.put(
+      name.replace(/\.tsr$/i, ""),
+      versionFrom(graph, url, { versionId: crypto.randomUUID(), message: "dropped in" })
+    );
   }
   /** Adds a tessera, or another version of one already here under that name. */
   put(name, version) {
@@ -4183,6 +4210,38 @@ var ArchiveSource = class {
     return this.summaries().find((summary) => summary.id === tessera.id);
   }
   // --- what is inside an archive ------------------------------------------
+  /** Every archive graph any version here points into, each once. */
+  graphs() {
+    const seen = /* @__PURE__ */ new Set();
+    for (const tessera of this.held.values()) {
+      for (const version of tessera.versions) seen.add(version.graph);
+    }
+    return [...seen];
+  }
+  /** The archive at a url, from whichever graph has it. */
+  archiveAt(url) {
+    for (const graph of this.graphs()) {
+      const found = graph.get(url);
+      if (found) return found;
+    }
+    return void 0;
+  }
+  /**
+   * Every archive that was loaded, whether it is shown as a tessera or only imported by
+   * one. Roots first -- the archives nothing here imports -- since those are the ones
+   * someone is most likely to have come looking for.
+   */
+  archives() {
+    const all = /* @__PURE__ */ new Map();
+    const importedUrls = /* @__PURE__ */ new Set();
+    for (const graph of this.graphs()) {
+      for (const archive of graph.values()) {
+        all.set(archive.url, archive);
+        for (const dep of archive.imports) importedUrls.add(dep);
+      }
+    }
+    return [...all.values()].map((archive) => ({ url: archive.url, name: archive.name, imported: importedUrls.has(archive.url) })).sort((a2, b) => Number(a2.imported) - Number(b.imported) || a2.name.localeCompare(b.name));
+  }
   /**
    * The files an archive is made of, as text.
    *
@@ -4191,30 +4250,29 @@ var ArchiveSource = class {
    * is shown is the archive as written, without what it imports, since that is what
    * editing it would change.
    */
-  filesOf(ref) {
-    const tessera = this.held.get(ref.tesseraId);
-    const version = tessera?.versions.find((one) => one.versionId === ref.versionId);
-    if (!tessera || !version) return void 0;
+  filesOf(url) {
+    const archive = this.archiveAt(url);
+    if (!archive) return void 0;
     const files = {
-      "index.json": JSON.stringify(version.alone.index, null, 4)
+      "index.json": JSON.stringify(archive.alone.index, null, 4)
     };
-    for (const [type, rows] of version.alone.serializedComponents) {
+    for (const [type, rows] of archive.alone.serializedComponents) {
       files[type + ".ndjson"] = rows.join("\n");
     }
-    return { name: tessera.name, files };
+    return { url, name: archive.name, files };
   }
   /**
    * Puts edited files back, in place of the archive they came from.
    *
-   * The imports are merged again afterwards rather than kept: an edit can add one, or
-   * change which node a component belongs to, and a stale merge would show the old
-   * answer. What it cannot do is fetch a newly named import -- nothing here has a
-   * network -- so a new import is reported rather than silently ignored.
+   * Everything above the edited archive is merged again afterwards: an edit to a model
+   * changes every scene that imports it, and an edit can add an import or move a
+   * component to another node, so no merge that included it can be trusted. What it
+   * cannot do is fetch a newly named import -- nothing here has a network -- so a new
+   * import is reported rather than silently ignored.
    */
-  replaceFiles(ref, files) {
-    const tessera = this.held.get(ref.tesseraId);
-    const version = tessera?.versions.find((one) => one.versionId === ref.versionId);
-    if (!tessera || !version) throw new Error("that archive is not open");
+  replaceFiles(url, files) {
+    const archive = this.archiveAt(url);
+    if (!archive) throw new Error("that archive is not open");
     const index = files["index.json"];
     if (index === void 0) throw new Error("an archive needs an index.json");
     const edited = new MosaicFile();
@@ -4224,17 +4282,19 @@ var ArchiveSource = class {
       edited.serializedComponents.set(name.replace(/\.ndjson$/, ""), text.split("\n"));
     }
     const warnings = [];
-    const had = new Set((version.alone.index.imports ?? []).map((entry) => entry.uri));
+    const had = new Set((archive.alone.index.imports ?? []).map((entry) => entry.uri));
     for (const entry of edited.index.imports ?? []) {
       if (!had.has(entry.uri)) {
         warnings.push(`import "${entry.uri}" was added; reload the example to fetch it`);
       }
     }
-    version.alone = edited;
-    version.file = version.beneath ? federate(version.beneath, edited, true) : edited;
-    version.own = /* @__PURE__ */ new Set();
-    for (const section of edited.index.sections) {
-      for (const node of section.nodes) version.own.add(node.id);
+    archive.alone = edited;
+    for (const tessera of this.held.values()) {
+      for (const version of tessera.versions) {
+        if (!version.graph.has(url)) continue;
+        version.file = mergedFrom(version.graph, version.top);
+        version.own = ownNodesOf(version.graph.get(version.top).alone);
+      }
     }
     return { warnings };
   }
@@ -4374,30 +4434,22 @@ function resolveWithin(root, fromDirectory, uri) {
   if (!inside) throw new Error(`import "${uri}" points outside ${base.join("/")}`);
   return target.join("/");
 }
-async function loadArchive(directory, name, get = fetchBytes, warnings = []) {
+async function loadArchive(directory, name, get = fetchBytes, warnings = [], graph = /* @__PURE__ */ new Map()) {
   const visiting = /* @__PURE__ */ new Set();
-  const sources = [];
-  const top = directory.replace(/\/+$/, "") + "/" + name;
-  let beneath;
-  const already = /* @__PURE__ */ new Map();
-  const fetchOnce = (url) => {
-    const going = already.get(url) ?? get(url);
-    already.set(url, going);
-    return going;
-  };
   async function load(url, importedBy) {
+    if (graph.has(url)) return;
     if (visiting.has(url)) throw new Error(`Import cycle: ${url} is already being loaded`);
     visiting.add(url);
     let bytes;
     try {
-      bytes = await fetchOnce(url);
+      bytes = await get(url);
     } catch (error) {
       throw new Error(importedBy ? `Import "${url}", referenced by ${importedBy}, could not be read: ${message(error)}` : `${url} could not be read: ${message(error)}`);
     }
-    const file2 = await LoadMosaicFile(bytes);
+    const alone = await LoadMosaicFile(bytes);
     const here = url.slice(0, url.lastIndexOf("/"));
-    let merged;
-    for (const entry of file2.index.imports ?? []) {
+    const imports = [];
+    for (const entry of alone.index.imports ?? []) {
       let target;
       try {
         target = resolveWithin(directory, here, entry.uri);
@@ -4405,39 +4457,30 @@ async function loadArchive(directory, name, get = fetchBytes, warnings = []) {
         warnings.push(`skipped ${message(error)}`);
         continue;
       }
-      const imported = await load(target, url);
-      merged = merged ? federate(merged, imported, true) : imported;
+      await load(target, url);
+      imports.push(target);
     }
     visiting.delete(url);
-    sources.push(url);
-    if (url === top) beneath = merged;
-    return merged ? federate(merged, file2, true) : file2;
+    graph.set(url, { url, name: url.slice(url.lastIndexOf("/") + 1), alone, imports });
   }
-  const file = await load(top);
-  const alone = await LoadMosaicFile(await fetchOnce(top));
-  const own = /* @__PURE__ */ new Set();
-  for (const section of alone.index.sections) {
-    for (const node of section.nodes) own.add(node.id);
-  }
-  return { file, alone, beneath, own, sources };
+  const top = directory.replace(/\/+$/, "") + "/" + name;
+  await load(top);
+  return { top, graph };
 }
 async function loadExample(directory, manifest, get = fetchBytes) {
   const warnings = [];
   const tesserae = [];
+  const graph = /* @__PURE__ */ new Map();
   for (const name of manifest.archives) {
-    const { file, alone, beneath, own } = await loadArchive(directory, name, get, warnings);
+    const { top } = await loadArchive(directory, name, get, warnings, graph);
     const stem = name.replace(/\.[^./]+$/, "").split("/").pop() ?? name;
-    const version = {
+    const version = versionFrom(graph, top, {
       versionId: idFor(directory + "/" + name),
-      message: "as published",
-      alone,
-      ...beneath ? { beneath } : {},
-      file,
-      own
-    };
+      message: "as published"
+    });
     tesserae.push({ id: idFor(directory + "/" + name + "#tessera"), name: stem, versions: [version] });
   }
-  return { tesserae, warnings };
+  return { tesserae, graph, warnings };
 }
 function idFor(key) {
   let hash = 2166136261;
@@ -4516,7 +4559,7 @@ async function mountEditor(options) {
   else document.querySelector("header")?.append(toggle);
   let editor;
   let open = {};
-  let openRef;
+  let openUrl;
   let showing = "";
   let dirty = false;
   let filling = false;
@@ -4527,28 +4570,25 @@ async function mountEditor(options) {
     revert.disabled = !is;
     note.textContent = is ? "edited" : "";
   };
-  async function fillArchives() {
-    const tesserae = await source2.tesserae();
+  function fillArchives() {
+    const archives = source2.archives();
     which.innerHTML = "";
-    for (const tessera of tesserae) {
-      for (const version of tessera.versions) {
-        const option = document.createElement("option");
-        option.value = tessera.id + " " + version.versionId;
-        option.textContent = tessera.versions.length > 1 ? tessera.name + " \xB7 " + (version.message ?? version.versionId.slice(0, 8)) : tessera.name;
-        which.append(option);
-      }
+    for (const archive of archives) {
+      const option = document.createElement("option");
+      option.value = archive.url;
+      option.textContent = archive.imported ? archive.name + "  (imported)" : archive.name;
+      which.append(option);
     }
-    return tesserae;
+    return archives.length;
   }
-  function openArchive(value) {
-    const [tesseraId, versionId] = value.split(" ");
-    if (!tesseraId || !versionId) return;
-    const held = source2.filesOf({ tesseraId, versionId });
+  function openArchive(url) {
+    if (!url) return;
+    const held = source2.filesOf(url);
     if (!held) {
       note.textContent = "that archive is not open";
       return;
     }
-    openRef = { tesseraId, versionId };
+    openUrl = url;
     open = { ...held.files };
     const names = Object.keys(open).sort((a2, b) => a2 === "index.json" ? -1 : b === "index.json" ? 1 : a2.localeCompare(b));
     files.innerHTML = "";
@@ -4576,14 +4616,14 @@ async function mountEditor(options) {
   which.onchange = () => openArchive(which.value);
   files.onchange = () => showFile(files.value);
   revert.onclick = () => {
-    if (openRef) openArchive(openRef.tesseraId + " " + openRef.versionId);
+    if (openUrl) openArchive(openUrl);
   };
   save.onclick = async () => {
-    if (!openRef) return;
+    if (!openUrl) return;
     if (showing) open[showing] = editor.getValue();
     save.disabled = true;
     try {
-      const { warnings } = source2.replaceFiles(openRef, open);
+      const { warnings } = source2.replaceFiles(openUrl, open);
       markDirty(false);
       await onSaved();
       note.textContent = warnings.length > 0 ? warnings.join(" \xB7 ") : "saved";
@@ -4627,12 +4667,11 @@ async function mountEditor(options) {
       });
       note.textContent = "";
     }
-    const tesserae = await fillArchives();
-    if (tesserae.length === 0) {
+    if (fillArchives() === 0) {
       note.textContent = "nothing to look inside yet";
       return;
     }
-    if (!openRef) openArchive(which.value);
+    if (!openUrl) openArchive(which.value);
   };
   toggle.onclick = () => void setOpen(drawer.hidden);
   close.onclick = () => void setOpen(false);

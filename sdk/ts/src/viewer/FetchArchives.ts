@@ -1,6 +1,5 @@
-import { LoadMosaicFile, MosaicFile } from "../MosaicFile.ts";
-import { federate } from "../MosaicFileOperations.ts";
-import type { LoadedTessera, LoadedVersion } from "./ArchiveSource.ts";
+import { LoadMosaicFile } from "../MosaicFile.ts";
+import { versionFrom, type ArchiveGraph, type LoadedTessera } from "./ArchiveSource.ts";
 
 /** What one example folder says it holds. */
 export interface ExampleManifest {
@@ -74,67 +73,47 @@ export function resolveWithin(root: string, fromDirectory: string, uri: string):
 }
 
 /**
- * An archive and everything it imports, merged.
+ * An archive and everything it imports, as a graph.
  *
- * This is {@link loadWithImports} without a filesystem: the same walk, the same order --
- * imports underneath the file that imports them, so a later section still wins -- reading
- * through whatever the caller hands over instead of `fs`.
+ * This is {@link loadWithImports} without a filesystem, and without the merging: the same
+ * walk, reading through whatever the caller hands over instead of `fs`, but what comes
+ * back is every archive reached, each on its own, with what it imports named by url.
+ * Merging is done from the graph when a version is asked about, so that every file stays
+ * a file -- one that can be opened and edited -- however many others fold it in.
+ *
+ * Archives already in the graph are not fetched again: several files in one example often
+ * import the same library, and the graph is shared by everything in the example.
  */
 export async function loadArchive(
     directory: string,
     name: string,
     get: Fetcher = fetchBytes,
     warnings: string[] = [],
-): Promise<{
-    /** The archive with its imports merged underneath, which is what is drawn. */
-    file: MosaicFile;
-    /** The archive as written, which is what is edited. */
-    alone: MosaicFile;
-    /** Its imports, merged together. Absent when it imports nothing. */
-    beneath: MosaicFile | undefined;
-    own: Set<string>;
-    sources: string[];
-}> {
+    graph: ArchiveGraph = new Map(),
+): Promise<{ top: string; graph: ArchiveGraph }> {
     const visiting = new Set<string>();
-    const sources: string[] = [];
 
-    const top = directory.replace(/\/+$/, "") + "/" + name;
-
-    // What the named archive imports, merged, kept aside as the walk passes through it.
-    // An edit to the archive has to be layered over the same thing again, and going back
-    // for it would mean fetching everything a second time.
-    let beneath: MosaicFile | undefined;
-
-    // An archive is read twice -- once merged with its imports, once on its own to see
-    // which nodes are its -- and several archives in one example often import the same
-    // library. Asking for any of it twice is asking the network twice.
-    const already = new Map<string, Promise<Uint8Array>>();
-    const fetchOnce = (url: string): Promise<Uint8Array> => {
-        const going = already.get(url) ?? get(url);
-        already.set(url, going);
-        return going;
-    };
-
-    async function load(url: string, importedBy?: string): Promise<MosaicFile> {
+    async function load(url: string, importedBy?: string): Promise<void> {
+        if (graph.has(url)) return;
         if (visiting.has(url)) throw new Error(`Import cycle: ${url} is already being loaded`);
         visiting.add(url);
 
         let bytes: Uint8Array;
         try {
-            bytes = await fetchOnce(url);
+            bytes = await get(url);
         } catch (error) {
             throw new Error(importedBy
                 ? `Import "${url}", referenced by ${importedBy}, could not be read: ${message(error)}`
                 : `${url} could not be read: ${message(error)}`);
         }
 
-        const file = await LoadMosaicFile(bytes);
+        const alone = await LoadMosaicFile(bytes);
 
         // Imports are named relative to the archive that declares them.
         const here = url.slice(0, url.lastIndexOf("/"));
+        const imports: string[] = [];
 
-        let merged: MosaicFile | undefined;
-        for (const entry of file.index.imports ?? []) {
+        for (const entry of alone.index.imports ?? []) {
             let target: string;
             try {
                 target = resolveWithin(directory, here, entry.uri);
@@ -143,57 +122,48 @@ export async function loadArchive(
                 continue;
             }
 
-            const imported = await load(target, url);
-            merged = merged ? federate(merged, imported, true) : imported;
+            await load(target, url);
+            imports.push(target);
         }
 
         visiting.delete(url);
-        sources.push(url);
-
-        if (url === top) beneath = merged;
-
-        return merged ? federate(merged, file, true) : file;
+        graph.set(url, { url, name: url.slice(url.lastIndexOf("/") + 1), alone, imports });
     }
 
-    const file = await load(top);
+    const top = directory.replace(/\/+$/, "") + "/" + name;
+    await load(top);
 
-    // The archive on its own, which is both what an editor shows and how the nodes it
-    // writes are told apart from the ones it imported.
-    const alone = await LoadMosaicFile(await fetchOnce(top));
-    const own = new Set<string>();
-    for (const section of alone.index.sections) {
-        for (const node of section.nodes) own.add(node.id);
-    }
-
-    return { file, alone, beneath, own, sources };
+    return { top, graph };
 }
 
-/** Every archive an example lists, as tesserae the viewer can show. */
+/**
+ * Every archive an example lists, as tesserae the viewer can show.
+ *
+ * One graph serves the whole example: an archive two tesserae both import is read once
+ * and is one object, so an edit to it reaches both.
+ */
 export async function loadExample(
     directory: string,
     manifest: ExampleManifest,
     get: Fetcher = fetchBytes,
-): Promise<{ tesserae: LoadedTessera[]; warnings: string[] }> {
+): Promise<{ tesserae: LoadedTessera[]; graph: ArchiveGraph; warnings: string[] }> {
     const warnings: string[] = [];
     const tesserae: LoadedTessera[] = [];
+    const graph: ArchiveGraph = new Map();
 
     for (const name of manifest.archives) {
-        const { file, alone, beneath, own } = await loadArchive(directory, name, get, warnings);
+        const { top } = await loadArchive(directory, name, get, warnings, graph);
         const stem = name.replace(/\.[^./]+$/, "").split("/").pop() ?? name;
 
-        const version: LoadedVersion = {
+        const version = versionFrom(graph, top, {
             versionId: idFor(directory + "/" + name),
             message: "as published",
-            alone,
-            ...(beneath ? { beneath } : {}),
-            file,
-            own,
-        };
+        });
 
         tesserae.push({ id: idFor(directory + "/" + name + "#tessera"), name: stem, versions: [version] });
     }
 
-    return { tesserae, warnings };
+    return { tesserae, graph, warnings };
 }
 
 /**

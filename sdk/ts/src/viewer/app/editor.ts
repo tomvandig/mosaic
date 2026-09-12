@@ -1,5 +1,4 @@
 import type { ArchiveSource } from "../ArchiveSource.ts";
-import type { TesseraSummary, VersionRef } from "../MosaicSource.ts";
 
 /**
  * The inside of an archive, open in an editor.
@@ -129,7 +128,8 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
     let editor: any;
     /** The text of every file of the archive on show, as it currently stands. */
     let open: Record<string, string> = {};
-    let openRef: VersionRef | undefined;
+    /** The url of the archive on show, which is how the source knows it. */
+    let openUrl: string | undefined;
     let showing = "";
     let dirty = false;
     /** Set while the editor's contents are being replaced by this code rather than typed. */
@@ -144,37 +144,37 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
         note.textContent = is ? "edited" : "";
     };
 
-    /** The archives the viewer knows about, as rows in the first picker. */
-    async function fillArchives(): Promise<TesseraSummary[]> {
-        const tesserae = await source.tesserae();
+    /**
+     * Every archive that was loaded, as rows in the first picker.
+     *
+     * Not only the ones shown as tesserae: what they import is here too, marked as such,
+     * since a model a scene places is as much a file in the example as the scene is.
+     */
+    function fillArchives(): number {
+        const archives = source.archives();
 
         which.innerHTML = "";
-        for (const tessera of tesserae) {
-            for (const version of tessera.versions) {
-                const option = document.createElement("option");
-                option.value = tessera.id + " " + version.versionId;
-                option.textContent = tessera.versions.length > 1
-                    ? tessera.name + " · " + (version.message ?? version.versionId.slice(0, 8))
-                    : tessera.name;
-                which.append(option);
-            }
+        for (const archive of archives) {
+            const option = document.createElement("option");
+            option.value = archive.url;
+            option.textContent = archive.imported ? archive.name + "  (imported)" : archive.name;
+            which.append(option);
         }
 
-        return tesserae;
+        return archives.length;
     }
 
     /** Reads one archive's files in, and shows the first of them. */
-    function openArchive(value: string): void {
-        const [tesseraId, versionId] = value.split(" ");
-        if (!tesseraId || !versionId) return;
+    function openArchive(url: string): void {
+        if (!url) return;
 
-        const held = source.filesOf({ tesseraId, versionId });
+        const held = source.filesOf(url);
         if (!held) {
             note.textContent = "that archive is not open";
             return;
         }
 
-        openRef = { tesseraId, versionId };
+        openUrl = url;
         open = { ...held.files };
 
         // index.json first; the component tables are alphabetical after it, which is the
@@ -220,16 +220,16 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
     files.onchange = () => showFile(files.value);
 
     revert.onclick = () => {
-        if (openRef) openArchive(openRef.tesseraId + " " + openRef.versionId);
+        if (openUrl) openArchive(openUrl);
     };
 
     save.onclick = async () => {
-        if (!openRef) return;
+        if (!openUrl) return;
         if (showing) open[showing] = editor.getValue();
 
         save.disabled = true;
         try {
-            const { warnings } = source.replaceFiles(openRef, open);
+            const { warnings } = source.replaceFiles(openUrl, open);
             markDirty(false);
 
             await onSaved();
@@ -281,13 +281,12 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
             note.textContent = "";
         }
 
-        const tesserae = await fillArchives();
-        if (tesserae.length === 0) {
+        if (fillArchives() === 0) {
             note.textContent = "nothing to look inside yet";
             return;
         }
 
-        if (!openRef) openArchive(which.value);
+        if (!openUrl) openArchive(which.value);
     };
 
     toggle.onclick = () => void setOpen(drawer.hidden);

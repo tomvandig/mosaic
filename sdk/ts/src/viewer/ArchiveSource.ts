@@ -10,42 +10,107 @@ import type {
 } from "./MosaicSource.ts";
 
 /**
- * One version of one tessera, as the archive it was loaded from.
+ * One .tsr, as it was written.
  *
- * The archive is kept twice over: as it was written, and as it reads once its imports are
- * merged underneath it. Both are needed. Drawing wants the merged one, and editing wants
- * the written one -- what someone opens and changes is the file, not the file plus
- * everything it pulled in, and the merge has to be redone afterwards rather than undone.
+ * Nothing is merged in here. What an archive imports is named, not included, and the
+ * merging happens when a version is asked about -- so that every file in an example is
+ * still a file in its own right, one that can be opened and edited on its own, however
+ * many others it is folded into when drawn.
+ */
+export interface LoadedArchive {
+    /** Where it was read from, which is how everything else refers to it. */
+    url: string;
+    /** The file name, for showing. */
+    name: string;
+    alone: MosaicFile;
+    /** The archives it imports, in the order it names them, by url. */
+    imports: string[];
+}
+
+/** Every archive one example reached, by url. Shared by all the versions in it. */
+export type ArchiveGraph = Map<string, LoadedArchive>;
+
+/**
+ * One version of one tessera: an archive in the graph, and what it reads as with its
+ * imports merged underneath.
+ *
+ * `file` and `own` are worked out from the graph, not stored alongside it -- an edit to
+ * any archive in the graph can change both for every version above it, so they are
+ * rebuilt rather than kept.
  */
 export interface LoadedVersion {
     versionId: string;
     message?: string;
     author?: string;
-    /** The archive as written, which is what its own files say. */
-    alone: MosaicFile;
-    /**
-     * Everything it imports, already merged. Absent when it imports nothing.
-     *
-     * Imports are resolved when the archive is loaded rather than when it is asked about,
-     * because resolving one means fetching more files.
-     */
-    beneath?: MosaicFile;
-    /** `alone` layered over `beneath`. Rebuilt whenever `alone` changes. */
+    /** The archive this version is, as a key into the graph. */
+    top: string;
+    graph: ArchiveGraph;
+    /** `top` layered over everything it imports. Rebuilt whenever the graph changes. */
     file: MosaicFile;
     /**
-     * The nodes this archive writes itself, as opposed to the ones it got from an import.
+     * The nodes `top` writes itself, as opposed to the ones it got from an import.
      * Which archive a node belongs to is a question the viewer asks about every node it
-     * draws, and it cannot be recovered once the files are merged.
+     * draws, and it cannot be recovered from the merged file.
      */
     own: Set<string>;
 }
 
 /** The files inside an archive, as the zip holds them. */
 export interface ArchiveFiles {
-    /** The tessera's name, for the panel heading. */
+    url: string;
+    /** The file name, for the panel heading. */
     name: string;
     /** Filename to contents: `index.json`, and one `.ndjson` per component type. */
     files: Record<string, string>;
+}
+
+/**
+ * An archive with its imports merged underneath it, the way the composer does it: each
+ * import in the order named, then the archive itself over them so its sections win.
+ */
+export function mergedFrom(graph: ArchiveGraph, url: string, memo = new Map<string, MosaicFile>()): MosaicFile {
+    const done = memo.get(url);
+    if (done) return done;
+
+    const archive = graph.get(url);
+    if (!archive) throw new Error(`${url} is not in the graph`);
+
+    let beneath: MosaicFile | undefined;
+    for (const dep of archive.imports) {
+        const imported = mergedFrom(graph, dep, memo);
+        beneath = beneath ? federate(beneath, imported, true) : imported;
+    }
+
+    const merged = beneath ? federate(beneath, archive.alone, true) : archive.alone;
+    memo.set(url, merged);
+    return merged;
+}
+
+/** The node ids an archive writes itself. */
+export function ownNodesOf(alone: MosaicFile): Set<string> {
+    const own = new Set<string>();
+    for (const section of alone.index.sections) {
+        for (const node of section.nodes) own.add(node.id);
+    }
+    return own;
+}
+
+/** A version of the archive at `top`, with its merged file and its own nodes worked out. */
+export function versionFrom(
+    graph: ArchiveGraph,
+    top: string,
+    about: { versionId: string; message?: string; author?: string },
+): LoadedVersion {
+    const archive = graph.get(top);
+    if (!archive) throw new Error(`${top} is not in the graph`);
+
+    return {
+        ...about,
+        top,
+        graph,
+        file: mergedFrom(graph, top),
+        own: ownNodesOf(archive.alone),
+    };
 }
 
 export interface LoadedTessera {
@@ -98,20 +163,14 @@ export class ArchiveSource implements MosaicSource {
      * shows as it is, and one that does not shows what it has.
      */
     async add(name: string, bytes: Uint8Array): Promise<TesseraSummary> {
-        const file = await LoadMosaicFile(bytes);
+        const alone = await LoadMosaicFile(bytes);
 
-        const own = new Set<string>();
-        for (const section of file.index.sections) {
-            for (const node of section.nodes) own.add(node.id);
-        }
+        // A url of its own, so it can sit in the files list beside archives that have one.
+        const url = "dropped:" + name;
+        const graph: ArchiveGraph = new Map([[url, { url, name, alone, imports: [] }]]);
 
-        return this.put(name.replace(/\.tsr$/i, ""), {
-            versionId: crypto.randomUUID(),
-            message: "dropped in",
-            alone: file,
-            file,
-            own,
-        });
+        return this.put(name.replace(/\.tsr$/i, ""),
+            versionFrom(graph, url, { versionId: crypto.randomUUID(), message: "dropped in" }));
     }
 
     /** Adds a tessera, or another version of one already here under that name. */
@@ -127,6 +186,45 @@ export class ArchiveSource implements MosaicSource {
 
     // --- what is inside an archive ------------------------------------------
 
+    /** Every archive graph any version here points into, each once. */
+    private graphs(): ArchiveGraph[] {
+        const seen = new Set<ArchiveGraph>();
+        for (const tessera of this.held.values()) {
+            for (const version of tessera.versions) seen.add(version.graph);
+        }
+        return [...seen];
+    }
+
+    /** The archive at a url, from whichever graph has it. */
+    private archiveAt(url: string): LoadedArchive | undefined {
+        for (const graph of this.graphs()) {
+            const found = graph.get(url);
+            if (found) return found;
+        }
+        return undefined;
+    }
+
+    /**
+     * Every archive that was loaded, whether it is shown as a tessera or only imported by
+     * one. Roots first -- the archives nothing here imports -- since those are the ones
+     * someone is most likely to have come looking for.
+     */
+    archives(): Array<{ url: string; name: string; imported: boolean }> {
+        const all = new Map<string, LoadedArchive>();
+        const importedUrls = new Set<string>();
+
+        for (const graph of this.graphs()) {
+            for (const archive of graph.values()) {
+                all.set(archive.url, archive);
+                for (const dep of archive.imports) importedUrls.add(dep);
+            }
+        }
+
+        return [...all.values()]
+            .map(archive => ({ url: archive.url, name: archive.name, imported: importedUrls.has(archive.url) }))
+            .sort((a, b) => Number(a.imported) - Number(b.imported) || a.name.localeCompare(b.name));
+    }
+
     /**
      * The files an archive is made of, as text.
      *
@@ -135,34 +233,33 @@ export class ArchiveSource implements MosaicSource {
      * is shown is the archive as written, without what it imports, since that is what
      * editing it would change.
      */
-    filesOf(ref: VersionRef): ArchiveFiles | undefined {
-        const tessera = this.held.get(ref.tesseraId);
-        const version = tessera?.versions.find(one => one.versionId === ref.versionId);
-        if (!tessera || !version) return undefined;
+    filesOf(url: string): ArchiveFiles | undefined {
+        const archive = this.archiveAt(url);
+        if (!archive) return undefined;
 
         const files: Record<string, string> = {
-            "index.json": JSON.stringify(version.alone.index, null, 4),
+            "index.json": JSON.stringify(archive.alone.index, null, 4),
         };
 
-        for (const [type, rows] of version.alone.serializedComponents) {
+        for (const [type, rows] of archive.alone.serializedComponents) {
             files[type + ".ndjson"] = rows.join("\n");
         }
 
-        return { name: tessera.name, files };
+        return { url, name: archive.name, files };
     }
 
     /**
      * Puts edited files back, in place of the archive they came from.
      *
-     * The imports are merged again afterwards rather than kept: an edit can add one, or
-     * change which node a component belongs to, and a stale merge would show the old
-     * answer. What it cannot do is fetch a newly named import -- nothing here has a
-     * network -- so a new import is reported rather than silently ignored.
+     * Everything above the edited archive is merged again afterwards: an edit to a model
+     * changes every scene that imports it, and an edit can add an import or move a
+     * component to another node, so no merge that included it can be trusted. What it
+     * cannot do is fetch a newly named import -- nothing here has a network -- so a new
+     * import is reported rather than silently ignored.
      */
-    replaceFiles(ref: VersionRef, files: Record<string, string>): { warnings: string[] } {
-        const tessera = this.held.get(ref.tesseraId);
-        const version = tessera?.versions.find(one => one.versionId === ref.versionId);
-        if (!tessera || !version) throw new Error("that archive is not open");
+    replaceFiles(url: string, files: Record<string, string>): { warnings: string[] } {
+        const archive = this.archiveAt(url);
+        if (!archive) throw new Error("that archive is not open");
 
         const index = files["index.json"];
         if (index === undefined) throw new Error("an archive needs an index.json");
@@ -176,19 +273,24 @@ export class ArchiveSource implements MosaicSource {
         }
 
         const warnings: string[] = [];
-        const had = new Set((version.alone.index.imports ?? []).map(entry => entry.uri));
+        const had = new Set((archive.alone.index.imports ?? []).map(entry => entry.uri));
         for (const entry of edited.index.imports ?? []) {
             if (!had.has(entry.uri)) {
                 warnings.push(`import "${entry.uri}" was added; reload the example to fetch it`);
             }
         }
 
-        version.alone = edited;
-        version.file = version.beneath ? federate(version.beneath, edited, true) : edited;
+        // The archive is shared by every graph that holds it, so one change reaches all.
+        archive.alone = edited;
 
-        version.own = new Set();
-        for (const section of edited.index.sections) {
-            for (const node of section.nodes) version.own.add(node.id);
+        // Rebuilt for every version whose graph has this archive in it -- not only the one
+        // that is this archive, but anything that imports it, however far up.
+        for (const tessera of this.held.values()) {
+            for (const version of tessera.versions) {
+                if (!version.graph.has(url)) continue;
+                version.file = mergedFrom(version.graph, version.top);
+                version.own = ownNodesOf(version.graph.get(version.top)!.alone);
+            }
         }
 
         return { warnings };

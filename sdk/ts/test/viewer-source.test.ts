@@ -6,7 +6,7 @@ import { LoadMosaicFile } from "../src/MosaicFile.ts";
 import { collapseNodesByPath } from "../src/MosaicFileOperations.ts";
 import { parseGlb } from "../src/gltf/GltfDocument.ts";
 import { loadWithImports } from "../src/composition/ComposeFs.ts";
-import { ArchiveSource, type LoadedTessera } from "../src/viewer/ArchiveSource.ts";
+import { ArchiveSource, mergedFrom, versionFrom, type LoadedTessera } from "../src/viewer/ArchiveSource.ts";
 import { loadArchive, resolveWithin, type Fetcher } from "../src/viewer/FetchArchives.ts";
 import { GEOMETRY_COMPONENTS } from "../src/viewer/Components.ts";
 import { DATA_DIR } from "./fixtures.ts";
@@ -17,30 +17,34 @@ const serve: Fetcher = async url => new Uint8Array(fs.readFileSync(url));
 /** test-data, named the way a url names it, since that is what the loader takes. */
 const DIR = DATA_DIR.split(path.sep).join("/");
 
-/** One tessera per archive, as the static viewer builds them. */
+/** One tessera per archive, as the static viewer builds them, sharing one graph. */
 async function sourceOf(...archives: string[]): Promise<ArchiveSource> {
     const loaded: LoadedTessera[] = [];
+    const graph = new Map();
 
     for (const name of archives) {
-        const { file, alone, beneath, own } = await loadArchive(DIR, name, serve);
+        const { top } = await loadArchive(DIR, name, serve, [], graph);
         loaded.push({
             id: "t-" + name,
             name,
-            versions: [{ versionId: "v-" + name, alone, ...(beneath ? { beneath } : {}), file, own }],
+            versions: [versionFrom(graph, top, { versionId: "v-" + name })],
         });
     }
 
     return new ArchiveSource(loaded);
 }
 
+/** The url an archive in test-data is known by inside a source. */
+const urlOf = (name: string) => DIR + "/" + name;
+
 const allOf = (source: ArchiveSource, names: string[]) =>
     names.map(name => ({ tesseraId: "t-" + name, versionId: "v-" + name }));
 
 test("an import is followed and merged underneath, as it is on disk", async () => {
-    const overFetch = await loadArchive(DIR, "helmet-plaza.tsr", serve);
+    const { top, graph } = await loadArchive(DIR, "helmet-plaza.tsr", serve);
     const overDisk = await loadWithImports(path.join(DATA_DIR, "helmet-plaza.tsr"));
 
-    const fetched = [...collapseNodesByPath(overFetch.file).keys()].sort();
+    const fetched = [...collapseNodesByPath(mergedFrom(graph, top)).keys()].sort();
     const read = [...collapseNodesByPath(overDisk.file).keys()].sort();
 
     assert.deepEqual(fetched, read, "fetching the imports gives the same nodes as reading them");
@@ -48,7 +52,8 @@ test("an import is followed and merged underneath, as it is on disk", async () =
 });
 
 test("what the archive writes itself is kept apart from what it imported", async () => {
-    const { own } = await loadArchive(DIR, "helmet-plaza.tsr", serve);
+    const { top, graph } = await loadArchive(DIR, "helmet-plaza.tsr", serve);
+    const { own } = versionFrom(graph, top, { versionId: "v" });
     const alone = await LoadMosaicFile(new Uint8Array(fs.readFileSync(path.join(DATA_DIR, "helmet-plaza.tsr"))));
     const helmet = await LoadMosaicFile(new Uint8Array(fs.readFileSync(path.join(DATA_DIR, "helmet.tsr"))));
 
@@ -63,11 +68,11 @@ test("what the archive writes itself is kept apart from what it imported", async
 
 test("an import that is not a path is skipped, and said so", async () => {
     const warnings: string[] = [];
-    const { file } = await loadArchive(DIR, "linked-house.tsr", serve, warnings);
+    const { top, graph } = await loadArchive(DIR, "linked-house.tsr", serve, warnings);
 
     assert.equal(warnings.length, 1, "one import could not be fetched");
     assert.match(warnings[0]!, /site-survey/, "and it says which");
-    assert.ok(collapseNodesByPath(file).size > 0, "the rest of it still loaded");
+    assert.ok(collapseNodesByPath(mergedFrom(graph, top)).size > 0, "the rest of it still loaded");
 });
 
 test("an import resolves against the file that declares it", () => {
@@ -170,9 +175,9 @@ test("a source with nothing in it answers rather than throwing", async () => {
 
 test("an archive can be added after the fact, the way a drop does it", async () => {
     const source = new ArchiveSource();
-    const { file, alone, own } = await loadArchive(DIR, "helmet.tsr", serve);
+    const { top, graph } = await loadArchive(DIR, "helmet.tsr", serve);
 
-    const summary = source.put("helmet", { versionId: "v1", alone, file, own });
+    const summary = source.put("helmet", versionFrom(graph, top, { versionId: "v1" }));
 
     assert.equal(summary.name, "helmet");
     assert.equal((await source.tesserae()).length, 1);
@@ -183,9 +188,8 @@ test("an archive can be added after the fact, the way a drop does it", async () 
 
 test("an archive opens as the files it is made of", async () => {
     const source = await sourceOf("helmet-plaza.tsr");
-    const [ref] = allOf(source, ["helmet-plaza.tsr"]);
 
-    const held = source.filesOf(ref!);
+    const held = source.filesOf(urlOf("helmet-plaza.tsr"));
     assert.ok(held, "the archive is there to open");
 
     assert.ok(held!.files["index.json"], "an archive has an index");
@@ -202,15 +206,16 @@ test("an archive opens as the files it is made of", async () => {
 test("what is saved is what is drawn afterwards", async () => {
     const source = await sourceOf("typed-boxes.tsr");
     const [ref] = allOf(source, ["typed-boxes.tsr"]);
+    const url = urlOf("typed-boxes.tsr");
 
     const before = await source.scene({ versions: [ref!], compose: true });
     const named = Object.values(before.nodes).find(node => node.name !== null)!;
 
-    const held = source.filesOf(ref!)!;
+    const held = source.filesOf(url)!;
     const edited = held.files["index.json"]!.replace(named.name!, "Renamed by the editor");
     assert.notEqual(edited, held.files["index.json"], "the name was there to change");
 
-    const { warnings } = source.replaceFiles(ref!, { ...held.files, "index.json": edited });
+    const { warnings } = source.replaceFiles(url, { ...held.files, "index.json": edited });
     assert.deepEqual(warnings, [], "nothing to warn about");
 
     const after = await source.scene({ versions: [ref!], compose: true });
@@ -230,8 +235,9 @@ test("saving keeps what the archive imports underneath it", async () => {
     const meshesBefore = parseGlb(before).document.meshes?.length ?? 0;
 
     // Saved back unchanged: the imported helmet has to survive the round trip.
-    const held = source.filesOf(ref!)!;
-    source.replaceFiles(ref!, held.files);
+    const url = urlOf("helmet-plaza.tsr");
+    const held = source.filesOf(url)!;
+    source.replaceFiles(url, held.files);
 
     const after = await source.glb({ versions: [ref!] });
     assert.equal(parseGlb(after).document.meshes?.length, meshesBefore,
@@ -242,10 +248,11 @@ test("a broken edit is refused rather than half applied", async () => {
     const source = await sourceOf("typed-boxes.tsr");
     const [ref] = allOf(source, ["typed-boxes.tsr"]);
 
+    const url = urlOf("typed-boxes.tsr");
     const before = await source.scene({ versions: [ref!] });
-    const held = source.filesOf(ref!)!;
+    const held = source.filesOf(url)!;
 
-    assert.throws(() => source.replaceFiles(ref!, { ...held.files, "index.json": "{ not json" }));
+    assert.throws(() => source.replaceFiles(url, { ...held.files, "index.json": "{ not json" }));
 
     const after = await source.scene({ versions: [ref!] });
     assert.deepEqual(Object.keys(after.nodes).sort(), Object.keys(before.nodes).sort(),
@@ -256,15 +263,52 @@ test("an import added by an edit is reported, since it cannot be fetched", async
     const source = await sourceOf("typed-boxes.tsr");
     const [ref] = allOf(source, ["typed-boxes.tsr"]);
 
-    const held = source.filesOf(ref!)!;
+    const url = urlOf("typed-boxes.tsr");
+    const held = source.filesOf(url)!;
     const index = JSON.parse(held.files["index.json"]!);
     index.imports.push({ uri: "somewhere-else.tsr" });
 
-    const { warnings } = source.replaceFiles(ref!, {
+    const { warnings } = source.replaceFiles(url, {
         ...held.files,
         "index.json": JSON.stringify(index, null, 4),
     });
 
     assert.equal(warnings.length, 1);
     assert.match(warnings[0], /somewhere-else\.tsr/);
+});
+
+test("every archive in the example is listed, imported ones included", async () => {
+    const source = await sourceOf("helmet-plaza.tsr");
+    const archives = source.archives();
+
+    assert.deepEqual(archives.map(a => a.name), ["helmet-plaza.tsr", "helmet.tsr"],
+        "the scene first, then the model it imports");
+    assert.equal(archives[0]!.imported, false);
+    assert.equal(archives[1]!.imported, true, "and the import is marked as one");
+
+    const helmet = source.filesOf(urlOf("helmet.tsr"));
+    assert.ok(helmet, "an imported archive opens like any other");
+    assert.ok(helmet!.files["index.json"]);
+});
+
+test("editing an imported archive changes every scene that imports it", async () => {
+    const source = await sourceOf("helmet-plaza.tsr");
+    const [ref] = allOf(source, ["helmet-plaza.tsr"]);
+
+    const before = await source.scene({ versions: [ref!] });
+    const helmetNodes = Object.values(before.nodes).filter(node => node.tessera === null);
+    const named = helmetNodes.find(node => node.name !== null);
+    assert.ok(named, "the helmet has a named node the plaza did not write");
+
+    // Rename a node inside helmet.tsr, which the plaza only imports.
+    const url = urlOf("helmet.tsr");
+    const held = source.filesOf(url)!;
+    const edited = held.files["index.json"]!.replace(named!.name!, "Renamed inside the import");
+    assert.notEqual(edited, held.files["index.json"]);
+
+    source.replaceFiles(url, { ...held.files, "index.json": edited });
+
+    const after = await source.scene({ versions: [ref!] });
+    const renamed = Object.values(after.nodes).filter(node => node.name === "Renamed inside the import");
+    assert.equal(renamed.length, 1, "the scene that imports it shows the change");
 });
