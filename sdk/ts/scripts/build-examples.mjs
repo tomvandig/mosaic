@@ -1,5 +1,5 @@
 /**
- * Fills `examples/viewer/examples` with the archives the static viewer shows.
+ * Fills `docs/viewer/examples` with the archives the static viewer shows.
  *
  * Each example is a folder of its own holding everything it needs and nothing it does
  * not. That is the rule the viewer enforces from the other side: an import is resolved
@@ -7,13 +7,12 @@
  * example, so an example has to be self-contained to work at all.
  *
  * Which files those are is not listed here, only the archives to show. Everything else
- * follows from what they import -- the campus is one 13 KB file that names eleven others,
- * one of which names three more, and all fifteen are found by reading rather than by
- * being written down.
+ * follows from what they import: a scene that names a model brings the model, and it is
+ * found by reading rather than by being written down.
  *
  * Archives are deflated on the way through. They are mostly json and mostly repetition,
- * so the campus goes from 14.3 MB to 1.2 MB, which is the difference between a page that
- * opens and one that is waited for.
+ * and an archive of a few megabytes often goes to a fraction of itself, which is the
+ * difference between a page that opens and one that is waited for.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -22,38 +21,16 @@ import { LoadMosaicFile, WriteMosaicFile } from "../src/MosaicFile.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(root, "..", "..");
-const into = path.join(repo, "examples", "viewer", "examples");
+const into = path.join(repo, "docs", "viewer", "examples");
 
 /**
  * What to publish.
  *
  * `archives` names what becomes a tessera in the viewer -- one row in its list. Imports
- * are not tesserae: they are merged underneath the archive that imports them, which is
- * what the campus is, one file standing for fifteen.
+ * are not tesserae: they are merged underneath the archive that imports them, so a scene
+ * that places a model is one row, not two.
  */
 const EXAMPLES = [
-    {
-        id: "campus",
-        name: "Campus",
-        description: "Three buildings and a site, each split into structure, architecture and services, "
-            + "over a shared library of types. One archive importing eleven.",
-        from: "examples/campus",
-        archives: ["campus.tsr"],
-    },
-    {
-        id: "buildings",
-        name: "Campus, by discipline",
-        description: "The same three buildings, with each discipline as its own tessera, "
-            + "so they can be shown and hidden separately.",
-        from: "examples/campus",
-        archives: [
-            "campus-site.tsr",
-            "bldg-a-structure.tsr", "bldg-a-architecture.tsr", "bldg-a-services.tsr",
-            "bldg-b-structure.tsr", "bldg-b-architecture.tsr", "bldg-b-services.tsr",
-            "bldg-c-structure.tsr", "bldg-c-architecture.tsr", "bldg-c-services.tsr",
-        ],
-        shown: ["campus-site.tsr", "bldg-a-structure.tsr", "bldg-a-architecture.tsr"],
-    },
     {
         id: "helmet",
         name: "Helmet on a plaza",

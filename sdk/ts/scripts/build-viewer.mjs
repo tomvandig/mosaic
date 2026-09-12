@@ -9,7 +9,7 @@
  *           string, because the CLI ships as one executable with no directory to read
  *           from. It asks the server it came from.
  *
- *   static  a folder of files that needs no server at all, written to `examples/viewer`
+ *   static  a folder of files that needs no server at all, written to `docs/viewer`
  *           for github pages. It reads .tsr files beside itself and does the selection and
  *           the glTF conversion in the browser.
  *
@@ -93,7 +93,7 @@ console.log("served page  " + KB(served.length) + "  ->  " + path.relative(repo,
 
 // --- the static app ---------------------------------------------------------
 const staticScript = await bundle("boot-static.ts");
-const into = path.join(repo, "examples", "viewer");
+const into = path.join(repo, "docs", "viewer");
 fs.mkdirSync(into, { recursive: true });
 
 fs.writeFileSync(path.join(into, "index.html"), assemble(staticScript, true));

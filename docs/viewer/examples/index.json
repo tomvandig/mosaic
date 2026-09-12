@@ -1,0 +1,35 @@
+{
+  "examples": [
+    {
+      "id": "helmet",
+      "name": "Helmet on a plaza",
+      "description": "A small scene importing a model: two archives, one of which places the other.",
+      "archives": [
+        "helmet-plaza.tsr"
+      ]
+    },
+    {
+      "id": "instanced-boxes",
+      "name": "One box, many places",
+      "description": "A single mesh placed a dozen times. Every box in the tree is the same geometry.",
+      "archives": [
+        "instanced-boxes.tsr"
+      ]
+    },
+    {
+      "id": "typed-boxes",
+      "name": "Boxes by type",
+      "description": "Parts whose geometry belongs to the type they are, rather than to them. Turn compose off and they disappear.",
+      "archives": [
+        "typed-boxes.tsr"
+      ]
+    },
+    {
+      "id": "s1",
+      "name": "S1",
+      "archives": [
+        "s1-together.tsr"
+      ]
+    }
+  ]
+}

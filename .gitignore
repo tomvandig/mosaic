@@ -4,3 +4,7 @@ node_modules/
 sdk/cli/dist/
 sdk/cli/build/
 *.tsr
+
+# ...except the archives the static viewer serves, which have to be committed for github
+# pages to have anything to show
+!docs/viewer/examples/**/*.tsr
