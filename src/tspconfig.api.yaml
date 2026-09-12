@@ -6,4 +6,4 @@ options:
   "@typespec/openapi3":
     file-type: json
     emitter-output-dir: "{output-dir}"
-output-dir: "{project-root}/../../standard"
+output-dir: "{project-root}/../standard"

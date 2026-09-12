@@ -6,7 +6,7 @@ Mosaic is a file format supporting **incremental collaboration on geometric and 
 
 This repository holds the format's specification and the tooling used to work with it:
 
-- **`src/schema`** — the format definition, written in [TypeSpec](https://typespec.io), which emits the
+- **`src`** — the format definition, written in [TypeSpec](https://typespec.io), which emits the
   canonical JSON Schema.
 - **`standard`** — the emitted JSON Schema, checked in so consumers can use it without running the toolchain.
 - **`src/code-gen`** — a CLI that turns Mosaic component schemas into typed TypeScript or C# classes.
@@ -52,14 +52,14 @@ without an `operation` at all:
 ## Generating the schema
 
 ```bash
-cd src/schema-gen
+cd src
 npm install
 npm run compile-json-spec
 ```
 
-The TypeSpec compiler reads [`mosaic-json-file.tsp`](src/schema-gen/mosaic-json-file.tsp) and writes JSON
+The TypeSpec compiler reads [`mosaic-json-file.tsp`](src/mosaic-json-file.tsp) and writes JSON
 Schema to [`standard/`](standard/), as configured in
-[`tspconfig.yaml`](src/schema-gen/tspconfig.yaml). Commit the regenerated output alongside the spec change.
+[`tspconfig.yaml`](src/tspconfig.yaml). Commit the regenerated output alongside the spec change.
 
 ## Generating code from component schemas
 
@@ -316,12 +316,12 @@ installed, and a database command with nothing to load says exactly what it look
 
 ## The HTTP API
 
-[`src/schema/mosaic-api.tsp`](src/schema/mosaic-api.tsp) describes an API for keeping tesserae and their
+[`src/mosaic-api.tsp`](src/mosaic-api.tsp) describes an API for keeping tesserae and their
 versions. It emits OpenAPI on its own config, since the file format's emitter has nothing to say
 about routes:
 
 ```bash
-cd src/schema
+cd src
 npm run compile-api-spec     # mosaic-api.tsp -> standard/openapi.json
 npm run gen-api-sdk          # openapi.json  -> sdk/ts/src/api/
 ```

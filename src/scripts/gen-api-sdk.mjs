@@ -14,8 +14,8 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const openApiPath = path.resolve(here, "..", "..", "..", "standard", "openapi.json");
-const outputDir = path.resolve(here, "..", "..", "..", "sdk", "ts", "src", "api");
+const openApiPath = path.resolve(here, "..", "..", "standard", "openapi.json");
+const outputDir = path.resolve(here, "..", "..", "sdk", "ts", "src", "api");
 
 const document = JSON.parse(fs.readFileSync(openApiPath, "utf-8"));
 
@@ -77,8 +77,8 @@ let types = fs.readFileSync(generated, "utf-8")
     .replace(/export interface \w+ \{[^{}]*?BlobResponse\?:[\s\S]*?\n\}\n\n/, "");
 
 types =
-`// Generated from standard/openapi.json by src/schema/scripts/gen-api-sdk.mjs.
-// Run "npm run gen-api-sdk" in src/schema after changing mosaic-api.tsp.
+`// Generated from standard/openapi.json by src/scripts/gen-api-sdk.mjs.
+// Run "npm run gen-api-sdk" in src after changing mosaic-api.tsp.
 //
 // Object schemas are sealed on the way through, so these types say exactly what each
 // model holds rather than carrying an index signature apiece.
@@ -111,8 +111,8 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
 
 routes.sort((a, b) => a.operationId.localeCompare(b.operationId));
 
-const routesFile = `// Generated from standard/openapi.json by src/schema/scripts/gen-api-sdk.mjs.
-// Run "npm run gen-api-sdk" in src/schema after changing mosaic-api.tsp.
+const routesFile = `// Generated from standard/openapi.json by src/scripts/gen-api-sdk.mjs.
+// Run "npm run gen-api-sdk" in src after changing mosaic-api.tsp.
 
 /** One operation of the API, as the spec declares it. */
 export interface ApiRoute {
@@ -267,8 +267,8 @@ function methodSource(method) {
     }`;
 }
 
-const clientFile = `// Generated from standard/openapi.json by src/schema/scripts/gen-api-sdk.mjs.
-// Run "npm run gen-api-sdk" in src/schema after changing mosaic-api.tsp.
+const clientFile = `// Generated from standard/openapi.json by src/scripts/gen-api-sdk.mjs.
+// Run "npm run gen-api-sdk" in src after changing mosaic-api.tsp.
 
 import type {
 ${modelImports.map(name => `    ${name},`).join("\n")}

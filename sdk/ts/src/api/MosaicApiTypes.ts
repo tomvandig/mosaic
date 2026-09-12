@@ -1,5 +1,5 @@
-// Generated from standard/openapi.json by src/schema/scripts/gen-api-sdk.mjs.
-// Run "npm run gen-api-sdk" in src/schema after changing mosaic-api.tsp.
+// Generated from standard/openapi.json by src/scripts/gen-api-sdk.mjs.
+// Run "npm run gen-api-sdk" in src after changing mosaic-api.tsp.
 //
 // Object schemas are sealed on the way through, so these types say exactly what each
 // model holds rather than carrying an index signature apiece.
