@@ -110,6 +110,8 @@
     display: flex; flex-direction: column; min-height: 0;
     border-top: 1px solid var(--line); background: var(--panel);
   }
+  /* An author rule beats the browser's own [hidden], so hiding it has to be said here. */
+  .editor[hidden] { display: none; }
   .editor-bar {
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     padding: 7px 12px; border-bottom: 1px solid var(--line);

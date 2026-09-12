@@ -61,6 +61,8 @@ export interface EditorOptions {
     say: (message: string, isError?: boolean) => void;
     /** Whether to start with the drawer open, as a link naming it asks for. */
     open?: boolean;
+    /** Called when the drawer is opened or hidden, so the address can keep up. */
+    onToggled?: (open: boolean) => void;
 }
 
 /**
@@ -244,10 +246,11 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
         }
     };
 
-    const setOpen = async (wanted: boolean) => {
+    const setOpen = async (wanted: boolean, quietly = false) => {
         drawer.hidden = !wanted;
         toggle.setAttribute("aria-pressed", String(wanted));
         document.body.classList.toggle("editing", wanted);
+        if (!quietly) options.onToggled?.(wanted);
 
         if (!wanted) return;
 
@@ -292,5 +295,5 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
 
     // A link can name the drawer as well as the example, so "look at this file" is a
     // thing that can be sent to someone.
-    if (options.open) await setOpen(true);
+    if (options.open) await setOpen(true, true);
 }

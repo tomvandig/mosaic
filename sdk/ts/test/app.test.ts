@@ -84,7 +84,10 @@ test("the page is served at the root", async () => {
         assert.match(html, /"three": "https:/, "three.js is named in the import map");
         assert.match(html, /id="tree"/);
         assert.match(html, /id="components"/);
-        assert.match(html, /id="compose"/, "the compose flag is on the page");
+        // Inheritance is always resolved now, so there is no flag to find -- and the page
+        // is generated from src/viewer/app, so this is also the check that it was built.
+        assert.doesNotMatch(html, /id="compose"/, "composing is not a choice the page offers");
+        assert.match(html, /id="tesserae"/, "the page is the viewer, not a placeholder");
     } finally {
         await stopped(running);
     }

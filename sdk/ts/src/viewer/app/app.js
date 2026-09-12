@@ -64,7 +64,14 @@ let source = null;
 /** The types of source that offer more than reading, for the parts of the UI that need it. */
 const canUpload = () => typeof source?.add === "function";
 
-const compose = () => $("compose").checked;
+/**
+ * Inheritance is always resolved.
+ *
+ * It used to be a tick box, which meant the viewer had a setting whose only honest answer
+ * was "on": a part whose geometry belongs to the type it is-a draws nothing without it,
+ * and there is nothing to be learned from looking at a building with half of it missing.
+ */
+const compose = () => true;
 
 /** The versions on show, as the "tessera:version" pairs the endpoints take. */
 function shownVersions() {
@@ -1225,12 +1232,11 @@ async function intoViewer(saying, pending) {
     const summary = await drawing.show(bytes);
 
     // A selection can be all links and no geometry, which looks like a broken viewer
-    // rather than what it is: a part drawing its type's mesh, with compose turned off.
+    // rather than what it is: nodes that carry no mesh of their own.
     // What decides it is what came out of the drawing, not what the meshes header said --
     // an SVG is drawable and is not a mesh, so a file can have none and still show.
     if (summary.drawn === 0) {
-      say((nodes ? nodes + " nodes, " : "") + "nothing to draw in the answer"
-          + (compose() ? "" : " — tick compose if it comes from a type"), true);
+      say((nodes ? nodes + " nodes, " : "") + "nothing to draw in the answer", true);
       return;
     }
 
@@ -1265,12 +1271,6 @@ $("file").onchange = async event => {
   event.target.value = "";
   await loadTesserae();
   if (last) await loadScene();
-};
-
-$("compose").onchange = async () => {
-  const selected = state.selected;
-  await loadScene();
-  if (selected && state.scene?.nodes[selected]) select(selected);
 };
 
 $("whole").onclick = () => showEverything();

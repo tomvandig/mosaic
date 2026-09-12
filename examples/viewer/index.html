@@ -124,6 +124,8 @@
     display: flex; flex-direction: column; min-height: 0;
     border-top: 1px solid var(--line); background: var(--panel);
   }
+  /* An author rule beats the browser's own [hidden], so hiding it has to be said here. */
+  .editor[hidden] { display: none; }
   .editor-bar {
     display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
     padding: 7px 12px; border-bottom: 1px solid var(--line);
@@ -144,9 +146,6 @@
 <header>
   <h1>Mosaic</h1>
   <label>upload <input id="file" type="file" accept=".tsr" multiple></label>
-  <label title="Resolve inheritance before answering, the way composing does. A part whose geometry belongs to the type it is-a has none of its own until this is on.">
-    <input id="compose" type="checkbox" checked> compose
-  </label>
   <button id="whole">Show everything</button>
   <span class="status" id="status"></span>
 </header>

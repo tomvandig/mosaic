@@ -54,18 +54,54 @@ function picker(examples: ExampleManifest[], onChoose: (id: string) => void): HT
 }
 
 /**
- * What a hash asks for: an example, and whether the files drawer is open.
+ * What the address asks for: an example, and whether the files drawer is open.
  *
- * Written as `#campus` or `#campus/files`, so a link can point at either.
+ * `?example=campus`, and `?example=campus&files` for the drawer as well. A reload keeps
+ * what was being looked at, and a link to it is the address bar rather than something to
+ * be assembled by hand.
+ *
+ * The older `#campus` form is still read, since links to it exist; choosing anything
+ * rewrites the address to the query form.
  */
 function asked(): { id: string; files: boolean } {
-    const raw = decodeURIComponent(location.hash.replace(/^#/, ""));
-    const files = raw.endsWith("/files");
-    return { id: files ? raw.slice(0, -"/files".length) : raw, files };
+    const query = new URLSearchParams(location.search);
+    const named = query.get("example");
+
+    if (named !== null) {
+        // `?files` and `?files=1` both open it; anything explicitly off does not.
+        const flag = query.get("files");
+        const files = flag !== null && flag !== "0" && flag !== "false";
+        return { id: named, files };
+    }
+
+    const hash = decodeURIComponent(location.hash.replace(/^#/, ""));
+    const files = hash.endsWith("/files");
+    return { id: files ? hash.slice(0, -"/files".length) : hash, files };
+}
+
+/**
+ * Puts the choice in the address bar.
+ *
+ * Opening the page is a replacement -- there is nothing to go back to -- and choosing
+ * afterwards is a step, so the browser's back button walks through what was looked at.
+ */
+function remember(id: string, files: boolean, replace: boolean): void {
+    const query = new URLSearchParams(location.search);
+    query.set("example", id);
+    if (files) query.set("files", "1");
+    else query.delete("files");
+
+    const url = location.pathname + "?" + query.toString();
+    if (replace) history.replaceState({ id, files }, "", url);
+    else history.pushState({ id, files }, "", url);
 }
 
 /** Loads one example and shows it. */
-async function show(example: ExampleManifest, openFiles: boolean): Promise<void> {
+async function show(
+    example: ExampleManifest,
+    openFiles: boolean,
+    onFilesToggled: (open: boolean) => void,
+): Promise<void> {
     const directory = EXAMPLES + "/" + example.id;
     say("reading " + example.name + "…");
 
@@ -80,7 +116,13 @@ async function show(example: ExampleManifest, openFiles: boolean): Promise<void>
     document.getElementById("editor")?.remove();
     document.body.classList.remove("editing");
 
-    await mountEditor({ source, onSaved: () => reload(), say, open: openFiles });
+    await mountEditor({
+        source,
+        onSaved: () => reload(),
+        say,
+        open: openFiles,
+        onToggled: onFilesToggled,
+    });
 
     // What the manifest says to show, or everything it lists.
     const wanted = example.shown ?? example.archives;
@@ -122,32 +164,40 @@ async function main(): Promise<void> {
         return;
     }
 
-    const choose = async (id: string, openFiles = false) => {
+    /** Whether the drawer is open, kept so the address can say so as it changes. */
+    let filesOpen = false;
+
+    const choose = async (id: string, openFiles = false, replace = false) => {
         const example = index.examples.find(one => one.id === id) ?? index.examples[0]!;
-        location.hash = example.id + (openFiles ? "/files" : "");
+        filesOpen = openFiles;
+        remember(example.id, openFiles, replace);
+
         try {
-            await show(example, openFiles);
+            await show(example, openFiles, open => {
+                filesOpen = open;
+                remember(example.id, open, true);
+            });
         } catch (error) {
             say(example.name + ": " + (error instanceof Error ? error.message : String(error)), true);
         }
     };
 
-    // A link to an example is a link to that example, so the hash decides what opens.
+    // A link to an example is a link to that example, so the address decides what opens.
     const wanted = asked();
     const opening = index.examples.find(one => one.id === wanted.id) ?? index.examples[0]!;
 
-    const select = picker(index.examples, id => void choose(id));
+    const select = picker(index.examples, id => void choose(id, filesOpen));
     select.value = opening.id;
 
-    window.addEventListener("hashchange", () => {
+    // Back and forward walk through what was looked at, rather than leaving the page.
+    window.addEventListener("popstate", () => {
         const now = asked();
-        if (now.id && now.id !== select.value && index.examples.some(one => one.id === now.id)) {
-            select.value = now.id;
-            void choose(now.id, now.files);
-        }
+        const id = index.examples.some(one => one.id === now.id) ? now.id : opening.id;
+        select.value = id;
+        void choose(id, now.files, true);
     });
 
-    await choose(opening.id, wanted.files);
+    await choose(opening.id, wanted.files, true);
 }
 
 await main();

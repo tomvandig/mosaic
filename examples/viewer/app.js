@@ -4595,10 +4595,11 @@ async function mountEditor(options) {
       save.disabled = false;
     }
   };
-  const setOpen = async (wanted) => {
+  const setOpen = async (wanted, quietly = false) => {
     drawer.hidden = !wanted;
     toggle.setAttribute("aria-pressed", String(wanted));
     document.body.classList.toggle("editing", wanted);
+    if (!quietly) options.onToggled?.(wanted);
     if (!wanted) return;
     if (!editor) {
       note.textContent = "loading the editor\u2026";
@@ -4635,7 +4636,7 @@ async function mountEditor(options) {
   };
   toggle.onclick = () => void setOpen(drawer.hidden);
   close.onclick = () => void setOpen(false);
-  if (options.open) await setOpen(true);
+  if (options.open) await setOpen(true, true);
 }
 
 // src/viewer/app/app.js
@@ -4677,7 +4678,7 @@ function say(message2, isError = false) {
 }
 var source = null;
 var canUpload = () => typeof source?.add === "function";
-var compose = () => $("compose").checked;
+var compose = () => true;
 function shownVersions() {
   const pairs = [];
   for (const tessera of state.tesserae) {
@@ -5387,7 +5388,7 @@ async function intoViewer(saying, pending) {
     say("drawing " + (bytes.byteLength / 1048576).toFixed(1) + " MB of glb\u2026");
     const summary = await drawing.show(bytes);
     if (summary.drawn === 0) {
-      say((nodes ? nodes + " nodes, " : "") + "nothing to draw in the answer" + (compose() ? "" : " \u2014 tick compose if it comes from a type"), true);
+      say((nodes ? nodes + " nodes, " : "") + "nothing to draw in the answer", true);
       return;
     }
     say((nodes ? nodes + " nodes, " : "") + (meshes ? meshes + " meshes, " : "") + bytes.byteLength + " bytes of glb \u2014 " + summary.text);
@@ -5413,11 +5414,6 @@ $("file").onchange = async (event) => {
   event.target.value = "";
   await loadTesserae();
   if (last) await loadScene();
-};
-$("compose").onchange = async () => {
-  const selected = state.selected;
-  await loadScene();
-  if (selected && state.scene?.nodes[selected]) select(selected);
 };
 $("whole").onclick = () => showEverything();
 async function reload() {
@@ -5472,11 +5468,27 @@ function picker(examples, onChoose) {
   return select2;
 }
 function asked() {
-  const raw = decodeURIComponent(location.hash.replace(/^#/, ""));
-  const files = raw.endsWith("/files");
-  return { id: files ? raw.slice(0, -"/files".length) : raw, files };
+  const query = new URLSearchParams(location.search);
+  const named = query.get("example");
+  if (named !== null) {
+    const flag = query.get("files");
+    const files2 = flag !== null && flag !== "0" && flag !== "false";
+    return { id: named, files: files2 };
+  }
+  const hash = decodeURIComponent(location.hash.replace(/^#/, ""));
+  const files = hash.endsWith("/files");
+  return { id: files ? hash.slice(0, -"/files".length) : hash, files };
 }
-async function show(example, openFiles) {
+function remember(id, files, replace) {
+  const query = new URLSearchParams(location.search);
+  query.set("example", id);
+  if (files) query.set("files", "1");
+  else query.delete("files");
+  const url = location.pathname + "?" + query.toString();
+  if (replace) history.replaceState({ id, files }, "", url);
+  else history.pushState({ id, files }, "", url);
+}
+async function show(example, openFiles, onFilesToggled) {
   const directory = EXAMPLES + "/" + example.id;
   say2("reading " + example.name + "\u2026");
   const { tesserae, warnings } = await loadExample(directory, example, void 0);
@@ -5485,7 +5497,13 @@ async function show(example, openFiles) {
   document.getElementById("files-toggle")?.remove();
   document.getElementById("editor")?.remove();
   document.body.classList.remove("editing");
-  await mountEditor({ source: source2, onSaved: () => reload(), say: say2, open: openFiles });
+  await mountEditor({
+    source: source2,
+    onSaved: () => reload(),
+    say: say2,
+    open: openFiles,
+    onToggled: onFilesToggled
+  });
   const wanted = example.shown ?? example.archives;
   const stems = new Set(wanted.map((name) => name.replace(/\.[^./]+$/, "").split("/").pop()));
   for (const tessera of await source2.tesserae()) {
@@ -5517,26 +5535,30 @@ async function main() {
     await start(new ArchiveSource());
     return;
   }
-  const choose = async (id, openFiles = false) => {
+  let filesOpen = false;
+  const choose = async (id, openFiles = false, replace = false) => {
     const example = index.examples.find((one) => one.id === id) ?? index.examples[0];
-    location.hash = example.id + (openFiles ? "/files" : "");
+    filesOpen = openFiles;
+    remember(example.id, openFiles, replace);
     try {
-      await show(example, openFiles);
+      await show(example, openFiles, (open) => {
+        filesOpen = open;
+        remember(example.id, open, true);
+      });
     } catch (error) {
       say2(example.name + ": " + (error instanceof Error ? error.message : String(error)), true);
     }
   };
   const wanted = asked();
   const opening = index.examples.find((one) => one.id === wanted.id) ?? index.examples[0];
-  const select2 = picker(index.examples, (id) => void choose(id));
+  const select2 = picker(index.examples, (id) => void choose(id, filesOpen));
   select2.value = opening.id;
-  window.addEventListener("hashchange", () => {
+  window.addEventListener("popstate", () => {
     const now = asked();
-    if (now.id && now.id !== select2.value && index.examples.some((one) => one.id === now.id)) {
-      select2.value = now.id;
-      void choose(now.id, now.files);
-    }
+    const id = index.examples.some((one) => one.id === now.id) ? now.id : opening.id;
+    select2.value = id;
+    void choose(id, now.files, true);
   });
-  await choose(opening.id, wanted.files);
+  await choose(opening.id, wanted.files, true);
 }
 await main();

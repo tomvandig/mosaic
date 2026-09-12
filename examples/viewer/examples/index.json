@@ -53,6 +53,13 @@
       "archives": [
         "typed-boxes.tsr"
       ]
+    },
+    {
+      "id": "s1",
+      "name": "S1",
+      "archives": [
+        "s1-together.tsr"
+      ]
     }
   ]
 }
