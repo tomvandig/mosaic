@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mosaic</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+  }
+}
+</script>
+<!--STYLES-->
+</head>
+<body>
+<header>
+  <h1>Mosaic</h1>
+  <label>upload <input id="file" type="file" accept=".tsr" multiple></label>
+  <label title="Resolve inheritance before answering, the way composing does. A part whose geometry belongs to the type it is-a has none of its own until this is on.">
+    <input id="compose" type="checkbox" checked> compose
+  </label>
+  <button id="whole">Show everything</button>
+  <span class="status" id="status"></span>
+</header>
+
+<main>
+  <div class="column">
+    <section class="tesserae">
+      <h2>Tesserae</h2>
+      <div class="scroll" id="tesserae"><p class="empty">Upload a .tsr to begin.</p></div>
+    </section>
+    <section class="tree">
+      <h2>Tree</h2>
+      <div class="scroll" id="tree"><p class="empty">Tick a tessera to show it.</p></div>
+      <div class="warnings" id="warnings" hidden></div>
+    </section>
+  </div>
+  <section>
+    <h2>3D <span class="stats" id="stats"></span></h2>
+    <div class="stage"><canvas id="viewer"></canvas></div>
+  </section>
+  <section>
+    <h2>Components</h2>
+    <div class="scroll" id="components"><p class="empty">Select a node.</p></div>
+  </section>
+</main>
+
+<!--SCRIPT-->
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  // The parts of the viewer that run in a browser.
+  //
+  // They are checked apart from the rest because they need the DOM, and the rest is a
+  // node library that should not be able to reach for `document` by accident. Everything
+  // they import from the SDK is checked by the main project as usual.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  // The main project excludes these; this is the project that has them.
+  "exclude": [],
+  "include": ["src/viewer/app/**/*.ts"]
+}
