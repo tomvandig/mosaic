@@ -8,11 +8,11 @@ let loaded: DuckDBModule | undefined;
 /**
  * Finds DuckDB at run time rather than at build time.
  *
- * `@duckdb/node-api` is a native module, so it cannot be bundled into the single-file
- * executable the CLI ships as. Loading it on demand keeps the executable free of it: the
- * archive commands never touch this, and a command that reads a database resolves the
- * module when it runs -- from the process, from the working directory, or from wherever
- * `MOSAIC_DUCKDB` points.
+ * `@duckdb/node-api` is JavaScript over a native addon. The CLI bundles the JavaScript and
+ * carries the addon inside its executable, so the import below is the path that is taken
+ * there; the rest is for anything holding this library another way -- a build that left
+ * DuckDB out, or a caller pointing `MOSAIC_DUCKDB` at an install of its own. The archive
+ * commands never touch any of it, which is why it is loaded on demand at all.
  */
 export async function duckdb(): Promise<DuckDBModule> {
     if (loaded) return loaded;

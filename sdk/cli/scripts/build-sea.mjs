@@ -4,6 +4,8 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -14,6 +16,7 @@ const exeName = isWindows ? "mosaic.exe" : "mosaic";
 const exePath = path.join(buildDir, exeName);
 
 const run = (cmd, args) => execFileSync(cmd, args, { cwd: root, stdio: "inherit" });
+const MB = bytes => (bytes / 1048576).toFixed(1) + " MB";
 
 /**
  * Replaces just the files this script produces, rather than the whole directory.
@@ -39,8 +42,74 @@ fs.mkdirSync(buildDir, { recursive: true });
 removeWithRetries(exePath);
 removeWithRetries(path.join(buildDir, "mosaic.blob"));
 
+/**
+ * DuckDB's binaries, compressed, as assets for the executable to carry.
+ *
+ * Only the host's binaries go in: this script copies the node binary it is running under,
+ * so it was never building for anywhere else. Everything in the platform package that is
+ * not paperwork is taken -- the addon and the shared library it links against -- rather
+ * than a list of names, since which files those are differs by platform.
+ */
+function duckdbAssets() {
+    const fromSdk = createRequire(path.join(root, "node_modules", "mosaic-ts", "index.js"));
+    const pkg = `@duckdb/node-bindings-${process.platform}-${process.arch}`;
+
+    let dir;
+    try {
+        dir = path.dirname(fromSdk.resolve(`${pkg}/package.json`));
+    } catch {
+        throw new Error(
+            `${pkg} is not installed, so the executable would have no DuckDB to carry.\n` +
+            `Install the sdk/ts dependencies, or build on a platform DuckDB ships for.`);
+    }
+
+    const paperwork = new Set(["package.json", "README.md", "LICENSE"]);
+    const files = fs.readdirSync(dir).filter(name => !paperwork.has(name));
+    if (files.length === 0) throw new Error(`${pkg} has no binaries in ${dir}`);
+
+    const into = path.join(buildDir, "sea-assets");
+    fs.rmSync(into, { recursive: true, force: true });
+    fs.mkdirSync(into, { recursive: true });
+
+    const assets = {};
+    let raw = 0, packed = 0;
+
+    for (const name of files) {
+        const bytes = fs.readFileSync(path.join(dir, name));
+        // Unpacking happens once per machine, so the slower setting is the right trade:
+        // it is a smaller executable to hand around for a few hundred milliseconds paid
+        // on one run out of however many.
+        const squeezed = zlib.brotliCompressSync(bytes, {
+            params: {
+                [zlib.constants.BROTLI_PARAM_QUALITY]: 9,
+                [zlib.constants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+            },
+        });
+
+        fs.writeFileSync(path.join(into, name + ".br"), squeezed);
+        assets[`duckdb/${name}.br`] = path.relative(root, path.join(into, name + ".br"))
+            .split(path.sep).join("/");
+
+        raw += bytes.length;
+        packed += squeezed.length;
+        console.log(`  ${name.padEnd(14)} ${MB(bytes.length).padStart(9)} -> ${MB(squeezed.length)}`);
+    }
+
+    console.log(`  carrying DuckDB ${MB(raw)} as ${MB(packed)}`);
+    return assets;
+}
+
+console.log("Packing DuckDB...");
+const assets = duckdbAssets();
+
+// The checked-in config holds the settings; the assets are worked out per platform, so
+// the config the blob is actually generated from is written here.
+const base = JSON.parse(fs.readFileSync(path.join(root, "sea-config.json"), "utf-8"));
+const configPath = path.join(buildDir, "sea-config.json");
+fs.writeFileSync(configPath, JSON.stringify({ ...base, assets }, null, 4));
+
 console.log("Generating SEA blob...");
-run(process.execPath, ["--experimental-sea-config", "sea-config.json"]);
+run(process.execPath, ["--experimental-sea-config", path.relative(root, configPath)]);
 
 console.log(`Copying node binary -> ${exePath}`);
 fs.copyFileSync(process.execPath, exePath);
@@ -73,4 +142,4 @@ if (isMac) {
     }
 }
 
-console.log(`\nBuilt ${exePath}`);
+console.log(`\nBuilt ${exePath}  ${MB(fs.statSync(exePath).size)}`);
