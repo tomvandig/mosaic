@@ -5,6 +5,9 @@ incremental collaboration on geometric, structured data.
 
 ```bash
 npx @tomvandig/mosaic help
+
+# convert a glTF model, straight from a URL
+npx @tomvandig/mosaic gltf-pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
 ```
 
 Or install it, and the command is `mosaic`:
@@ -21,8 +24,8 @@ Needs Node.js 24 or later.
 | Command | |
 | --- | --- |
 | `mosaic pack <input.json> [output.tsr]` | Pack a Mosaic source document into a `.tsr` archive |
-| `mosaic gltf <input.gltf\|.glb> [output.mosaic.json] [--stable-ids]` | Convert glTF into a source document |
-| `mosaic gltf-pack <input.gltf\|.glb> [output.tsr] [--stable-ids]` | Convert glTF straight into an archive |
+| `mosaic gltf <input.gltf\|.glb\|url> [output.mosaic.json] [--stable-ids]` | Convert glTF into a source document |
+| `mosaic gltf-pack <input.gltf\|.glb\|url> [output.tsr] [--stable-ids]` | Convert glTF straight into an archive |
 | `mosaic ifc <input.ifc> [output.mosaic.json]` | Convert an IFC model into a source document |
 | `mosaic ifc-pack <input.ifc> [output.tsr]` | Convert an IFC model straight into an archive |
 | `mosaic svg-pack <input.svg> [output.tsr]` | Pack an SVG into an archive of one node |

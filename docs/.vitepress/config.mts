@@ -121,7 +121,10 @@ export default defineConfig({
         footer: {
             message: 'Background: the Alexander Mosaic, House of the Faun, Pompeii (c. 100 BC). '
                 + 'Photo by Berthold Werner, public domain, via '
-                + '<a href="https://commons.wikimedia.org/wiki/File:Battle_of_Issus_mosaic_-_Museo_Archeologico_Nazionale_-_Naples_2013-05-16_16-25-06_BW.jpg">Wikimedia Commons</a>.',
+                + '<a href="https://commons.wikimedia.org/wiki/File:Battle_of_Issus_mosaic_-_Museo_Archeologico_Nazionale_-_Naples_2013-05-16_16-25-06_BW.jpg">Wikimedia Commons</a>. '
+                + '<br>Damaged Helmet: © 2018 ctxwing, CC BY 4.0 (rebuild and glTF conversion); '
+                + '© 2016 theblueturtle_, CC BY-NC 4.0 (earlier version), via the '
+                + '<a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/DamagedHelmet">Khronos glTF sample assets</a>.',
         },
     },
 
