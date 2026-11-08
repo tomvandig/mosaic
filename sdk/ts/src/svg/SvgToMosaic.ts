@@ -64,7 +64,7 @@ export function svgToMosaic(svg: string, options: SvgConvertOptions = {}): SvgCo
                     dataVersion: options.provenance?.dataVersion ?? "1.0.0",
                     author: options.provenance?.author ?? "",
                     timestamp: options.provenance?.timestamp ?? new Date().toISOString(),
-                    application: options.provenance?.application ?? "mosaic svg-pack",
+                    application: options.provenance?.application ?? "mosaic pack",
                 },
                 nodes: [{
                     id: nodeId,

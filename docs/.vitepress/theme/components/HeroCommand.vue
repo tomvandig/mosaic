@@ -5,7 +5,7 @@
 import { ref } from "vue";
 
 const props = withDefaults(defineProps<{ command?: string }>(), {
-    command: "npx @tomvandig/mosaic gltf-pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb",
+    command: "npx @tomvandig/mosaic pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb",
 });
 
 const copied = ref(false);

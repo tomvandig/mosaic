@@ -1,8 +1,7 @@
 import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
-import { runPack, PACK_USAGE } from "./commands/pack.js";
-import { runGltf, runGltfPack, GLTF_USAGE, GLTF_PACK_USAGE } from "./commands/gltf.js";
-import { runIfc, runIfcPack, IFC_USAGE, IFC_PACK_USAGE } from "./commands/ifc.js";
-import { runSvgPack, SVG_PACK_USAGE } from "./commands/svg.js";
+import { runPack, PACK_USAGE, PACK_DETAILS } from "./commands/pack.js";
+import { runGltf, GLTF_USAGE } from "./commands/gltf.js";
+import { runIfc, IFC_USAGE } from "./commands/ifc.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
@@ -12,6 +11,8 @@ const VERSION = typeof MOSAIC_CLI_VERSION === "string" ? MOSAIC_CLI_VERSION : "d
 
 type Command = {
     readonly usage: string;
+    /** More lines printed under the usage, when there is more to say. */
+    readonly details?: readonly string[];
     readonly summary: string;
     readonly run: (argv: string[]) => Promise<void>;
 };
@@ -24,7 +25,8 @@ const COMMANDS: Record<string, Command> = {
     },
     pack: {
         usage: PACK_USAGE,
-        summary: "Pack a Mosaic source document into a .tsr archive",
+        details: PACK_DETAILS,
+        summary: "Pack a source document, glTF, IFC or SVG into a .tsr archive",
         run: runPack
     },
     gltf: {
@@ -32,25 +34,10 @@ const COMMANDS: Record<string, Command> = {
         summary: "Convert a glTF or GLB file into a Mosaic source document",
         run: runGltf
     },
-    "gltf-pack": {
-        usage: GLTF_PACK_USAGE,
-        summary: "Convert a glTF or GLB file straight into a .tsr archive",
-        run: runGltfPack
-    },
     ifc: {
         usage: IFC_USAGE,
         summary: "Convert an IFC model into a Mosaic source document",
         run: runIfc
-    },
-    "ifc-pack": {
-        usage: IFC_PACK_USAGE,
-        summary: "Convert an IFC model straight into a .tsr archive",
-        run: runIfcPack
-    },
-    "svg-pack": {
-        usage: SVG_PACK_USAGE,
-        summary: "Pack an SVG into a .tsr archive of one node",
-        run: runSvgPack
     },
     compose: {
         usage: COMPOSE_USAGE,
@@ -73,6 +60,7 @@ function printUsage(): void {
     for (const [name, command] of Object.entries(COMMANDS)) {
         console.log(`  ${name.padEnd(10)} ${command.summary}`);
         console.log(`  ${" ".repeat(10)} ${command.usage}`);
+        for (const line of command.details ?? []) console.log(`  ${" ".repeat(12)} ${line}`);
     }
     console.log();
     console.log(`  help       Show this message`);

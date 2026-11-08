@@ -78,7 +78,7 @@ and check it against what the accessors declare, so the geometry cannot drift fr
 archive converts to the same ids every time. Build it with:
 
 ```bash
-mosaic gltf-pack gltf/DamagedHelmet.glb helmet.tsr --stable-ids
+mosaic pack gltf/DamagedHelmet.glb helmet.tsr --stable-ids
 mosaic pack helmet-plaza.mosaic.json
 mosaic compose helmet-plaza.tsr
 ```

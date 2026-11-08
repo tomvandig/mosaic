@@ -7,10 +7,9 @@ convenience only (file paths, default output names, console reporting), never be
 
 | Command | Calls | |
 | --- | --- | --- |
-| `mosaic pack` | `packMosaicSourceFile` | [Packing](/tools/pack) |
-| `mosaic gltf`, `gltf-pack` | `gltfToMosaic` | [glTF](/tools/gltf) |
-| `mosaic ifc`, `ifc-pack` | `mosaic-ifc4` | [IFC](/tools/ifc) |
-| `mosaic svg-pack` | `svgToMosaic` | [SVG](/tools/svg) |
+| `mosaic pack` | by extension: `packMosaicSourceFile`, `gltfToMosaic`, `mosaic-ifc4` or `svgToMosaic` | [Packing](/tools/pack) |
+| `mosaic gltf` | `gltfToMosaic`, to a source document | [glTF](/tools/gltf) |
+| `mosaic ifc` | `mosaic-ifc4`, to a source document | [IFC](/tools/ifc) |
 | `mosaic compose` | `composeArchiveToGlb`, or the DuckDB reader for a `.duckdb` | [Composing](/tools/compose) |
 | `mosaic serve` | the API server and viewer page | [HTTP API](/sdk/http-api) |
 | `mosaic codegen` | quicktype over `*.schema.json` | [Code generation](/tools/codegen) |

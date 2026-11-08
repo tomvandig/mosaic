@@ -11,7 +11,7 @@ import {
 const STABLE_IDS = "--stable-ids";
 
 export const GLTF_USAGE = `mosaic gltf <input.gltf|input.glb|url> [output${MOSAIC_SOURCE_EXTENSION}] [${STABLE_IDS}]`;
-export const GLTF_PACK_USAGE = `mosaic gltf-pack <input.gltf|input.glb|url> [output.tsr] [${STABLE_IDS}]`;
+export const GLTF_PACK_USAGE = `mosaic pack <input.gltf|input.glb|url> [output.tsr] [${STABLE_IDS}]`;
 
 const isUrl = (input: string) => /^https?:\/\//i.test(input);
 

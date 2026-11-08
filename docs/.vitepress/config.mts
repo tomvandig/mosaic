@@ -88,7 +88,7 @@ export default defineConfig({
                 text: "CLI",
                 items: [
                     { text: "Overview", link: "/tools/" },
-                    { text: "Packing a dataset", link: "/tools/pack" },
+                    { text: "Packing", link: "/tools/pack" },
                     { text: "Importing glTF", link: "/tools/gltf" },
                     { text: "Importing IFC", link: "/tools/ifc" },
                     { text: "SVG", link: "/tools/svg" },

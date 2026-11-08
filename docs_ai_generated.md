@@ -95,8 +95,8 @@ consumer of the SDK.
 container:
 
 ```bash
-mosaic gltf      <input.gltf|input.glb> [output.mosaic.json] [--stable-ids]   # to a source document
-mosaic gltf-pack <input.gltf|input.glb> [output.tsr]         [--stable-ids]   # straight to an archive
+mosaic gltf <input.gltf|input.glb> [output.mosaic.json] [--stable-ids]   # to a source document
+mosaic pack <input.gltf|input.glb> [output.tsr]         [--stable-ids]   # straight to an archive
 ```
 
 Both read the same conversion; the first stops at the editable JSON document, the second packs it in
@@ -130,8 +130,8 @@ glTF-derived component schemas; the CLI commands are a thin wrapper over it.
 `mosaic` converts an IFC model the same way, reading `.ifc` files of either IFC4 or IFC2X3:
 
 ```bash
-mosaic ifc      <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]
-mosaic ifc-pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]
+mosaic ifc  <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]
+mosaic pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]
 ```
 
 Parsing and meshing are [web-ifc](https://github.com/ThatOpen/engine_web-ifc)'s job: it resolves
@@ -210,7 +210,7 @@ end into the GLB's BIN chunk on 4-byte boundaries, with each bufferView shifted 
 held inline as a data URI is moved into that chunk too, and given a bufferView of its own, so the
 textures ship as bytes rather than as base64 text in the JSON.
 
-Round-tripping `DamagedHelmet.glb` through `gltf-pack` and `compose` returns a file whose materials,
+Round-tripping `DamagedHelmet.glb` through `mosaic pack` and `mosaic compose` returns a file whose materials,
 textures, images, samplers, accessors, bufferViews and meshes are all identical to the original, with
 byte-identical geometry and texture payloads. The output passes the Khronos glTF validator with no
 errors, reporting only the tangent-space warning the original itself carries.
@@ -530,7 +530,7 @@ for a tree, its trunk and a helmet.
 
 ## Drawings
 
-`mosaic svg-pack drawing.svg` packs an SVG into an archive of one node, named after the file
+`mosaic pack drawing.svg` packs an SVG into an archive of one node, named after the file
 and given a made-up id the way a converted glTF node is. There is no conversion in the sense the
 glTF and IFC readers convert — those take a file apart into the components that describe it, because
 a mesh is not one thing but buffers and accessors and primitives. An SVG is already a description of

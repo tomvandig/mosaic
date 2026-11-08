@@ -1,10 +1,10 @@
 import path from "node:path";
 import { convertSvgToArchiveFile } from "mosaic-ts";
 
-export const SVG_PACK_USAGE = `mosaic svg-pack <input.svg> [output.tsr]`;
+export const SVG_PACK_USAGE = `mosaic pack <input.svg> [output.tsr]`;
 
 /**
- * Packs an SVG into an archive of one node.
+ * Packs an SVG into an archive of one node. Reached through `mosaic pack`.
  *
  * Unlike the glTF and IFC readers there is nothing to take apart: an SVG is already a
  * description of a drawing, so the archive carries it whole, under a node named after the

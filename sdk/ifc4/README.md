@@ -5,7 +5,7 @@ the geometry becomes triangulated glTF meshes, and everything else IFC says — 
 quantities, units, and every relationship — becomes components.
 
 ```
-mosaic ifc-pack tower.ifc              # -> tower.tsr
+mosaic pack     tower.ifc              # -> tower.tsr
 mosaic ifc      tower.ifc              # -> tower.mosaic.json, the readable form
 mosaic compose  tower.tsr tower.glb    # -> something a viewer opens
 ```

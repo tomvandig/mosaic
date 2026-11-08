@@ -103,4 +103,4 @@ inheritance. The last tab is the whole source document it is packed from.
 
 <MosaicViewer example="typed-boxes" caption="The archive above, drawn. Every box gets its mesh from Box type." />
 
-Packed with `mosaic pack typed-boxes.mosaic.json`; see [Packing a dataset](/tools/pack).
+Packed with `mosaic pack typed-boxes.mosaic.json`; see [Packing](/tools/pack).

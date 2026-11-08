@@ -51,7 +51,7 @@ end into the GLB's BIN chunk on 4-byte boundaries, with each bufferView shifted 
 held inline as a data URI is moved into that chunk too, and given a bufferView of its own, so the
 textures ship as bytes rather than as base64 text in the JSON.
 
-Round-tripping `DamagedHelmet.glb` through `gltf-pack` and `compose` returns a file whose materials,
+Round-tripping `DamagedHelmet.glb` through `mosaic pack` and `mosaic compose` returns a file whose materials,
 textures, images, samplers, accessors, bufferViews and meshes are all identical to the original, with
 byte-identical geometry and texture payloads. The output passes the Khronos glTF validator with no
 errors, reporting only the tangent-space warning the original itself carries.

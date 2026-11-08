@@ -7,7 +7,7 @@ incremental collaboration on geometric, structured data.
 npx @tomvandig/mosaic help
 
 # convert a glTF model, straight from a URL
-npx @tomvandig/mosaic gltf-pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
+npx @tomvandig/mosaic pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
 ```
 
 Or install it, and the command is `mosaic`:
@@ -23,12 +23,9 @@ Needs Node.js 24 or later.
 
 | Command | |
 | --- | --- |
-| `mosaic pack <input.json> [output.tsr]` | Pack a Mosaic source document into a `.tsr` archive |
-| `mosaic gltf <input.gltf\|.glb\|url> [output.mosaic.json] [--stable-ids]` | Convert glTF into a source document |
-| `mosaic gltf-pack <input.gltf\|.glb\|url> [output.tsr] [--stable-ids]` | Convert glTF straight into an archive |
-| `mosaic ifc <input.ifc> [output.mosaic.json]` | Convert an IFC model into a source document |
-| `mosaic ifc-pack <input.ifc> [output.tsr]` | Convert an IFC model straight into an archive |
-| `mosaic svg-pack <input.svg> [output.tsr]` | Pack an SVG into an archive of one node |
+| `mosaic pack <input> [output.tsr] [flags]` | Pack into a `.tsr` archive, by extension: a source document (`.json`), glTF (`.gltf`, `.glb`, or a URL), IFC (`.ifc`) or SVG (`.svg`) |
+| `mosaic gltf <input.gltf\|.glb\|url> [output.mosaic.json] [--stable-ids]` | Convert glTF into an editable source document |
+| `mosaic ifc <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]` | Convert an IFC model into an editable source document |
 | `mosaic compose <input.tsr\|.duckdb> [output.glb]` | Compose an archive and its imports into a `.glb` |
 | `mosaic serve <database.duckdb> [--port <n>] [--host <name>]` | Serve the Mosaic API, and a viewer, over a database |
 | `mosaic codegen <input_dir> <output_dir> <ts\|cs>` | Generate typed classes from component schemas |

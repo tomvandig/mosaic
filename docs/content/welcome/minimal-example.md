@@ -10,7 +10,7 @@ scene that imports it and places it five times. The model is never copied. The s
 
 | File | Made by | Holds |
 | --- | --- | --- |
-| `helmet.tsr` | `mosaic gltf-pack` from `DamagedHelmet.glb` | The model: 27 nodes for its buffer, bufferViews, accessors, images, textures, material and mesh. About 3.5 MB |
+| `helmet.tsr` | `mosaic pack` from `DamagedHelmet.glb` | The model: 27 nodes for its buffer, bufferViews, accessors, images, textures, material and mesh. About 3.5 MB |
 | `helmet-plaza.tsr` | `mosaic pack` from `helmet-plaza.mosaic.json` | The scene: six nodes and five transforms, a little over 1 KB. It imports `helmet.tsr` |
 
 Each is a zip holding an `index.json` and one `.ndjson` table per component type:
@@ -165,7 +165,7 @@ is in their `id`.
 
 ```bash
 # 1. the model, with ids that stay the same every time it is converted
-mosaic gltf-pack DamagedHelmet.glb helmet.tsr --stable-ids
+mosaic pack DamagedHelmet.glb helmet.tsr --stable-ids
 
 # 2. the scene, from its source document
 mosaic pack helmet-plaza.mosaic.json            # -> helmet-plaza.tsr
@@ -177,7 +177,7 @@ mosaic compose helmet-plaza.tsr                 # -> helmet-plaza.glb
 The source document, `helmet-plaza.mosaic.json`, is the scene as one readable file: the index with the
 component rows beside it, and schemas referenced by path. `mosaic pack` turns it into the archive:
 it writes the rows as `core::transform.ndjson` and inlines the schema. See
-[Packing a dataset](/tools/pack).
+[Packing](/tools/pack).
 
 ## What composing does
 

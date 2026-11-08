@@ -8,7 +8,7 @@ Archive
 
 Source document
 : A `.mosaic.json` file. One readable, diffable JSON document holding the index plus the component
-  rows. `mosaic pack` turns it into an archive. See [Packing a dataset](/tools/pack).
+  rows. `mosaic pack` turns it into an archive. See [Packing](/tools/pack).
 
 Index file
 : `index.json` inside an archive (`MosaicIndexFile`). It holds a `header`, the `imports`, the

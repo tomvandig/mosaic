@@ -4,15 +4,15 @@
 container:
 
 ```bash
-mosaic gltf      <input.gltf|input.glb|url> [output.mosaic.json] [--stable-ids]   # to a source document
-mosaic gltf-pack <input.gltf|input.glb|url> [output.tsr]         [--stable-ids]   # straight to an archive
+mosaic gltf <input.gltf|input.glb|url> [output.mosaic.json] [--stable-ids]   # to a source document
+mosaic pack <input.gltf|input.glb|url> [output.tsr]         [--stable-ids]   # straight to an archive
 ```
 
 The input can be an `http(s)` URL. The model is downloaded first, along with any buffers and images a
 `.gltf` keeps in files beside it, and the result is written to the working directory:
 
 ```bash
-npx @tomvandig/mosaic gltf-pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
+npx @tomvandig/mosaic pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
 ```
 
 Both read the same conversion; the first stops at the editable JSON document, the second packs it in
@@ -43,13 +43,13 @@ glTF-derived component schemas; the CLI commands are a thin wrapper over it.
 
 ## Example: a helmet on a plaza
 
-The Damaged Helmet converted with `gltf-pack`, then imported by a second, hand-written archive that
+The Damaged Helmet converted with `mosaic pack`, then imported by a second, hand-written archive that
 places it with `core::child` links. The helmet's geometry and textures are stored once.
 
 ::: code-group
 
 ```bash [terminal]
-mosaic gltf-pack DamagedHelmet.glb helmet.tsr --stable-ids
+mosaic pack DamagedHelmet.glb helmet.tsr --stable-ids
 mosaic pack sdk/ts/test-data/helmet-plaza.mosaic.json
 ```
 

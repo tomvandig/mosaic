@@ -1,6 +1,6 @@
 # SVG
 
-`mosaic svg-pack drawing.svg` packs an SVG into an archive of one node, named after the file
+`mosaic pack drawing.svg` packs an SVG into an archive of one node, named after the file
 and given a made-up id the way a converted glTF node is. There is no conversion in the sense the
 glTF and IFC readers convert — those take a file apart into the components that describe it, because
 a mesh is not one thing but buffers and accessors and primitives. An SVG is already a description of
