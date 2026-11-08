@@ -12,13 +12,14 @@ docs/
     viewer/           built by `npm run build:static` in sdk/ts -- generated, do not edit
 ```
 
-Publish `dist/` as the site root and you get `/docs/` and `/viewer/` side by side. The base
-defaults to `/mosaic/docs/` for `tomvandig.github.io/mosaic`; set `DOCS_BASE` to build for
-somewhere else.
+GitHub Pages publishes this `docs/` folder, so the site is at
+`tomvandig.github.io/mosaic/dist/docs/` and the viewer at `/mosaic/dist/viewer/`. That base
+(`/mosaic/dist/docs/`) is the default; set `DOCS_BASE` to build for somewhere else. The built
+files are committed, so run `npm run build` before pushing a docs change.
 
 ```
 npm install
-npm run dev       # live preview, at http://localhost:5173/mosaic/docs/ (the viewer is served too)
+npm run dev       # live preview, at http://localhost:5173/mosaic/dist/docs/ (the viewer is served too)
 npm run build     # -> dist/docs, plus dist/index.html and dist/.nojekyll
 npm run serve     # the built dist/, the way Pages will serve it
 ```

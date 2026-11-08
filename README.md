@@ -4,7 +4,7 @@
 
 Mosaic is a file format for **incremental collaboration on geometric, structured data**. Many data sources may be combined to form a bigger composed picture but in the composition they **retain their identity and lineage**.
 
-[Examples](https://tomvandig.github.io/mosaic/viewer/?example=s1)
+[Examples](https://tomvandig.github.io/mosaic/dist/viewer/?example=s1)
 
 Mosaic takes lessons from and addresses shortcomings of modern data patterns from *usd*, *ecs*, *json* and *gltf*, and combines them into a single flexible data system.
 

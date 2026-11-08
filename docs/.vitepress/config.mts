@@ -8,11 +8,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.resolve(here, "..", "dist");
 
 /**
- * Where the site lives. The docs are built to `dist/docs` and the viewer sits beside them
- * in `dist/viewer`, so publishing `dist/` at tomvandig.github.io/mosaic gives
- * `/mosaic/docs/` and `/mosaic/viewer/`. Set DOCS_BASE to build for somewhere else.
+ * Where the site lives. GitHub Pages publishes this `docs/` folder at
+ * tomvandig.github.io/mosaic, so the docs built to `dist/docs` are at `/mosaic/dist/docs/`
+ * and the viewer beside them at `/mosaic/dist/viewer/`. Set DOCS_BASE to build for
+ * somewhere else.
  */
-const base = process.env.DOCS_BASE ?? "/mosaic/docs/";
+const base = process.env.DOCS_BASE ?? "/mosaic/dist/docs/";
 
 /** The viewer, as the docs embed it: a sibling of the docs, unless VIEWER_URL says otherwise. */
 const viewer = process.env.VIEWER_URL ?? path.posix.join(base, "..", "viewer") + "/";
@@ -52,10 +53,11 @@ export default defineConfig({
                 text: "Guide",
                 items: [
                     { text: "Introduction", link: "/guide/" },
+                    { text: "Definitions", link: "/guide/definitions" },
                     { text: "The format", link: "/guide/format" },
+                    { text: "Core components", link: "/guide/core-components" },
+                    { text: "API", link: "/guide/api" },
                     { text: "Schema & code generation", link: "/guide/schema" },
-                    { text: "Edges", link: "/guide/edges" },
-                    { text: "Drawings", link: "/guide/drawings" },
                     { text: "A worked example", link: "/guide/worked-example" },
                 ],
             },
@@ -65,6 +67,7 @@ export default defineConfig({
                     { text: "Packing a dataset", link: "/tools/pack" },
                     { text: "Importing glTF", link: "/tools/gltf" },
                     { text: "Importing IFC", link: "/tools/ifc" },
+                    { text: "SVG", link: "/tools/svg" },
                     { text: "Composing a GLB", link: "/tools/compose" },
                 ],
             },
