@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Scenarios written in prose, and the tests generated from them",
+  "license": "UNLICENSED",
   "scripts": {
     "test": "node --experimental-transform-types --test \"*/*.test.ts\"",
     "typecheck": "tsc --noEmit"

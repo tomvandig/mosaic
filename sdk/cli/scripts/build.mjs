@@ -18,6 +18,9 @@ const bindings = path.dirname(fromSdk.resolve("@duckdb/node-bindings/package.jso
 const duckdbVersion = JSON.parse(
     fs.readFileSync(path.join(bindings, "package.json"), "utf-8")).version;
 
+/** The CLI's own version, so `mosaic version` and the published package always agree. */
+const cliVersion = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf-8")).version;
+
 /**
  * Sends DuckDB's native binding to the copy that can find itself inside the executable.
  *
@@ -48,9 +51,15 @@ await esbuild.build({
     // its native binding carried as an asset and unpacked on first use.
     external: ["web-ifc"],
     plugins: [carryDuckDB],
-    define: { MOSAIC_DUCKDB_VERSION: JSON.stringify(duckdbVersion) },
+    define: {
+        MOSAIC_DUCKDB_VERSION: JSON.stringify(duckdbVersion),
+        MOSAIC_CLI_VERSION: JSON.stringify(cliVersion),
+    },
+    // Installed through npm, the bundle is the package's `bin`, which macOS and Linux run
+    // directly. Node skips this line when it loads the file.
+    banner: { js: "#!/usr/bin/env node" },
     sourcemap: true,
     logLevel: "info"
 });
 
-console.log(`Bundled with DuckDB ${duckdbVersion} from ${path.relative(root, bindings)}`);
+console.log(`mosaic ${cliVersion}, bundled against DuckDB ${duckdbVersion} from ${path.relative(root, bindings)}`);

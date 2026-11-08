@@ -6,7 +6,9 @@ import { runSvgPack, SVG_PACK_USAGE } from "./commands/svg.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
-const VERSION = "0.1.0";
+/** Stamped in by the build from package.json. */
+declare const MOSAIC_CLI_VERSION: string | undefined;
+const VERSION = typeof MOSAIC_CLI_VERSION === "string" ? MOSAIC_CLI_VERSION : "dev";
 
 type Command = {
     readonly usage: string;

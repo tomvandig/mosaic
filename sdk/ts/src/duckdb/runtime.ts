@@ -19,11 +19,21 @@ export async function duckdb(): Promise<DuckDBModule> {
 
     const attempts: string[] = [];
 
+    /**
+     * The CLI's own explanation, when it has one. Its bundle carries this JavaScript but
+     * not DuckDB's native half, and when that is missing it says exactly what to install;
+     * that says more than anything this function could add, so it is passed on unchanged.
+     */
+    let explained: Error | undefined;
+
     // Running from source, or from anywhere the module is on the normal resolution path.
     try {
         loaded = await import("@duckdb/node-api");
         return loaded;
     } catch (error) {
+        if (error instanceof Error && (error as { code?: unknown }).code === "MOSAIC_DUCKDB_MISSING") {
+            explained = error;
+        }
         attempts.push(`import: ${message(error)}`);
     }
 
@@ -46,6 +56,8 @@ export async function duckdb(): Promise<DuckDBModule> {
             attempts.push(`${root}: ${message(error)}`);
         }
     }
+
+    if (explained) throw explained;
 
     throw new Error(
         `Could not load @duckdb/node-api, which reading a database needs.\n` +

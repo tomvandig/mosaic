@@ -1,25 +1,56 @@
 {
-  "name": "mosaic",
+  "name": "@tomvandig/mosaic",
   "version": "0.1.0",
-  "private": true,
-  "description": "Mosaic CLI",
+  "description": "The Mosaic CLI: pack, convert (glTF, IFC, SVG), compose and serve Mosaic archives",
+  "license": "UNLICENSED",
+  "keywords": [
+    "mosaic",
+    "gltf",
+    "ifc",
+    "bim",
+    "3d",
+    "ecs",
+    "cli"
+  ],
+  "homepage": "https://tomvandig.github.io/mosaic/dist/docs/tools/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tomvandig/mosaic.git",
+    "directory": "sdk/cli"
+  },
+  "bugs": "https://github.com/tomvandig/mosaic/issues",
+  "author": "Tom van Diggelen",
   "type": "module",
+  "bin": {
+    "mosaic": "dist/mosaic.cjs"
+  },
+  "files": [
+    "dist/mosaic.cjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "build:exe": "npm run build && node scripts/build-sea.mjs",
-    "start": "npm run build && node dist/mosaic.cjs"
+    "start": "npm run build && node dist/mosaic.cjs",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "dependencies": {
-    "mosaic-ifc4": "file:../ifc4",
-    "mosaic-ts": "file:../ts",
-    "quicktype-core": "^23.0.171",
     "web-ifc": "^0.0.77"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "esbuild": "^0.25.0",
+    "mosaic-ifc4": "file:../ifc4",
+    "mosaic-ts": "file:../ts",
     "postject": "^1.0.0-alpha.6",
+    "quicktype-core": "^23.0.171",
     "typescript": "^5.7.0"
   }
 }

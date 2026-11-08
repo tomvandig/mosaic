@@ -136,9 +136,14 @@ function load() {
     }
 
     // Not a single-file executable: the bundle is being run by node, so the package is
-    // somewhere on disk. It is a dependency of mosaic-ts rather than of the CLI, so the
-    // link to that package is one of the places worth looking.
+    // somewhere on disk, or nowhere. DuckDB is not a dependency of the published CLI --
+    // its native binary is large and most commands never need it -- so it is looked for
+    // where someone who installed it would have put it: beside the bundle (installed
+    // next to the CLI, or globally alongside it), in the working directory, and, running
+    // from this repository, in the linked mosaic-ts.
     const roots = [
+        __dirname,
+        path.join(__dirname, ".."),
         process.cwd(),
         path.join(process.cwd(), "node_modules", "mosaic-ts"),
         path.dirname(process.execPath),
@@ -153,11 +158,21 @@ function load() {
         }
     }
 
-    throw new Error(
-        "Could not load DuckDB, which reading a database needs.\n" +
-        "This build has no copy of its own, so it has to be found on disk: install it " +
-        "(npm install @duckdb/node-api) or point MOSAIC_DUCKDB at a directory that has it.\n" +
-        tried.join("\n"));
+    // The JavaScript half of DuckDB is bundled; only the native half is missing, and the two
+    // have to be the same version, so the instruction names it.
+    const wanted = VERSION === "unknown" ? "@duckdb/node-api" : "@duckdb/node-api@" + VERSION;
+    // Tagged, so the SDK's own loader (mosaic-ts/src/duckdb/runtime.ts), which catches
+    // this on the way out, passes it on as it is rather than wrapping it in a vaguer one.
+    throw Object.assign(new Error(
+        "DuckDB is not installed, and this command needs it to read or write a database.\n" +
+        "\n" +
+        "It is left out of the CLI because it is large and only the database commands use it.\n" +
+        "Install it in the directory you are running from:\n" +
+        "\n" +
+        "    npm install " + wanted + "\n" +
+        "\n" +
+        "or point MOSAIC_DUCKDB at a directory where it is installed. Looked in:\n" +
+        tried.join("\n")), { code: "MOSAIC_DUCKDB_MISSING" });
 }
 
 function first(error) {

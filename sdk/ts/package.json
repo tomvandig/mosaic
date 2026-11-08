@@ -19,7 +19,7 @@
     "build:static": "npm run build:viewer && npm run build:examples"
   },
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "description": "",
   "dependencies": {
     "@duckdb/node-api": "^1.5.5-r.4",
