@@ -19,7 +19,7 @@ A single mesh placed a dozen times. Every box in the tree is the same geometry.
 ## Boxes by type
 
 Parts whose geometry belongs to the type they are, rather than to them. The source is on
-[The format](/guide/format#example-boxes-by-type) page.
+[The format](/standard/file/format#example-boxes-by-type) page.
 
 <MosaicViewer example="typed-boxes" />
 

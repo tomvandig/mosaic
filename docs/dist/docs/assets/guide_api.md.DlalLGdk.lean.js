@@ -1,1 +1,0 @@
-import{_ as i,o as a,c as t,a2 as e}from"./chunks/framework.DhQimoSI.js";const c=JSON.parse('{"title":"API","description":"","frontmatter":{},"headers":[],"relativePath":"guide/api.md","filePath":"guide/api.md"}'),n={name:"guide/api.md"};function h(o,s,l,d,p,k){return a(),t("div",null,[...s[0]||(s[0]=[e("",22)])])}const E=i(n,[["render",h]]);export{c as __pageData,E as default};

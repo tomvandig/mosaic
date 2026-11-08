@@ -169,6 +169,34 @@ body:has(.VPHome)::before { display: none; }
    Small touches.
    -------------------------------------------------------------------------- */
 
+/* The hero title, set in tesserae: the same gradient, sampled once per letter, so it
+   steps from colour to colour instead of blending. */
+:root {
+  --tile-1: #12766d;
+  --tile-2: #497b58;
+  --tile-3: #878141;
+  --tile-4: #b9812f;
+  --tile-5: #bf6a2f;
+  --tile-6: #c4552f;
+}
+.dark {
+  --tile-1: #5cc9bd;
+  --tile-2: #89be97;
+  --tile-3: #bab26d;
+  --tile-4: #e2a44d;
+  --tile-5: #e18f54;
+  --tile-6: #e07d5a;
+}
+.VPHero .name .tiles > span {
+  -webkit-text-fill-color: currentColor;
+}
+.VPHero .name .tiles > span:nth-child(1) { color: var(--tile-1); }
+.VPHero .name .tiles > span:nth-child(2) { color: var(--tile-2); }
+.VPHero .name .tiles > span:nth-child(3) { color: var(--tile-3); }
+.VPHero .name .tiles > span:nth-child(4) { color: var(--tile-4); }
+.VPHero .name .tiles > span:nth-child(5) { color: var(--tile-5); }
+.VPHero .name .tiles > span:nth-child(6) { color: var(--tile-6); }
+
 /* Feature cards: lighter sheets of paper laid on the mosaic. */
 .VPHome .VPFeature {
   background: color-mix(in srgb, var(--mosaic-panel) 92%, transparent);

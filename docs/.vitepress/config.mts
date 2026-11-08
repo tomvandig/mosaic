@@ -44,7 +44,8 @@ export default defineConfig({
         search: { provider: "local" },
 
         nav: [
-            { text: "Guide", link: "/guide/" },
+            { text: "Welcome", link: "/welcome/" },
+            { text: "Standard", link: "/standard/" },
             { text: "Examples", link: "/examples/" },
             // The theme puts the base in front of a link starting with "/", so the sibling
             // folder is written relative to it.
@@ -53,32 +54,46 @@ export default defineConfig({
 
         sidebar: [
             {
-                text: "Guide",
+                text: "Welcome",
                 items: [
-                    { text: "Introduction", link: "/guide/" },
-                    { text: "Definitions", link: "/guide/definitions" },
-                    { text: "The format", link: "/guide/format" },
-                    { text: "Core components", link: "/guide/core-components" },
-                    { text: "API", link: "/guide/api" },
-                    { text: "Schema & code generation", link: "/guide/schema" },
-                    { text: "A worked example", link: "/guide/worked-example" },
+                    { text: "What is Mosaic", link: "/welcome/" },
+                    { text: "Why Mosaic exists", link: "/welcome/why" },
+                    { text: "Who it is for", link: "/welcome/who" },
+                    { text: "Definitions", link: "/welcome/definitions" },
+                    { text: "A minimal example", link: "/welcome/minimal-example" },
                 ],
             },
             {
-                text: "CLI",
+                text: "Standard",
                 items: [
-                    { text: "Packing a dataset", link: "/tools/pack" },
-                    { text: "Importing glTF", link: "/tools/gltf" },
-                    { text: "Importing IFC", link: "/tools/ifc" },
-                    { text: "SVG", link: "/tools/svg" },
-                    { text: "Composing a GLB", link: "/tools/compose" },
+                    { text: "Overview", link: "/standard/" },
+                    {
+                        text: "File standard",
+                        link: "/standard/file/",
+                        items: [{ text: "The format, by example", link: "/standard/file/format" }],
+                    },
+                    { text: "API standard", link: "/standard/api" },
+                    { text: "Core components", link: "/standard/core-components" },
                 ],
             },
             {
                 text: "SDK",
                 items: [
+                    { text: "Overview", link: "/sdk/" },
                     { text: "Querying with DuckDB", link: "/sdk/duckdb" },
                     { text: "The HTTP API", link: "/sdk/http-api" },
+                ],
+            },
+            {
+                text: "CLI",
+                items: [
+                    { text: "Overview", link: "/tools/" },
+                    { text: "Packing a dataset", link: "/tools/pack" },
+                    { text: "Importing glTF", link: "/tools/gltf" },
+                    { text: "Importing IFC", link: "/tools/ifc" },
+                    { text: "SVG", link: "/tools/svg" },
+                    { text: "Composing a GLB", link: "/tools/compose" },
+                    { text: "Code generation", link: "/tools/codegen" },
                 ],
             },
             {

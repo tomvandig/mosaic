@@ -2,13 +2,14 @@
 layout: home
 
 hero:
-  name: Mosaic
+  # One tile per letter: each is a solid colour from the gradient, not a blend.
+  name: '<span class="tiles"><span>M</span><span>o</span><span>s</span><span>a</span><span>i</span><span>c</span></span>'
   text: Incremental collaboration on geometric, structured data
   tagline: Many sources composed into one picture — each keeping its identity and lineage.
   actions:
     - theme: brand
       text: Get started
-      link: /guide/
+      link: /welcome/
     - theme: alt
       text: Examples
       link: /examples/
