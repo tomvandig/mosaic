@@ -1,0 +1,13 @@
+{
+  "name": "mosaic-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build && node scripts/finish.mjs",
+    "serve": "node scripts/serve.mjs"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

@@ -5479,6 +5479,28 @@ async function start(from) {
 
 // src/viewer/app/boot-static.ts
 var EXAMPLES = "examples";
+var EMBEDDED = new URLSearchParams(location.search).has("embed");
+if (EMBEDDED) {
+  document.body.classList.add("embed");
+  const open = document.createElement("a");
+  open.className = "embed-open";
+  open.target = "_blank";
+  open.rel = "noopener";
+  open.textContent = "Open in viewer \u2197";
+  const refresh = () => {
+    const query = new URLSearchParams(location.search);
+    query.delete("embed");
+    open.href = location.pathname + "?" + query.toString();
+  };
+  refresh();
+  window.addEventListener("popstate", refresh);
+  const replace = history.replaceState.bind(history);
+  history.replaceState = (...args) => {
+    replace(...args);
+    refresh();
+  };
+  document.querySelector("header")?.append(open);
+}
 var say2 = (message2, isError = false) => {
   const status = document.getElementById("status");
   if (!status) return;

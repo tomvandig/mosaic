@@ -126,3 +126,18 @@
   /* Monaco paints its own surface; this keeps its edge from fighting the panel's. */
   .editor-host .monaco-editor,
   .editor-host .monaco-editor .overflow-guard { border-radius: 0; }
+
+  /* --- embedded -------------------------------------------------------------
+     `?embed`: the viewer inside another page. The 3D panel takes the whole frame; the
+     header keeps only the status line and a way out to the full viewer. */
+  .embed-open { display: none; }
+  body.embed header { padding: 4px 10px; gap: 8px; }
+  body.embed header > :not(.status):not(.embed-open) { display: none; }
+  body.embed .embed-open {
+    display: inline; color: var(--accent); text-decoration: none; font-size: 12px;
+  }
+  body.embed .embed-open:hover { text-decoration: underline; }
+  body.embed main { grid-template-columns: 1fr; }
+  body.embed main > .column,
+  body.embed main > section:last-child { display: none; }
+  body.embed main > section { border-right: 0; }

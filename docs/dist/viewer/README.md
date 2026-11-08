@@ -19,9 +19,11 @@ npm run build:static      # both of the below
 
 ## Hosting it
 
-Any static host will do. For GitHub Pages, point it at the `docs` folder and open
-`/viewer/`. The `.nojekyll` file beside this one stops Pages running the folder through
-Jekyll, which would otherwise eat paths beginning with an underscore.
+Any static host will do. It is published together with the documentation: `docs/dist`
+holds this folder as `viewer/` and the built docs as `docs/`, and the docs embed it with
+`?embed`, which shows only the 3D panel. The `.nojekyll` file beside this one stops Pages
+running the folder through Jekyll, which would otherwise eat paths beginning with an
+underscore. See `docs/README.md`.
 
 The repository ignores `*.tsr` everywhere except under `examples/` here -- those have to
 be committed, or Pages has a viewer and nothing to view.

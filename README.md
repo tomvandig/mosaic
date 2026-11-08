@@ -11,12 +11,12 @@ Mosaic takes lessons from and addresses shortcomings of modern data patterns fro
 Mosaic:
 * is unopinionated on your data
 * can serialize & validate any data type with JSON schema component schemas
-* allows people to collaborate on that data through file exchange or API
+* allows people to collaborate on that data through file exchange or through an API
 * takes an ECS approach to decoupling data from usecases
 * elevates parent-child relationships to allow for geometric assemby reuse
 * supports semantic typing through native inheritance
 
-The rest of this page documents the format in more detail.
+Please see below for documentation.
 
 ## Status
 
@@ -24,11 +24,11 @@ Mosaic is currently in active development, not yet ready for production use.
 
 ## Documentation
 
-See [AI generated docs](docs_ai_generated.md), real docs pending.
+See the [documentation](https://tomvandig.github.io/mosaic/dist/docs) 
 
 ## License
 
-
+License pending
 
 ## Contributing
 

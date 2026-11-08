@@ -19,6 +19,35 @@ import { reload, start } from "./app.js";
 
 const EXAMPLES = "examples";
 
+/**
+ * `?embed` is the viewer as it sits inside another page -- the documentation, in an
+ * iframe beside the files it draws. Only the 3D panel and the status line are shown, and
+ * a link opens the same example in the whole viewer.
+ */
+const EMBEDDED = new URLSearchParams(location.search).has("embed");
+
+if (EMBEDDED) {
+    document.body.classList.add("embed");
+
+    const open = document.createElement("a");
+    open.className = "embed-open";
+    open.target = "_blank";
+    open.rel = "noopener";
+    open.textContent = "Open in viewer ↗";
+    // Kept up to date as the address changes, so it opens whatever is on show.
+    const refresh = () => {
+        const query = new URLSearchParams(location.search);
+        query.delete("embed");
+        open.href = location.pathname + "?" + query.toString();
+    };
+    refresh();
+    window.addEventListener("popstate", refresh);
+    const replace = history.replaceState.bind(history);
+    history.replaceState = (...args) => { replace(...args); refresh(); };
+
+    document.querySelector("header")?.append(open);
+}
+
 const say = (message: string, isError = false) => {
     const status = document.getElementById("status");
     if (!status) return;

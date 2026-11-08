@@ -1,5 +1,5 @@
 /**
- * Fills `docs/viewer/examples` with the archives the static viewer shows.
+ * Fills `docs/dist/viewer/examples` with the archives the static viewer shows.
  *
  * Each example is a folder of its own holding everything it needs and nothing it does
  * not. That is the rule the viewer enforces from the other side: an import is resolved
@@ -21,7 +21,7 @@ import { LoadMosaicFile, WriteMosaicFile } from "../src/MosaicFile.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(root, "..", "..");
-const into = path.join(repo, "docs", "viewer", "examples");
+const into = path.join(repo, "docs", "dist", "viewer", "examples");
 
 /**
  * What to publish.

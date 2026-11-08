@@ -112,7 +112,7 @@ model CreateTesseraVersionResponse
 }
 
 @service
-@route("/Mosaic-api")
+@route("/mosaic-api")
 namespace MosaicApi {
     
   @route("/upload/{blobId}")
@@ -133,7 +133,7 @@ namespace MosaicApi {
       @get op get_tessera(@path tesseraId: uuid): TesseraDetails;
       @delete op delete_tessera(@path tesseraId: uuid): OkResponse;
       
-      @route("/upload-Mosaic-blob-url")
+      @route("/upload-mosaic-blob-url")
       @post op uploadMosaicBlobUrl(@path tesseraId: uuid): BlobResponse;
 
       @route("/versions")
@@ -145,7 +145,7 @@ namespace MosaicApi {
         {
           @get op get_tessera_version(@path tesseraId: uuid, @path versionId: uuid): TesseraVersion;
 
-          @route("/download-Mosaic")
+          @route("/download-mosaic")
           @put op tessera_Mosaic(
             @path tesseraId: uuid, 
             @path versionId: uuid,
@@ -162,6 +162,9 @@ namespace MosaicApi {
 
           @route("/query")
           op query is MosaicQueryApi.query;
+
+          @route("/types")
+          @get op get_types(@path tesseraId: uuid, @path versionId: uuid): unknown[];
         }
       }
     }

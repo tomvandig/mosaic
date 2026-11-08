@@ -7,4 +7,4 @@ sdk/cli/build/
 
 # ...except the archives the static viewer serves, which have to be committed for github
 # pages to have anything to show
-!docs/viewer/examples/**/*.tsr
+!docs/dist/viewer/examples/**/*.tsr

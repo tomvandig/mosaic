@@ -1,0 +1,14 @@
+/* The viewer's own palette -- shallow water on paper -- carried over to the docs. */
+:root {
+  --vp-c-brand-1: #16867c;
+  --vp-c-brand-2: #1a9a8f;
+  --vp-c-brand-3: #16867c;
+  --vp-c-brand-soft: rgba(22, 134, 124, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #4cc2b6;
+  --vp-c-brand-2: #3aa99e;
+  --vp-c-brand-3: #2b8f85;
+  --vp-c-brand-soft: rgba(76, 194, 182, 0.16);
+}
