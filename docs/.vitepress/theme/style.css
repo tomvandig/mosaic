@@ -1,14 +1,204 @@
-/* The viewer's own palette -- shallow water on paper -- carried over to the docs. */
+/* --------------------------------------------------------------------------
+   Colours: the viewer's palette. Paper and sand, with shallow water as the
+   accent and terracotta for warnings, the colours of the tesserae in the
+   Alexander Mosaic behind the page.
+   -------------------------------------------------------------------------- */
 :root {
-  --vp-c-brand-1: #16867c;
-  --vp-c-brand-2: #1a9a8f;
-  --vp-c-brand-3: #16867c;
+  --mosaic-paper: #f4efe4;
+  --mosaic-panel: #fbf7ee;
+  --mosaic-sunk: #ede6d7;
+  --mosaic-line: #e0d6c2;
+  --mosaic-ink: #33322d;
+  --mosaic-water: #16867c;
+  --mosaic-terracotta: #d1603d;
+  --mosaic-sand: #e2a84c;
+
+  --vp-c-bg: var(--mosaic-paper);
+  --vp-c-bg-alt: #efe9dc;
+  --vp-c-bg-soft: var(--mosaic-sunk);
+  --vp-c-bg-elv: var(--mosaic-panel);
+
+  --vp-c-divider: var(--mosaic-line);
+  --vp-c-gutter: var(--mosaic-line);
+  --vp-c-border: #d3c7ae;
+
+  --vp-c-text-1: var(--mosaic-ink);
+  --vp-c-text-2: #66604f;   /* driftwood, darkened enough to read as body text */
+  --vp-c-text-3: #8c8474;
+
+  --vp-c-brand-1: #12766d;
+  --vp-c-brand-2: var(--mosaic-water);
+  --vp-c-brand-3: var(--mosaic-water);
   --vp-c-brand-soft: rgba(22, 134, 124, 0.14);
+
+  --vp-c-tip-1: var(--vp-c-brand-1);
+  --vp-c-tip-soft: rgba(22, 134, 124, 0.12);
+  --vp-c-warning-1: #a9482a;
+  --vp-c-warning-2: #b9532f;
+  --vp-c-warning-3: var(--mosaic-terracotta);
+  --vp-c-warning-soft: rgba(209, 96, 61, 0.13);
+  --vp-c-note-1: #8a6420;
+  --vp-c-note-soft: rgba(226, 168, 76, 0.18);
+
+  --vp-code-block-bg: var(--mosaic-panel);
+  --vp-code-tab-bg: var(--vp-c-bg-alt);
+  --vp-code-tab-divider: var(--mosaic-line);
+  --vp-code-copy-code-bg: var(--mosaic-sunk);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #12766d 10%, #b8862f 55%, #c4552f 90%);
+
+  --vp-nav-bg-color: var(--mosaic-paper);
+  --vp-sidebar-bg-color: #efe9dc;
+  --vp-local-search-bg: var(--mosaic-paper);
+  --vp-local-search-result-bg: var(--mosaic-panel);
+
+  --mosaic-backdrop-opacity: 0.14;
 }
 
+/* Night: the same stones, unlit. */
 .dark {
-  --vp-c-brand-1: #4cc2b6;
-  --vp-c-brand-2: #3aa99e;
+  --mosaic-paper: #1c1a16;
+  --mosaic-panel: #24211c;
+  --mosaic-sunk: #2a2620;
+  --mosaic-line: #3a352c;
+  --mosaic-ink: #ece4d3;
+
+  --vp-c-bg-alt: #181612;
+  --vp-c-border: #4a443a;
+
+  --vp-c-text-2: #bbb19e;
+  --vp-c-text-3: #8a8170;
+
+  --vp-c-brand-1: #5cc9bd;
+  --vp-c-brand-2: #45b3a7;
   --vp-c-brand-3: #2b8f85;
   --vp-c-brand-soft: rgba(76, 194, 182, 0.16);
+
+  --vp-c-tip-1: var(--vp-c-brand-1);
+  --vp-c-warning-1: #ec9474;
+  --vp-c-warning-2: #e07d5a;
+  --vp-c-note-1: #e8bd72;
+
+  --vp-code-block-bg: #201d18;
+  --vp-sidebar-bg-color: #181612;
+  --vp-home-hero-name-background: linear-gradient(120deg, #5cc9bd 10%, #e2a84c 55%, #e07d5a 90%);
+
+  --mosaic-backdrop-opacity: 0.1;
+}
+
+/* --------------------------------------------------------------------------
+   The mosaic behind the page.
+
+   One fixed layer under everything. On a doc page it shows only at the sides,
+   faint, and fades out towards the middle where the text is. The sidebar and
+   the nav are solid, so nothing written ever sits on the picture.
+   -------------------------------------------------------------------------- */
+body {
+  background: var(--vp-c-bg);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url("/issus.webp") center / cover no-repeat;
+  opacity: var(--mosaic-backdrop-opacity);
+  filter: sepia(0.25) saturate(0.8);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 32%, transparent 68%, #000 100%);
+  mask-image: linear-gradient(90deg, #000 0%, transparent 32%, transparent 68%, #000 100%);
+}
+
+.dark body::before {
+  filter: sepia(0.2) saturate(0.7) brightness(0.8);
+}
+
+/* Narrow screens have no margins to spare; the picture would sit under text. */
+@media (max-width: 959px) {
+  body::before { display: none; }
+}
+
+/* The home page doesn't use that layer. The mosaic is the hero there, fading into
+   the paper on the left where the title is written. */
+body:has(.VPHome)::before { display: none; }
+
+.VPHome .VPHero {
+  position: relative;
+  isolation: isolate;
+}
+
+.VPHome .VPHero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--vp-nav-height)) 0 -48px 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,
+      var(--vp-c-bg) 0%,
+      var(--vp-c-bg) 30%,
+      color-mix(in srgb, var(--vp-c-bg) 55%, transparent) 62%,
+      color-mix(in srgb, var(--vp-c-bg) 20%, transparent) 100%),
+    linear-gradient(0deg, var(--vp-c-bg) 0%, transparent 35%),
+    url("/issus.webp") 70% 35% / cover no-repeat;
+}
+
+.dark .VPHome .VPHero::before {
+  background:
+    linear-gradient(90deg,
+      var(--vp-c-bg) 0%,
+      var(--vp-c-bg) 30%,
+      color-mix(in srgb, var(--vp-c-bg) 60%, transparent) 62%,
+      color-mix(in srgb, var(--vp-c-bg) 35%, transparent) 100%),
+    linear-gradient(0deg, var(--vp-c-bg) 0%, transparent 35%),
+    url("/issus.webp") 70% 35% / cover no-repeat;
+}
+
+/* On a phone the text spans the whole width, so the picture steps back. */
+@media (max-width: 767px) {
+  .VPHome .VPHero::before {
+    background:
+      linear-gradient(0deg, var(--vp-c-bg) 0%, color-mix(in srgb, var(--vp-c-bg) 78%, transparent) 100%),
+      url("/issus.webp") 70% 35% / cover no-repeat;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Small touches.
+   -------------------------------------------------------------------------- */
+
+/* Feature cards: lighter sheets of paper laid on the mosaic. */
+.VPHome .VPFeature {
+  background: color-mix(in srgb, var(--mosaic-panel) 92%, transparent);
+  border: 1px solid var(--vp-c-divider);
+}
+
+/* A row of tesserae under each page title. */
+.vp-doc h1::after {
+  content: "";
+  display: block;
+  width: 72px;
+  height: 6px;
+  margin-top: 14px;
+  border-radius: 1px;
+  background: linear-gradient(90deg,
+    var(--mosaic-water) 0 22%, transparent 22% 26%,
+    var(--mosaic-sand) 26% 48%, transparent 48% 52%,
+    var(--mosaic-terracotta) 52% 74%, transparent 74% 78%,
+    var(--vp-c-text-3) 78% 100%);
+}
+
+/* Definition lists, used by the Definitions page. */
+.vp-doc dl dt {
+  margin-top: 20px;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+}
+.vp-doc dl dd {
+  margin: 4px 0 0 0;
+  padding-left: 16px;
+  border-left: 2px solid var(--vp-c-divider);
+  color: var(--vp-c-text-2);
 }

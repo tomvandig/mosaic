@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitepress";
+import deflist from "markdown-it-deflist";
 // @ts-expect-error -- plain JavaScript, shared with scripts/serve.mjs
 import { serveStatic } from "../scripts/static.mjs";
 
@@ -32,6 +33,8 @@ export default defineConfig({
 
     markdown: {
         theme: { light: "github-light", dark: "github-dark" },
+        // `Term` / `: definition` lists, for the Definitions page.
+        config: md => { md.use(deflist); },
     },
 
     themeConfig: {
@@ -99,6 +102,12 @@ export default defineConfig({
         },
 
         outline: { level: [2, 3] },
+
+        footer: {
+            message: 'Background: the Alexander Mosaic, House of the Faun, Pompeii (c. 100 BC). '
+                + 'Photo by Berthold Werner, public domain, via '
+                + '<a href="https://commons.wikimedia.org/wiki/File:Battle_of_Issus_mosaic_-_Museo_Archeologico_Nazionale_-_Naples_2013-05-16_16-25-06_BW.jpg">Wikimedia Commons</a>.',
+        },
     },
 
     vite: {
