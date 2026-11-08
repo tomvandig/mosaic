@@ -172,12 +172,12 @@ body:has(.VPHome)::before { display: none; }
 /* The hero title, set in tesserae: the same gradient, sampled once per letter, so it
    steps from colour to colour instead of blending. */
 :root {
-  --tile-1: #12766d;
-  --tile-2: #497b58;
-  --tile-3: #878141;
-  --tile-4: #b9812f;
-  --tile-5: #bf6a2f;
-  --tile-6: #c4552f;
+  --tile-1: #1b8073;
+  --tile-2: #55855e;
+  --tile-3: #948a46;
+  --tile-4: #c28835;
+  --tile-5: #c77134;
+  --tile-6: #cb5c33;
 }
 .dark {
   --tile-1: #5cc9bd;
@@ -187,15 +187,67 @@ body:has(.VPHome)::before { display: none; }
   --tile-5: #e18f54;
   --tile-6: #e07d5a;
 }
-.VPHero .name .tiles > span {
-  -webkit-text-fill-color: currentColor;
+/* Each letter is a glazed tile: lit from above (a highlight fading into the full
+   colour), edged with a fine, nearly white line, like grout, and set on the page with a faint
+   shadow. That makes the name read as a mark rather than the first word of
+   the line below it. */
+.VPHero .name .tiles {
+  display: inline-block;
+  letter-spacing: 0.02em;
+  filter: drop-shadow(0 1px 2px rgba(51, 50, 45, 0.22));
 }
-.VPHero .name .tiles > span:nth-child(1) { color: var(--tile-1); }
-.VPHero .name .tiles > span:nth-child(2) { color: var(--tile-2); }
-.VPHero .name .tiles > span:nth-child(3) { color: var(--tile-3); }
-.VPHero .name .tiles > span:nth-child(4) { color: var(--tile-4); }
-.VPHero .name .tiles > span:nth-child(5) { color: var(--tile-5); }
-.VPHero .name .tiles > span:nth-child(6) { color: var(--tile-6); }
+.dark .VPHero .name .tiles {
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.35));
+}
+.VPHero .name .tiles > span {
+  --t: var(--tile-1);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--t) 72%, white) 0%,
+    color-mix(in srgb, var(--t) 92%, white) 40%,
+    var(--t) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* The outline is drawn by the filter, round the letter's finished shape. A text
+     stroke would trace every contour of the glyph, and Inter's overlapping contours
+     show up as seams where the strokes of an M meet. */
+  --edge: color-mix(in srgb, var(--t) 18%, white);
+  filter:
+    drop-shadow(0.6px 0 0 var(--edge))
+    drop-shadow(-0.6px 0 0 var(--edge))
+    drop-shadow(0 0.6px 0 var(--edge))
+    drop-shadow(0 -0.6px 0 var(--edge));
+}
+.dark .VPHero .name .tiles > span {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--t) 50%, white) 0%,
+    color-mix(in srgb, var(--t) 85%, white) 40%,
+    var(--t) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  --edge: color-mix(in srgb, var(--t) 30%, white);
+}
+.VPHero .name .tiles > span:nth-child(1) { --t: var(--tile-1); }
+.VPHero .name .tiles > span:nth-child(2) { --t: var(--tile-2); }
+.VPHero .name .tiles > span:nth-child(3) { --t: var(--tile-3); }
+.VPHero .name .tiles > span:nth-child(4) { --t: var(--tile-4); }
+.VPHero .name .tiles > span:nth-child(5) { --t: var(--tile-5); }
+.VPHero .name .tiles > span:nth-child(6) { --t: var(--tile-6); }
+
+/* The line after the name is a description, so it steps back: smaller and quieter. */
+.VPHero .text {
+  margin-top: 8px;
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+}
+@media (min-width: 640px) {
+  .VPHero .text { font-size: 38px; line-height: 46px; }
+}
+@media (min-width: 960px) {
+  .VPHero .text { font-size: 44px; line-height: 54px; }
+}
 
 /* Feature cards: lighter sheets of paper laid on the mosaic. */
 .VPHome .VPFeature {
