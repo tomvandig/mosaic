@@ -1,0 +1,1 @@
+import{_ as e,o,c as a,a3 as d}from"./chunks/framework.uTHcANy5.js";const f=JSON.parse('{"title":"The SDK","description":"","frontmatter":{},"headers":[],"relativePath":"sdk/index.md","filePath":"sdk/index.md"}'),r={name:"sdk/index.md"};function s(i,t,n,c,h,l){return o(),a("div",null,[...t[0]||(t[0]=[d("",14)])])}const p=e(r,[["render",s]]);export{f as __pageData,p as default};

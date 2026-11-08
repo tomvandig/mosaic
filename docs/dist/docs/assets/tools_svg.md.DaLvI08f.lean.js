@@ -1,1 +1,0 @@
-import{_ as t,o as a,c as o,a2 as n}from"./chunks/framework.DhQimoSI.js";const p=JSON.parse('{"title":"SVG","description":"","frontmatter":{},"headers":[],"relativePath":"tools/svg.md","filePath":"tools/svg.md"}'),s={name:"tools/svg.md"};function i(r,e,d,c,h,l){return a(),o("div",null,[...e[0]||(e[0]=[n("",3)])])}const m=t(s,[["render",i]]);export{p as __pageData,m as default};
