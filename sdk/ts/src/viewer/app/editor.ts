@@ -64,13 +64,25 @@ export interface EditorOptions {
     onToggled?: (open: boolean) => void;
 }
 
+/** What a page can ask the drawer once it is built. */
+export interface EditorHandle {
+    /** Whether something is typed in it that has not been saved into the archive yet. */
+    dirty(): boolean;
+    /**
+     * Reads the archive again after it was changed some other way -- by dragging a part in
+     * 3D -- staying on the same file. Does nothing while there is unsaved typing, and says
+     * whether it refreshed.
+     */
+    refresh(): boolean;
+}
+
 /**
  * Builds the panel and the button that opens it.
  *
- * Returns nothing: from here on the panel looks after itself, and the page's only tie to
- * it is the archives it shares with the viewer.
+ * From here on the panel looks after itself, and the page's only tie to it is the
+ * archives it shares with the viewer -- and whether it is holding unsaved typing.
  */
-export async function mountEditor(options: EditorOptions): Promise<void> {
+export async function mountEditor(options: EditorOptions): Promise<EditorHandle> {
     const { source, onSaved, say } = options;
 
     // --- the drawer ---------------------------------------------------------
@@ -176,6 +188,10 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
 
         openUrl = url;
         open = { ...held.files };
+        // What is on screen belongs to the files just replaced, so it is not carried over:
+        // keeping it would put the old text back over the fresh, which is the opposite of
+        // what reopening (or Revert) is for.
+        showing = "";
 
         // index.json first; the component tables are alphabetical after it, which is the
         // order they are written in the zip.
@@ -295,4 +311,16 @@ export async function mountEditor(options: EditorOptions): Promise<void> {
     // A link can name the drawer as well as the example, so "look at this file" is a
     // thing that can be sent to someone.
     if (options.open) await setOpen(true, true);
+
+    return {
+        dirty: () => dirty,
+        refresh: () => {
+            if (dirty) return false;
+            if (!editor || !openUrl) return true; // nothing on screen yet; it reads fresh when opened
+            const was = showing;
+            openArchive(openUrl);
+            if (was && open[was] !== undefined) showFile(was);
+            return true;
+        },
+    };
 }

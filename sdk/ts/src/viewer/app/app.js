@@ -61,6 +61,12 @@ function say(message, isError = false) {
  */
 let source = null;
 
+/**
+ * Set by `startEditing`, for `mosaic edit`: clicking the model picks a part, a handle moves
+ * it, and selecting a node puts the handle on it instead of drawing that node alone.
+ */
+let editor = null;
+
 /** The types of source that offer more than reading, for the parts of the UI that need it. */
 const canUpload = () => typeof source?.add === "function";
 
@@ -400,9 +406,50 @@ function drawTree() {
 function select(id) {
   state.selected = id;
   state.expanded.add(id);
+  if (editor) {
+    // The row has to be visible to be seen selected, so everything above it opens.
+    for (let up = parentInScene(id); up !== null; up = parentInScene(up)) state.expanded.add(up);
+    drawTree();
+    drawComponents(id);
+    viewer().then(drawing => {
+      if (!drawing.attach(Number(id))) say("nothing drawn to move under " + labelOf(state.scene.nodes[id]));
+    });
+    return;
+  }
   drawTree();
   drawComponents(id);
   showNode(id);
+}
+
+/** The node a scene node hangs under, or null for a root. */
+function parentInScene(id) {
+  for (const [candidate, node] of Object.entries(state.scene?.nodes ?? {})) {
+    if (node.children.includes(id)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Turns the viewer into an editor: picking in 3D, and a handle to move what is picked.
+ *
+ * `onMoved(nodeId, transform, label)` is called when a part has been dragged, with the
+ * Mosaic node it is and its new local transform. Whoever holds the archive writes it
+ * there; the drawing has already moved, so nothing is rebuilt.
+ */
+export async function startEditing({ onMoved }) {
+  const drawing = await viewer();
+  editor = { onMoved };
+  await drawing.enableEditing({
+    onPick: index => select(String(index)),
+    onMoved: (index, transform) => {
+      const node = state.scene?.nodes[String(index)];
+      if (!node?.nodeId) return;
+      // What the components panel holds for it is out of date now.
+      state.components.delete(String(index));
+      onMoved(node.nodeId, transform, labelOf(node));
+      if (state.selected === String(index)) drawComponents(String(index));
+    },
+  });
 }
 
 /**
@@ -985,7 +1032,9 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         const ids = new Map();
         for (const [uuid, geometry] of distinct) ids.set(uuid, batch.addGeometry(geometry));
         for (const mesh of group.meshes) {
-          batch.setMatrixAt(batch.addInstance(ids.get(mesh.geometry.uuid)), mesh.matrixWorld);
+          const instance = batch.addInstance(ids.get(mesh.geometry.uuid));
+          batch.setMatrixAt(instance, mesh.matrixWorld);
+          placed3d.register(mesh, batch, instance);
         }
 
         // Culling every instance is javascript that runs on each frame the camera moves,
@@ -1202,9 +1251,14 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     clear();
 
     const file = await new Promise((resolve, reject) => loader.parse(bytes, "", resolve, reject));
+    placed3d.reset(file);
     const model = collapse(file.scene);
     content.add(model);
-    look(model);
+    // While editing, a redraw after an edit keeps the camera where it was: the point of
+    // the edit was to look at that part, and being thrown back to the whole model is not.
+    if (!editing || !lookedOnce) look(model);
+    lookedOnce = true;
+    if (editing) editing.reattach();
 
     // What the card counts is draws, and a drawing is a group of them rather than one.
     drawn = 0;
@@ -1215,7 +1269,297 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     return { text: model.userData.summary, drawn };
   }
 
-  return { show, clear };
+  // --- what each drawn instance is, for picking and moving -------------------
+  // The batches hold every placement as a matrix, and nothing about which glTF node it
+  // came from. That is kept here, alongside: each glTF node's world matrix as loaded, its
+  // parent, and the batch instances that draw it -- which is what lets a click find a node
+  // and a drag move it without building the model again.
+  const placed3d = {
+    associations: null,
+    world: new Map(),     // glTF node index -> world Matrix4
+    parent: new Map(),    // glTF node index -> parent index, or null
+    children: new Map(),  // glTF node index -> child indices
+    drawnBy: new Map(),   // glTF node index -> [{ batch, id, world }]
+    byInstance: new Map(),// batch -> Map(instance id -> glTF node index)
+
+    reset(file) {
+      this.associations = file.parser?.associations ?? new Map();
+      this.world.clear(); this.parent.clear(); this.children.clear();
+      this.drawnBy.clear(); this.byInstance.clear();
+      // The tinted instances belonged to batches that were just thrown away.
+      if (editing) { editing.tinted = []; editing.outline.visible = false; }
+
+      file.scene.updateMatrixWorld(true);
+      file.scene.traverse(object => {
+        const index = this.nodeOf(object, false);
+        if (index === null) return;
+        this.world.set(index, object.matrixWorld.clone());
+        let up = object.parent;
+        while (up && this.nodeOf(up, false) === null) up = up.parent;
+        const parent = up ? this.nodeOf(up, false) : null;
+        this.parent.set(index, parent);
+        if (parent !== null) {
+          if (!this.children.has(parent)) this.children.set(parent, []);
+          this.children.get(parent).push(index);
+        }
+      });
+    },
+
+    /** The glTF node an object stands for; with `upwards`, the nearest one above it. */
+    nodeOf(object, upwards = true) {
+      for (let at = object; at; at = upwards ? at.parent : null) {
+        const index = this.associations?.get(at)?.nodes;
+        if (index !== undefined) return index;
+        if (!upwards) break;
+      }
+      return null;
+    },
+
+    register(mesh, batch, id) {
+      const index = this.nodeOf(mesh);
+      if (index === null) return;
+      if (!this.drawnBy.has(index)) this.drawnBy.set(index, []);
+      this.drawnBy.get(index).push({ batch, id, world: mesh.matrixWorld.clone() });
+      if (!this.byInstance.has(batch)) this.byInstance.set(batch, new Map());
+      this.byInstance.get(batch).set(id, index);
+    },
+
+    subtree(index) {
+      const all = [index];
+      for (let i = 0; i < all.length; i++) all.push(...(this.children.get(all[i]) ?? []));
+      return all;
+    },
+  };
+
+  // --- editing: pick a part, drag it -----------------------------------------
+  let editing = null;
+  /** Whether the camera has been put on a model yet; while editing, it is only done once. */
+  let lookedOnce = false;
+
+  /**
+   * Turns on picking and the transform handle. Only `mosaic edit` asks for this.
+   *
+   * `onPick(index)` is called with the glTF node index a click landed on. `onMoved(index,
+   * local)` is called when a drag ends, with the node's new transform relative to its
+   * parent, as translation, rotation and scale.
+   */
+  async function enableEditing({ onPick, onMoved }) {
+    if (editing) return;
+    const { TransformControls } = await import("three/addons/controls/TransformControls.js");
+
+    const handle = new TransformControls(camera, canvas);
+    const proxy = new THREE.Object3D();
+    scene.add(proxy);
+    scene.add(handle.getHelper ? handle.getHelper() : handle);
+    handle.addEventListener("change", invalidate);
+
+    // The selection is shown twice over: tinted, which reads on a light surface, and boxed,
+    // which reads on any surface -- a tint multiplies the material's colour, so on black
+    // paint it does nothing. The box is drawn through whatever is in front of it.
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#16867c";
+    const outline = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color(accent));
+    outline.material.depthTest = false;
+    outline.material.transparent = true;
+    outline.material.opacity = 0.9;
+    outline.renderOrder = 999;
+    outline.visible = false;
+    scene.add(outline);
+
+    editing = {
+      handle, proxy, outline, selected: null, drag: null, reattach: () => {},
+      /** The instances tinted for the selection, to put back when it changes. */
+      tinted: [],
+      /** The selection's bounds in world space, as of the last time it was placed. */
+      bounds: new THREE.Box3(),
+    };
+
+    const raycaster = new THREE.Raycaster();
+    let down = null;
+
+    canvas.addEventListener("pointerdown", event => { down = { x: event.clientX, y: event.clientY }; });
+    canvas.addEventListener("pointerup", event => {
+      if (!down || handle.dragging) return;
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      down = null;
+      if (moved > 4) return; // an orbit, not a click
+
+      const box = canvas.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        ((event.clientX - box.left) / box.width) * 2 - 1,
+        -((event.clientY - box.top) / box.height) * 2 + 1);
+      raycaster.setFromCamera(pointer, camera);
+
+      for (const hit of raycaster.intersectObjects(content.children, true)) {
+        if (!hit.object.isBatchedMesh || hit.batchId === undefined) continue;
+        const index = placed3d.byInstance.get(hit.object)?.get(hit.batchId);
+        if (index !== undefined) { onPick(index); return; }
+      }
+    });
+
+    window.addEventListener("keydown", event => {
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, .monaco-editor")) return;
+      if (event.key === "w" || event.key === "W") handle.setMode("translate");
+      else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
+      else if (event.key === "r" || event.key === "R") handle.setMode("scale");
+      else if (event.key === "Escape") attach(null);
+      else if (event.key === "ArrowUp") {
+        // A click lands on the smallest part under it; this climbs to what holds it.
+        const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
+        if (parent === null || parent === undefined) return;
+        onPick(parent);
+        event.preventDefault();
+      }
+      else return;
+      invalidate();
+    });
+
+    handle.addEventListener("dragging-changed", event => {
+      controls.enabled = !event.value;
+      // Letting go of the handle is not a click on whatever is under it.
+      down = null;
+      if (event.value) beginDrag(); else endDrag(onMoved);
+    });
+    handle.addEventListener("objectChange", duringDrag);
+
+    editing.reattach = () => attach(editing.selected);
+  }
+
+  /** How a selected part is tinted: a little towards the accent, a little brighter. */
+  const TINT = new THREE.Color(0.74, 1.1, 1.04);
+  const UNTINTED = new THREE.Color(1, 1, 1);
+
+  /** The world-space bounds of everything drawn under these nodes. */
+  function boundsOf(nodes) {
+    const box = new THREE.Box3();
+    const one = new THREE.Box3();
+    for (const node of nodes) {
+      for (const instance of placed3d.drawnBy.get(node) ?? []) {
+        const geometry = instance.batch.getGeometryIdAt(instance.id);
+        if (geometry < 0 || !instance.batch.getBoundingBoxAt(geometry, one)) continue;
+        box.union(one.applyMatrix4(instance.world));
+      }
+    }
+    return box;
+  }
+
+  function untint() {
+    for (const { batch, id } of editing.tinted) batch.setColorAt(id, UNTINTED);
+    editing.tinted = [];
+  }
+
+  /**
+   * Puts the handle on a glTF node, or takes it away with null.
+   *
+   * The handle goes at the middle of what the node draws, not at the node's origin: a
+   * converted model often keeps its geometry in world coordinates under nodes with no
+   * transform of their own, so every origin is the world's and every handle would sit in
+   * one place, nowhere near the part. Where the handle sits does not change what a move
+   * writes -- the move is measured from wherever it started, and written as the node's own
+   * transform.
+   */
+  function attach(index) {
+    if (!editing) return false;
+    untint();
+    editing.selected = index;
+    const world = index === null ? undefined : placed3d.world.get(index);
+    if (!world) {
+      editing.handle.detach();
+      editing.outline.visible = false;
+      invalidate();
+      return false;
+    }
+
+    const nodes = placed3d.subtree(index);
+    for (const node of nodes) {
+      for (const instance of placed3d.drawnBy.get(node) ?? []) {
+        instance.batch.setColorAt(instance.id, TINT);
+        editing.tinted.push(instance);
+      }
+    }
+
+    world.decompose(editing.proxy.position, editing.proxy.quaternion, editing.proxy.scale);
+    editing.bounds = boundsOf(nodes);
+    if (!editing.bounds.isEmpty()) {
+      editing.bounds.getCenter(editing.proxy.position);
+      editing.outline.box.copy(editing.bounds);
+      editing.outline.visible = true;
+    } else {
+      editing.outline.visible = false;
+    }
+
+    editing.proxy.updateMatrixWorld(true);
+    editing.handle.attach(editing.proxy);
+    invalidate();
+    return true;
+  }
+
+  function beginDrag() {
+    const index = editing.selected;
+    if (index === null) return;
+    editing.drag = {
+      index,
+      undo: editing.proxy.matrixWorld.clone().invert(),
+      nodes: placed3d.subtree(index),
+      delta: new THREE.Matrix4(),
+      scratch: new THREE.Matrix4(),
+    };
+  }
+
+  /** Moves every instance under the node by however far the handle has gone. */
+  function duringDrag() {
+    const drag = editing?.drag;
+    if (!drag) return;
+    editing.proxy.updateMatrixWorld(true);
+    drag.delta.multiplyMatrices(editing.proxy.matrixWorld, drag.undo);
+    for (const node of drag.nodes) {
+      for (const one of placed3d.drawnBy.get(node) ?? []) {
+        one.batch.setMatrixAt(one.id, drag.scratch.multiplyMatrices(drag.delta, one.world));
+      }
+    }
+    if (editing.outline.visible) editing.outline.box.copy(editing.bounds).applyMatrix4(drag.delta);
+    invalidate();
+  }
+
+  function endDrag(onMoved) {
+    const drag = editing.drag;
+    if (!drag) return;
+    // One last update, so what is kept is exactly where the handle let go.
+    duringDrag();
+    editing.drag = null;
+
+    // What was moved stays moved: the remembered matrices follow, so the next drag starts
+    // from here, and the batches' bounds are measured again for picking.
+    const touched = new Set();
+    for (const node of drag.nodes) {
+      placed3d.world.get(node)?.premultiply(drag.delta);
+      for (const one of placed3d.drawnBy.get(node) ?? []) {
+        one.world.premultiply(drag.delta);
+        touched.add(one.batch);
+      }
+    }
+    for (const batch of touched) { batch.computeBoundingBox(); batch.computeBoundingSphere(); }
+    editing.bounds = boundsOf(drag.nodes);
+    if (!editing.bounds.isEmpty()) editing.outline.box.copy(editing.bounds);
+
+    // The node's transform is relative to its parent, so that is what is handed back.
+    const world = placed3d.world.get(drag.index);
+    const parentIndex = placed3d.parent.get(drag.index);
+    const parentWorld = parentIndex === null || parentIndex === undefined
+      ? new THREE.Matrix4() : placed3d.world.get(parentIndex) ?? new THREE.Matrix4();
+    const local = parentWorld.clone().invert().multiply(world);
+
+    const translation = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+    local.decompose(translation, rotation, scale);
+    const round = values => values.map(v => Math.round(v * 1e6) / 1e6);
+
+    onMoved(drag.index, {
+      translation: round(translation.toArray()),
+      rotation: round(rotation.toArray()),
+      scale: round(scale.toArray()),
+    });
+  }
+
+  return { show, clear, enableEditing, attach };
 }
 
 async function intoViewer(saying, pending) {

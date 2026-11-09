@@ -2742,8 +2742,15 @@ function collapseNodesByPath(file) {
 function federate(oldFile, newFile, keepHistory) {
   const result = new MosaicFile();
   result.index.header = newFile.index.header;
-  result.index.imports = newFile.index.imports;
-  result.index.componentTables = [...oldFile.index.componentTables, ...newFile.index.componentTables];
+  const imports = /* @__PURE__ */ new Map();
+  for (const entry of [...oldFile.index.imports, ...newFile.index.imports]) {
+    if (!imports.has(entry.uri)) imports.set(entry.uri, entry);
+  }
+  result.index.imports = [...imports.values()];
+  const tables = /* @__PURE__ */ new Map();
+  for (const table of oldFile.index.componentTables) tables.set(table.filename, table);
+  for (const table of newFile.index.componentTables) tables.set(table.filename, table);
+  result.index.componentTables = [...tables.values()];
   if (keepHistory) {
     for (const sec of oldFile.index.sections) {
       result.AddSection(sec);
@@ -2822,6 +2829,7 @@ function federate(oldFile, newFile, keepHistory) {
         result.AddSection(sec);
       }
     }
+    result.index.componentTables = result.index.componentTables.filter((table) => result.serializedComponents.has(table.filename.replace(/\.ndjson$/, "")));
   }
   return result;
 }
@@ -4289,6 +4297,14 @@ var ArchiveSource = class {
       }
     }
     archive.alone = edited;
+    this.remerge(url);
+    return { warnings };
+  }
+  /**
+   * Rebuilds every version whose graph has this archive in it -- not only the one that is
+   * this archive, but anything that imports it, however far up.
+   */
+  remerge(url) {
     for (const tessera of this.held.values()) {
       for (const version of tessera.versions) {
         if (!version.graph.has(url)) continue;
@@ -4296,7 +4312,63 @@ var ArchiveSource = class {
         version.own = ownNodesOf(version.graph.get(version.top).alone);
       }
     }
-    return { warnings };
+  }
+  /**
+   * Sets a node's local transform, the way an editor moving it would.
+   *
+   * The edit is a layer, not a rewrite: it goes in a section of its own at the end of the
+   * archive, written by "mosaic edit", which wins over whatever placed the node before.
+   * Moving the same node again changes its row in that section rather than adding
+   * another, so however long an editing session runs, it is one section with one
+   * transform per node it touched. The reference keeps the id the node's transform
+   * already had, which is what makes it replace that transform rather than sit beside it.
+   */
+  setTransform(url, nodeId, value) {
+    const archive = this.archiveAt(url);
+    if (!archive) throw new Error("that archive is not open");
+    const file = archive.alone;
+    const type = CORE_TYPE.transform;
+    if (!file.serializedComponents.has(type)) file.serializedComponents.set(type, []);
+    if (!file.index.componentTables.some((table) => table.filename === `${type}.ndjson`)) {
+      file.index.componentTables.push({ filename: `${type}.ndjson`, type: "NDJSON" /* Ndjson */, schema: CORE_SCHEMAS[type] });
+    }
+    const rows = file.serializedComponents.get(type);
+    const current = collapseNodesByPath(file).get(nodeId)?.components?.find((ref) => ref.type === type && operationOf(ref) === "VALUE" /* Value */);
+    const referenceId = current?.id ?? "transform";
+    const last = file.index.sections.at(-1);
+    let section;
+    if (last?.header.application === "mosaic edit") {
+      section = last;
+    } else {
+      const before = last?.header;
+      section = {
+        header: {
+          id: before?.id ?? archive.name,
+          application: "mosaic edit",
+          author: before?.author ?? "",
+          dataVersion: before?.dataVersion ?? "",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          message: "Edited in mosaic edit"
+        },
+        nodes: []
+      };
+      file.index.sections.push(section);
+    }
+    section.header.timestamp = (/* @__PURE__ */ new Date()).toISOString();
+    let node = section.nodes.find((entry) => entry.id === nodeId);
+    if (!node) {
+      node = { id: nodeId, components: [] };
+      section.nodes.push(node);
+    }
+    node.components ??= [];
+    const row = JSON.stringify(value);
+    const existing = node.components.find((ref) => ref.type === type && ref.id === referenceId);
+    if (existing && indexOf(existing) >= 0) {
+      rows[indexOf(existing)] = row;
+    } else {
+      node.components.push({ type, id: referenceId, index: rows.push(row) - 1 });
+    }
+    this.remerge(url);
   }
   /** The versions named, in the order they were named, skipping any that are not here. */
   resolve(refs) {
@@ -4557,7 +4629,7 @@ async function mountEditor(options) {
   const status = document.getElementById("status");
   if (status) status.before(toggle);
   else document.querySelector("header")?.append(toggle);
-  let editor;
+  let editor2;
   let open = {};
   let openUrl;
   let showing = "";
@@ -4590,6 +4662,7 @@ async function mountEditor(options) {
     }
     openUrl = url;
     open = { ...held.files };
+    showing = "";
     const names = Object.keys(open).sort((a2, b) => a2 === "index.json" ? -1 : b === "index.json" ? 1 : a2.localeCompare(b));
     files.innerHTML = "";
     for (const name of names) {
@@ -4603,14 +4676,14 @@ async function mountEditor(options) {
     markDirty(false);
   }
   function showFile(name) {
-    if (!name || !editor) return;
-    if (showing && open[showing] !== void 0) open[showing] = editor.getValue();
+    if (!name || !editor2) return;
+    if (showing && open[showing] !== void 0) open[showing] = editor2.getValue();
     showing = name;
     files.value = name;
-    const model = editor.getModel();
+    const model = editor2.getModel();
     monaco.editor.setModelLanguage(model, languageOf(name));
     filling = true;
-    editor.setValue(open[name] ?? "");
+    editor2.setValue(open[name] ?? "");
     filling = false;
   }
   which.onchange = () => openArchive(which.value);
@@ -4620,7 +4693,7 @@ async function mountEditor(options) {
   };
   save.onclick = async () => {
     if (!openUrl) return;
-    if (showing) open[showing] = editor.getValue();
+    if (showing) open[showing] = editor2.getValue();
     save.disabled = true;
     try {
       const { warnings } = source2.replaceFiles(openUrl, open);
@@ -4641,7 +4714,7 @@ async function mountEditor(options) {
     document.body.classList.toggle("editing", wanted);
     if (!quietly) options.onToggled?.(wanted);
     if (!wanted) return;
-    if (!editor) {
+    if (!editor2) {
       note.textContent = "loading the editor\u2026";
       try {
         await monacoReady();
@@ -4649,7 +4722,7 @@ async function mountEditor(options) {
         note.textContent = error instanceof Error ? error.message : String(error);
         return;
       }
-      editor = monaco.editor.create(host, {
+      editor2 = monaco.editor.create(host, {
         value: "",
         language: "json",
         automaticLayout: true,
@@ -4662,7 +4735,7 @@ async function mountEditor(options) {
         // them beats scrolling sideways through a hundred thousand of them.
         wordWrap: "on"
       });
-      editor.onDidChangeModelContent(() => {
+      editor2.onDidChangeModelContent(() => {
         if (!dirty && !filling) markDirty(true);
       });
       note.textContent = "";
@@ -4676,6 +4749,17 @@ async function mountEditor(options) {
   toggle.onclick = () => void setOpen(drawer.hidden);
   close.onclick = () => void setOpen(false);
   if (options.open) await setOpen(true, true);
+  return {
+    dirty: () => dirty,
+    refresh: () => {
+      if (dirty) return false;
+      if (!editor2 || !openUrl) return true;
+      const was = showing;
+      openArchive(openUrl);
+      if (was && open[was] !== void 0) showFile(was);
+      return true;
+    }
+  };
 }
 
 // src/viewer/app/app.js
@@ -4716,6 +4800,7 @@ function say(message2, isError = false) {
   $("status").dataset.error = String(isError);
 }
 var source = null;
+var editor = null;
 var canUpload = () => typeof source?.add === "function";
 var compose = () => true;
 function shownVersions() {
@@ -4952,9 +5037,24 @@ function drawTree() {
 function select(id) {
   state.selected = id;
   state.expanded.add(id);
+  if (editor) {
+    for (let up = parentInScene(id); up !== null; up = parentInScene(up)) state.expanded.add(up);
+    drawTree();
+    drawComponents(id);
+    viewer().then((drawing) => {
+      if (!drawing.attach(Number(id))) say("nothing drawn to move under " + labelOf(state.scene.nodes[id]));
+    });
+    return;
+  }
   drawTree();
   drawComponents(id);
   showNode(id);
+}
+function parentInScene(id) {
+  for (const [candidate, node] of Object.entries(state.scene?.nodes ?? {})) {
+    if (node.children.includes(id)) return candidate;
+  }
+  return null;
 }
 async function componentsOf(id) {
   if (state.components.has(id)) return state.components.get(id);
@@ -5274,7 +5374,9 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         const ids = /* @__PURE__ */ new Map();
         for (const [uuid, geometry] of distinct) ids.set(uuid, batch.addGeometry(geometry));
         for (const mesh of group.meshes) {
-          batch.setMatrixAt(batch.addInstance(ids.get(mesh.geometry.uuid)), mesh.matrixWorld);
+          const instance = batch.addInstance(ids.get(mesh.geometry.uuid));
+          batch.setMatrixAt(instance, mesh.matrixWorld);
+          placed3d.register(mesh, batch, instance);
         }
         batch.perObjectFrustumCulled = false;
         batch.sortObjects = group.material.transparent === true;
@@ -5403,9 +5505,12 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     clear();
     const file = await new Promise((resolve, reject) => loader.parse(bytes, "", resolve, reject));
+    placed3d.reset(file);
     const model = collapse(file.scene);
     content.add(model);
-    look(model);
+    if (!editing || !lookedOnce) look(model);
+    lookedOnce = true;
+    if (editing) editing.reattach();
     drawn = 0;
     model.traverse((one) => {
       if (one.isMesh || one.isLine || one.isLineSegments) drawn++;
@@ -5414,7 +5519,253 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     invalidate();
     return { text: model.userData.summary, drawn };
   }
-  return { show: show2, clear };
+  const placed3d = {
+    associations: null,
+    world: /* @__PURE__ */ new Map(),
+    // glTF node index -> world Matrix4
+    parent: /* @__PURE__ */ new Map(),
+    // glTF node index -> parent index, or null
+    children: /* @__PURE__ */ new Map(),
+    // glTF node index -> child indices
+    drawnBy: /* @__PURE__ */ new Map(),
+    // glTF node index -> [{ batch, id, world }]
+    byInstance: /* @__PURE__ */ new Map(),
+    // batch -> Map(instance id -> glTF node index)
+    reset(file) {
+      this.associations = file.parser?.associations ?? /* @__PURE__ */ new Map();
+      this.world.clear();
+      this.parent.clear();
+      this.children.clear();
+      this.drawnBy.clear();
+      this.byInstance.clear();
+      if (editing) {
+        editing.tinted = [];
+        editing.outline.visible = false;
+      }
+      file.scene.updateMatrixWorld(true);
+      file.scene.traverse((object) => {
+        const index = this.nodeOf(object, false);
+        if (index === null) return;
+        this.world.set(index, object.matrixWorld.clone());
+        let up = object.parent;
+        while (up && this.nodeOf(up, false) === null) up = up.parent;
+        const parent = up ? this.nodeOf(up, false) : null;
+        this.parent.set(index, parent);
+        if (parent !== null) {
+          if (!this.children.has(parent)) this.children.set(parent, []);
+          this.children.get(parent).push(index);
+        }
+      });
+    },
+    /** The glTF node an object stands for; with `upwards`, the nearest one above it. */
+    nodeOf(object, upwards = true) {
+      for (let at = object; at; at = upwards ? at.parent : null) {
+        const index = this.associations?.get(at)?.nodes;
+        if (index !== void 0) return index;
+        if (!upwards) break;
+      }
+      return null;
+    },
+    register(mesh, batch, id) {
+      const index = this.nodeOf(mesh);
+      if (index === null) return;
+      if (!this.drawnBy.has(index)) this.drawnBy.set(index, []);
+      this.drawnBy.get(index).push({ batch, id, world: mesh.matrixWorld.clone() });
+      if (!this.byInstance.has(batch)) this.byInstance.set(batch, /* @__PURE__ */ new Map());
+      this.byInstance.get(batch).set(id, index);
+    },
+    subtree(index) {
+      const all = [index];
+      for (let i = 0; i < all.length; i++) all.push(...this.children.get(all[i]) ?? []);
+      return all;
+    }
+  };
+  let editing = null;
+  let lookedOnce = false;
+  async function enableEditing({ onPick, onMoved }) {
+    if (editing) return;
+    const { TransformControls } = await import("three/addons/controls/TransformControls.js");
+    const handle = new TransformControls(camera, canvas);
+    const proxy = new THREE.Object3D();
+    scene.add(proxy);
+    scene.add(handle.getHelper ? handle.getHelper() : handle);
+    handle.addEventListener("change", invalidate);
+    const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#16867c";
+    const outline = new THREE.Box3Helper(new THREE.Box3(), new THREE.Color(accent));
+    outline.material.depthTest = false;
+    outline.material.transparent = true;
+    outline.material.opacity = 0.9;
+    outline.renderOrder = 999;
+    outline.visible = false;
+    scene.add(outline);
+    editing = {
+      handle,
+      proxy,
+      outline,
+      selected: null,
+      drag: null,
+      reattach: () => {
+      },
+      /** The instances tinted for the selection, to put back when it changes. */
+      tinted: [],
+      /** The selection's bounds in world space, as of the last time it was placed. */
+      bounds: new THREE.Box3()
+    };
+    const raycaster = new THREE.Raycaster();
+    let down = null;
+    canvas.addEventListener("pointerdown", (event) => {
+      down = { x: event.clientX, y: event.clientY };
+    });
+    canvas.addEventListener("pointerup", (event) => {
+      if (!down || handle.dragging) return;
+      const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
+      down = null;
+      if (moved > 4) return;
+      const box = canvas.getBoundingClientRect();
+      const pointer = new THREE.Vector2(
+        (event.clientX - box.left) / box.width * 2 - 1,
+        -((event.clientY - box.top) / box.height) * 2 + 1
+      );
+      raycaster.setFromCamera(pointer, camera);
+      for (const hit of raycaster.intersectObjects(content.children, true)) {
+        if (!hit.object.isBatchedMesh || hit.batchId === void 0) continue;
+        const index = placed3d.byInstance.get(hit.object)?.get(hit.batchId);
+        if (index !== void 0) {
+          onPick(index);
+          return;
+        }
+      }
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, .monaco-editor")) return;
+      if (event.key === "w" || event.key === "W") handle.setMode("translate");
+      else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
+      else if (event.key === "r" || event.key === "R") handle.setMode("scale");
+      else if (event.key === "Escape") attach(null);
+      else if (event.key === "ArrowUp") {
+        const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
+        if (parent === null || parent === void 0) return;
+        onPick(parent);
+        event.preventDefault();
+      } else return;
+      invalidate();
+    });
+    handle.addEventListener("dragging-changed", (event) => {
+      controls.enabled = !event.value;
+      down = null;
+      if (event.value) beginDrag();
+      else endDrag(onMoved);
+    });
+    handle.addEventListener("objectChange", duringDrag);
+    editing.reattach = () => attach(editing.selected);
+  }
+  const TINT = new THREE.Color(0.74, 1.1, 1.04);
+  const UNTINTED = new THREE.Color(1, 1, 1);
+  function boundsOf(nodes) {
+    const box = new THREE.Box3();
+    const one = new THREE.Box3();
+    for (const node of nodes) {
+      for (const instance of placed3d.drawnBy.get(node) ?? []) {
+        const geometry = instance.batch.getGeometryIdAt(instance.id);
+        if (geometry < 0 || !instance.batch.getBoundingBoxAt(geometry, one)) continue;
+        box.union(one.applyMatrix4(instance.world));
+      }
+    }
+    return box;
+  }
+  function untint() {
+    for (const { batch, id } of editing.tinted) batch.setColorAt(id, UNTINTED);
+    editing.tinted = [];
+  }
+  function attach(index) {
+    if (!editing) return false;
+    untint();
+    editing.selected = index;
+    const world = index === null ? void 0 : placed3d.world.get(index);
+    if (!world) {
+      editing.handle.detach();
+      editing.outline.visible = false;
+      invalidate();
+      return false;
+    }
+    const nodes = placed3d.subtree(index);
+    for (const node of nodes) {
+      for (const instance of placed3d.drawnBy.get(node) ?? []) {
+        instance.batch.setColorAt(instance.id, TINT);
+        editing.tinted.push(instance);
+      }
+    }
+    world.decompose(editing.proxy.position, editing.proxy.quaternion, editing.proxy.scale);
+    editing.bounds = boundsOf(nodes);
+    if (!editing.bounds.isEmpty()) {
+      editing.bounds.getCenter(editing.proxy.position);
+      editing.outline.box.copy(editing.bounds);
+      editing.outline.visible = true;
+    } else {
+      editing.outline.visible = false;
+    }
+    editing.proxy.updateMatrixWorld(true);
+    editing.handle.attach(editing.proxy);
+    invalidate();
+    return true;
+  }
+  function beginDrag() {
+    const index = editing.selected;
+    if (index === null) return;
+    editing.drag = {
+      index,
+      undo: editing.proxy.matrixWorld.clone().invert(),
+      nodes: placed3d.subtree(index),
+      delta: new THREE.Matrix4(),
+      scratch: new THREE.Matrix4()
+    };
+  }
+  function duringDrag() {
+    const drag = editing?.drag;
+    if (!drag) return;
+    editing.proxy.updateMatrixWorld(true);
+    drag.delta.multiplyMatrices(editing.proxy.matrixWorld, drag.undo);
+    for (const node of drag.nodes) {
+      for (const one of placed3d.drawnBy.get(node) ?? []) {
+        one.batch.setMatrixAt(one.id, drag.scratch.multiplyMatrices(drag.delta, one.world));
+      }
+    }
+    if (editing.outline.visible) editing.outline.box.copy(editing.bounds).applyMatrix4(drag.delta);
+    invalidate();
+  }
+  function endDrag(onMoved) {
+    const drag = editing.drag;
+    if (!drag) return;
+    duringDrag();
+    editing.drag = null;
+    const touched = /* @__PURE__ */ new Set();
+    for (const node of drag.nodes) {
+      placed3d.world.get(node)?.premultiply(drag.delta);
+      for (const one of placed3d.drawnBy.get(node) ?? []) {
+        one.world.premultiply(drag.delta);
+        touched.add(one.batch);
+      }
+    }
+    for (const batch of touched) {
+      batch.computeBoundingBox();
+      batch.computeBoundingSphere();
+    }
+    editing.bounds = boundsOf(drag.nodes);
+    if (!editing.bounds.isEmpty()) editing.outline.box.copy(editing.bounds);
+    const world = placed3d.world.get(drag.index);
+    const parentIndex = placed3d.parent.get(drag.index);
+    const parentWorld = parentIndex === null || parentIndex === void 0 ? new THREE.Matrix4() : placed3d.world.get(parentIndex) ?? new THREE.Matrix4();
+    const local = parentWorld.clone().invert().multiply(world);
+    const translation = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3();
+    local.decompose(translation, rotation, scale);
+    const round = (values) => values.map((v) => Math.round(v * 1e6) / 1e6);
+    onMoved(drag.index, {
+      translation: round(translation.toArray()),
+      rotation: round(rotation.toArray()),
+      scale: round(scale.toArray())
+    });
+  }
+  return { show: show2, clear, enableEditing, attach };
 }
 async function intoViewer(saying, pending) {
   say(saying);

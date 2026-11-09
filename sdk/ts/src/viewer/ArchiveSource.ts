@@ -4,7 +4,9 @@ import { collapseNodesByPath, federate } from "../MosaicFileOperations.ts";
 import { selectNodes } from "../Selection.ts";
 import { mosaicToGltf } from "../composition/MosaicToGltf.ts";
 import { writeGlb } from "../composition/GlbWriter.ts";
-import { CORE_TYPE } from "../core/schemas.ts";
+import { CORE_SCHEMAS, CORE_TYPE } from "../core/schemas.ts";
+import { Operation, Type, type NodeElement, type SectionElement } from "../MosaicIndexFile.ts";
+import { indexOf, operationOf } from "../ComponentReference.ts";
 import type {
     MosaicSource, Scene, SceneComponent, SceneNode, SelectionAcross, TesseraSummary, VersionRef,
 } from "./MosaicSource.ts";
@@ -282,9 +284,16 @@ export class ArchiveSource implements MosaicSource {
 
         // The archive is shared by every graph that holds it, so one change reaches all.
         archive.alone = edited;
+        this.remerge(url);
 
-        // Rebuilt for every version whose graph has this archive in it -- not only the one
-        // that is this archive, but anything that imports it, however far up.
+        return { warnings };
+    }
+
+    /**
+     * Rebuilds every version whose graph has this archive in it -- not only the one that is
+     * this archive, but anything that imports it, however far up.
+     */
+    private remerge(url: string): void {
         for (const tessera of this.held.values()) {
             for (const version of tessera.versions) {
                 if (!version.graph.has(url)) continue;
@@ -292,8 +301,73 @@ export class ArchiveSource implements MosaicSource {
                 version.own = ownNodesOf(version.graph.get(version.top)!.alone);
             }
         }
+    }
 
-        return { warnings };
+    /**
+     * Sets a node's local transform, the way an editor moving it would.
+     *
+     * The edit is a layer, not a rewrite: it goes in a section of its own at the end of the
+     * archive, written by "mosaic edit", which wins over whatever placed the node before.
+     * Moving the same node again changes its row in that section rather than adding
+     * another, so however long an editing session runs, it is one section with one
+     * transform per node it touched. The reference keeps the id the node's transform
+     * already had, which is what makes it replace that transform rather than sit beside it.
+     */
+    setTransform(url: string, nodeId: string, value: { translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[] }): void {
+        const archive = this.archiveAt(url);
+        if (!archive) throw new Error("that archive is not open");
+        const file = archive.alone;
+        const type = CORE_TYPE.transform;
+
+        // The table, and its schema, if the archive has never placed anything.
+        if (!file.serializedComponents.has(type)) file.serializedComponents.set(type, []);
+        if (!file.index.componentTables.some(table => table.filename === `${type}.ndjson`)) {
+            file.index.componentTables.push({ filename: `${type}.ndjson`, type: Type.Ndjson, schema: CORE_SCHEMAS[type] });
+        }
+        const rows = file.serializedComponents.get(type)!;
+
+        // Whatever the node already calls its transform, so the new one replaces it.
+        const current = collapseNodesByPath(file).get(nodeId)?.components
+            ?.find(ref => ref.type === type && operationOf(ref) === Operation.Value);
+        const referenceId = current?.id ?? "transform";
+
+        const last = file.index.sections.at(-1);
+        let section: SectionElement;
+        if (last?.header.application === "mosaic edit") {
+            section = last;
+        } else {
+            const before = last?.header;
+            section = {
+                header: {
+                    id: before?.id ?? archive.name,
+                    application: "mosaic edit",
+                    author: before?.author ?? "",
+                    dataVersion: before?.dataVersion ?? "",
+                    timestamp: new Date().toISOString(),
+                    message: "Edited in mosaic edit",
+                },
+                nodes: [],
+            };
+            file.index.sections.push(section);
+        }
+        section.header.timestamp = new Date().toISOString();
+
+        let node: NodeElement | undefined = section.nodes.find(entry => entry.id === nodeId);
+        if (!node) {
+            node = { id: nodeId, components: [] };
+            section.nodes.push(node);
+        }
+        node.components ??= [];
+
+        const row = JSON.stringify(value);
+        const existing = node.components.find(ref => ref.type === type && ref.id === referenceId);
+        if (existing && indexOf(existing) >= 0) {
+            rows[indexOf(existing)] = row;
+        } else {
+            node.components.push({ type, id: referenceId, index: rows.push(row) - 1 });
+        }
+
+        this.remerge(url);
     }
 
     /** The versions named, in the order they were named, skipping any that are not here. */

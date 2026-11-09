@@ -3,6 +3,7 @@ import { runPack, PACK_USAGE, PACK_DETAILS } from "./commands/pack.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runDiff, DIFF_USAGE } from "./commands/diff.js";
 import { runFederate, FEDERATE_USAGE } from "./commands/federate.js";
+import { runEdit, EDIT_USAGE } from "./commands/edit.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
 /** Stamped in by the build from package.json. */
@@ -28,6 +29,11 @@ const COMMANDS: Record<string, Command> = {
         details: PACK_DETAILS,
         summary: "Pack a source document, glTF, IFC or SVG into a .tsr archive (or a .mosaic.json)",
         run: runPack
+    },
+    edit: {
+        usage: EDIT_USAGE,
+        summary: "Open a model in the browser to edit it, and save it as a .tsr or .glb",
+        run: runEdit
     },
     diff: {
         usage: DIFF_USAGE,

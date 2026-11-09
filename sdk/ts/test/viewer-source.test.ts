@@ -312,3 +312,58 @@ test("editing an imported archive changes every scene that imports it", async ()
     const renamed = Object.values(after.nodes).filter(node => node.name === "Renamed inside the import");
     assert.equal(renamed.length, 1, "the scene that imports it shows the change");
 });
+
+// --- moving a node, the way the visual editor does ---------------------------
+
+/** What a node's transform reads as in the merged file the viewer draws from. */
+function transformOf(source: ArchiveSource, name: string, nodeId: string): unknown {
+    const file = mergedFrom(new Map([...source["held"].values()][0]!.versions[0]!.graph), urlOf(name));
+    const ref = collapseNodesByPath(file).get(nodeId)?.components?.find(c => c.type === "core::transform");
+    return ref ? JSON.parse(file.readRawComponent(ref.type, ref.index ?? -1)) : undefined;
+}
+
+const NEAR_BOX = "70000000-7000-4000-8000-700000000003";
+
+test("moving a node writes its transform as an edit of its own", async () => {
+    const source = await sourceOf("typed-boxes.tsr");
+    const url = urlOf("typed-boxes.tsr");
+    const before = source.filesOf(url)!;
+    const sections = JSON.parse(before.files["index.json"]!).sections.length;
+
+    source.setTransform(url, NEAR_BOX, { translation: [5, 0, 0] });
+
+    assert.deepEqual(transformOf(source, "typed-boxes.tsr", NEAR_BOX), { translation: [5, 0, 0] });
+
+    const index = JSON.parse(source.filesOf(url)!.files["index.json"]!);
+    assert.equal(index.sections.length, sections + 1);
+    assert.equal(index.sections.at(-1).header.application, "mosaic edit");
+    // The same reference id the node already used, so it replaces rather than adds.
+    assert.deepEqual(index.sections.at(-1).nodes[0].components.map((c: { id: string }) => c.id), ["transform"]);
+});
+
+test("moving the same node again changes its edit rather than adding another", async () => {
+    const source = await sourceOf("typed-boxes.tsr");
+    const url = urlOf("typed-boxes.tsr");
+    const rows = () => source.filesOf(url)!.files["core::transform.ndjson"]!.split("\n").length;
+
+    source.setTransform(url, NEAR_BOX, { translation: [5, 0, 0] });
+    const after = rows();
+    source.setTransform(url, NEAR_BOX, { translation: [7, 1, 0], scale: [2, 2, 2] });
+
+    assert.equal(rows(), after, "the second move reuses the first move's row");
+    assert.deepEqual(transformOf(source, "typed-boxes.tsr", NEAR_BOX), { translation: [7, 1, 0], scale: [2, 2, 2] });
+
+    const index = JSON.parse(source.filesOf(url)!.files["index.json"]!);
+    assert.equal(index.sections.filter((s: { header: { application: string } }) => s.header.application === "mosaic edit").length, 1);
+});
+
+test("a moved node is drawn where it was moved to", async () => {
+    const source = await sourceOf("typed-boxes.tsr");
+    source.setTransform(urlOf("typed-boxes.tsr"), NEAR_BOX, { translation: [9, 0, 0] });
+
+    const glb = parseGlb(await source.glb({
+        versions: allOf(source, ["typed-boxes.tsr"]), nodes: null, includeChildren: true, compose: true,
+    }));
+    const node = glb.document.nodes?.find(n => n.name === NEAR_BOX);
+    assert.deepEqual(node?.translation, [9, 0, 0]);
+});

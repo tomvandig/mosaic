@@ -8,6 +8,7 @@ convenience only (file paths, default output names, console reporting), never be
 | Command | Calls | |
 | --- | --- | --- |
 | `mosaic pack` | by extension: `packMosaicSourceFile`, `gltfToMosaic`, `mosaic-ifc4` or `svgToMosaic`; to a `.tsr`, or to a `.mosaic.json` | [Packing](/tools/pack) |
+| `mosaic edit` | `serveEditor` (`mosaic-ts/edit`), with the viewer | [Editing](/tools/edit) |
 | `mosaic diff` | `diffArchives` | [Diffing](/tools/diff) |
 | `mosaic federate` | `federate` | [Federating](/tools/federate) |
 | `mosaic compose` | `composeArchiveToGlb`, or the DuckDB reader for a `.duckdb` | [Composing](/tools/compose) |
