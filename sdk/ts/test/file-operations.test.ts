@@ -297,3 +297,39 @@ test("diffArchives: the diff is an archive of its own, with the schemas it needs
     assert.ok(reloaded.index.componentTables[0]!.schema);
     assert.deepEqual(visibleState(reloaded), visibleState(diff));
 });
+
+// ---------------------------------------------------------------------------
+// federate: what the merged file's index holds
+// ---------------------------------------------------------------------------
+
+test("federate lists each component table once", async () => {
+    const merged = federate(await loadExample("house-v1"), await loadExample("house-v2"), true);
+
+    const names = merged.index.componentTables.map(t => t.filename);
+    assert.deepEqual(names, [...new Set(names)]);
+});
+
+test("federate keeps both files' imports, each once, the old file's first", async () => {
+    const older = await loadExample("house-v1");
+    const newer = await loadExample("house-v2");
+    older.AddImport({ uri: "site.tsr" });
+    older.AddImport({ uri: "shared.tsr" });
+    newer.AddImport({ uri: "shared.tsr" });
+    newer.AddImport({ uri: "trees.tsr" });
+
+    for (const keepHistory of [true, false]) {
+        const merged = federate(older, newer, keepHistory);
+        assert.deepEqual(merged.index.imports.map(i => i.uri), ["site.tsr", "shared.tsr", "trees.tsr"]);
+    }
+});
+
+test("federate without history drops the table of a type whose every value was superseded", async () => {
+    const v1 = await loadExample("house-v1");
+    // v2 deletes the only paint there is.
+    const collapsed = federate(new MosaicFile(), await loadExample("house-v2"), false);
+    const paintTable = v1.index.componentTables.find(t => t.filename !== `${WALL}.ndjson`);
+
+    assert.ok(paintTable, "house-v1 should carry a second table to drop");
+    assert.ok(!collapsed.index.componentTables.some(t => t.filename === paintTable!.filename));
+    assert.deepEqual(collapsed.index.componentTables.map(t => t.filename), [`${WALL}.ndjson`]);
+});

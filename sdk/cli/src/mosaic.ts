@@ -2,6 +2,7 @@ import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE, PACK_DETAILS } from "./commands/pack.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runDiff, DIFF_USAGE } from "./commands/diff.js";
+import { runFederate, FEDERATE_USAGE } from "./commands/federate.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
 /** Stamped in by the build from package.json. */
@@ -32,6 +33,11 @@ const COMMANDS: Record<string, Command> = {
         usage: DIFF_USAGE,
         summary: "Write the changes between two archives as an archive of their own",
         run: runDiff
+    },
+    federate: {
+        usage: FEDERATE_USAGE,
+        summary: "Layer one archive over another, as one archive (applies a diff)",
+        run: runFederate
     },
     compose: {
         usage: COMPOSE_USAGE,

@@ -32,7 +32,7 @@ another implementation is not required to offer these features:
 | **Component namespaces** | `core::`, `khronos::gltf::`, `w3c::`, `ifc4::` and their schemas | [Core components](/standard/core-components) |
 | **Composition** | Imports followed, sections collapsed, `core::inherit` expanded, `core::child` turned into a glTF hierarchy | [Composing](/tools/compose) |
 | **Converters** | glTF / GLB, IFC and SVG into Mosaic, with stable ids where asked | [glTF](/tools/gltf), [IFC](/tools/ifc), [SVG](/tools/svg) |
-| **Federation & diff** | Merging files with shifted references; the changes between two files, by value, as a file of their own (`diffArchives`, behind [`mosaic diff`](/tools/diff)) | [source](https://github.com/tomvandig/mosaic/blob/main/sdk/ts/src/MosaicFileOperations.ts) |
+| **Federation & diff** | Merging files with shifted references; the changes between two files, by value, as a file of their own (`diffArchives` and `federate`, behind [`mosaic diff`](/tools/diff) and [`mosaic federate`](/tools/federate)) | [source](https://github.com/tomvandig/mosaic/blob/main/sdk/ts/src/MosaicFileOperations.ts) |
 | **Selection** | A subset of nodes as a file of its own, made whole | [source](https://github.com/tomvandig/mosaic/blob/main/sdk/ts/src/Selection.ts) |
 | **DuckDB storage** | One table per component type, built from each archive's schemas | [DuckDB](/sdk/duckdb) |
 | **The server** | The OpenAPI operations over DuckDB, plus the page's own `/app/*` endpoints, which are *not* part of the spec | [HTTP API](/sdk/http-api) |

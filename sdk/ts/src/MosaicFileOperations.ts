@@ -269,12 +269,32 @@ interface NodeLineage {
     node: NodeElement;
 }
 
+/**
+ * Layers one file over another, as one file.
+ *
+ * The new file's sections go over the old one's, so where both say something about a
+ * component the new file wins. With `keepHistory` every section of both is kept; without
+ * it, each component keeps only the value still leading, under the section that wrote it,
+ * and rows nothing points at any more are left behind.
+ *
+ * Both files' imports are kept, the old file's first, each once. Each component type has
+ * one table, described by the newer file's schema where both carry it.
+ */
 export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: boolean): MosaicFile {
     const result = new MosaicFile();
     result.index.header = newFile.index.header;
-    result.index.imports = newFile.index.imports;
-    result.index.componentTables = [...oldFile.index.componentTables, ...newFile.index.componentTables];
-    // TODO: deduplicate component tables by filename
+
+    const imports = new Map<string, MosaicFile["index"]["imports"][number]>();
+    for (const entry of [...oldFile.index.imports, ...newFile.index.imports]) {
+        if (!imports.has(entry.uri)) imports.set(entry.uri, entry);
+    }
+    result.index.imports = [...imports.values()];
+
+    // One table per type. The newer schema wins, in the place the type was first listed.
+    const tables = new Map<string, MosaicFile["index"]["componentTables"][number]>();
+    for (const table of oldFile.index.componentTables) tables.set(table.filename, table);
+    for (const table of newFile.index.componentTables) tables.set(table.filename, table);
+    result.index.componentTables = [...tables.values()];
 
     if (keepHistory) {
         // Append change to old file, keeping all history
@@ -376,6 +396,10 @@ export function federate(oldFile: MosaicFile, newFile: MosaicFile, keepHistory: 
                 result.AddSection(sec);
             }
         }
+
+        // Collapsing can leave a type with no rows at all, its every value superseded.
+        result.index.componentTables = result.index.componentTables.filter(table =>
+            result.serializedComponents.has(table.filename.replace(/\.ndjson$/, "")));
     }
 
     return result;

@@ -20,13 +20,17 @@ compared.
 
 ## Applying a diff
 
-A diff is an ordinary layer. Federated over the old archive, it reads the same as the new one: node
-for node, component for component.
+A diff is an ordinary layer. [Federated](/tools/federate) over the old archive, it reads the same as
+the new one: node for node, component for component.
 
 ::: code-group
 
 ```bash [diff]
 mosaic diff house-v1.tsr house-v2.tsr          # -> house-v2.diff.tsr
+```
+
+```bash [apply]
+mosaic federate house-v1.tsr house-v2.diff.tsr house.tsr   # reads as house-v2.tsr
 ```
 
 ```txt [output]
