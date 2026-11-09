@@ -95,12 +95,12 @@ consumer of the SDK.
 container:
 
 ```bash
-mosaic gltf <input.gltf|input.glb> [output.mosaic.json] [--stable-ids]   # to a source document
-mosaic pack <input.gltf|input.glb> [output.tsr]         [--stable-ids]   # straight to an archive
+mosaic pack <input.gltf|input.glb> [output.tsr]         [--stable-ids]   # to an archive
+mosaic pack <input.gltf|input.glb> output.mosaic.json   [--stable-ids]   # to a source document
 ```
 
-Both read the same conversion; the first stops at the editable JSON document, the second packs it in
-one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
+Both run the same conversion. Naming the output `.mosaic.json` stops at the editable JSON document;
+otherwise it is packed in one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
 input, and inlined as `data:` URIs so the result stands alone. The component schemas are inlined too,
 so a converted `.mosaic.json` packs anywhere without needing the schema files.
 
@@ -130,8 +130,8 @@ glTF-derived component schemas; the CLI commands are a thin wrapper over it.
 `mosaic` converts an IFC model the same way, reading `.ifc` files of either IFC4 or IFC2X3:
 
 ```bash
-mosaic ifc  <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]
 mosaic pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]
+mosaic pack <input.ifc> output.mosaic.json   [--center] [--no-geometry] [--seed=<text>]
 ```
 
 Parsing and meshing are [web-ifc](https://github.com/ThatOpen/engine_web-ifc)'s job: it resolves

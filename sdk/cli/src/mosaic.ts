@@ -1,7 +1,5 @@
 import { runCodegen, CODEGEN_USAGE } from "./commands/codegen.js";
 import { runPack, PACK_USAGE, PACK_DETAILS } from "./commands/pack.js";
-import { runGltf, GLTF_USAGE } from "./commands/gltf.js";
-import { runIfc, IFC_USAGE } from "./commands/ifc.js";
 import { runCompose, COMPOSE_USAGE } from "./commands/compose.js";
 import { runServe, SERVE_USAGE } from "./commands/serve.js";
 
@@ -26,18 +24,8 @@ const COMMANDS: Record<string, Command> = {
     pack: {
         usage: PACK_USAGE,
         details: PACK_DETAILS,
-        summary: "Pack a source document, glTF, IFC or SVG into a .tsr archive",
+        summary: "Pack a source document, glTF, IFC or SVG into a .tsr archive (or a .mosaic.json)",
         run: runPack
-    },
-    gltf: {
-        usage: GLTF_USAGE,
-        summary: "Convert a glTF or GLB file into a Mosaic source document",
-        run: runGltf
-    },
-    ifc: {
-        usage: IFC_USAGE,
-        summary: "Convert an IFC model into a Mosaic source document",
-        run: runIfc
     },
     compose: {
         usage: COMPOSE_USAGE,

@@ -13,7 +13,7 @@ const SEED = "--seed=";
 
 const FLAGS = `[${CENTER}] [${NO_GEOMETRY}] [${SEED}<text>]`;
 
-export const IFC_USAGE = `mosaic ifc <input.ifc> [output${MOSAIC_SOURCE_EXTENSION}] ${FLAGS}`;
+export const IFC_USAGE = `mosaic pack <input.ifc> [output${MOSAIC_SOURCE_EXTENSION}] ${FLAGS}`;
 export const IFC_PACK_USAGE = `mosaic pack <input.ifc> [output.tsr] ${FLAGS}`;
 
 /** Splits the flags off the positional arguments. */

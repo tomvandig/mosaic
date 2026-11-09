@@ -6,7 +6,7 @@ quantities, units, and every relationship — becomes components.
 
 ```
 mosaic pack     tower.ifc              # -> tower.tsr
-mosaic ifc      tower.ifc              # -> tower.mosaic.json, the readable form
+mosaic pack     tower.ifc tower.mosaic.json   # the readable form
 mosaic compose  tower.tsr tower.glb    # -> something a viewer opens
 ```
 

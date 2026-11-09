@@ -21,6 +21,34 @@ const viewer = process.env.VIEWER_URL ?? path.posix.join(base, "..", "viewer") +
 
 const GITHUB = "https://github.com/tomvandig/mosaic";
 
+/**
+ * Code groups with ids that are the same on every build.
+ *
+ * VitePress names each `::: code-group` and its tabs with random ids, so every page holding
+ * one came out different on every build, edited or not, and the committed site churned.
+ * The ids only have to be unique within a page, so they are numbered in the order the
+ * groups appear on it instead.
+ */
+function stableCodeGroupIds(md: { renderer: { rules: Record<string, any> } }) {
+    const rule = "container_code-group_open";
+    const original = md.renderer.rules[rule];
+    if (!original) return;
+
+    md.renderer.rules[rule] = (tokens: unknown, idx: number, options: unknown, env: any, self: unknown) => {
+        const html: string = original(tokens, idx, options, env, self);
+        if (!html.includes('name="group-')) return html;
+
+        const group = env.mosaicCodeGroups = (env.mosaicCodeGroups ?? 0) + 1;
+        const tabs = new Map<string, string>();
+        return html
+            .replace(/name="group-[^"]+"/g, `name="group-${group}"`)
+            .replace(/tab-([A-Za-z0-9_-]+)/g, (_, id: string) => {
+                if (!tabs.has(id)) tabs.set(id, `tab-${group}-${tabs.size + 1}`);
+                return tabs.get(id)!;
+            });
+    };
+}
+
 export default defineConfig({
     title: "Mosaic",
     description: "A file format for incremental collaboration on geometric, structured data.",
@@ -28,13 +56,19 @@ export default defineConfig({
     srcDir: "content",
     outDir: "dist/docs",
     cleanUrls: true,
+    // The built site is committed, so keep a one-line edit from touching every page: the map
+    // of page hashes goes in a chunk of its own instead of being inlined in every HTML file.
+    metaChunk: true,
     lastUpdated: false,
     head: [["meta", { name: "theme-color", content: "#16867c" }]],
 
     markdown: {
         theme: { light: "github-light", dark: "github-dark" },
-        // `Term` / `: definition` lists, for the Definitions page.
-        config: md => { md.use(deflist); },
+        config: md => {
+            // `Term` / `: definition` lists, for the Definitions page.
+            md.use(deflist);
+            stableCodeGroupIds(md);
+        },
     },
 
     themeConfig: {
@@ -130,6 +164,25 @@ export default defineConfig({
 
     vite: {
         plugins: [
+            {
+                // Every edit changes the search index, and its hashed name is written into the
+                // search box, whose name is written into the theme, whose name is in every page:
+                // one changed line renamed every file. A fixed name for the index stops that
+                // chain where it starts. (VitePress sets chunk names after the user config is
+                // read, so this has to happen here, as the bundle is written.)
+                name: "mosaic-stable-search-index",
+                apply: "build",
+                outputOptions(options) {
+                    const named = options.chunkFileNames;
+                    if (typeof named !== "function") return;
+                    return {
+                        ...options,
+                        chunkFileNames: chunk => chunk.name.startsWith("@localSearchIndex")
+                            ? "assets/chunks/[name].js"
+                            : named(chunk),
+                    };
+                },
+            },
             {
                 // `vitepress dev` serves the docs only; this puts the built viewer beside
                 // them, at the same address it will have once published.

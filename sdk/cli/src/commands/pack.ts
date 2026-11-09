@@ -1,11 +1,11 @@
 import path from "node:path";
-import { packMosaicSourceFile, MOSAIC_ARCHIVE_EXTENSION } from "mosaic-ts";
-import { runGltfPack } from "./gltf.js";
-import { runIfcPack } from "./ifc.js";
+import { packMosaicSourceFile, MOSAIC_ARCHIVE_EXTENSION, MOSAIC_SOURCE_EXTENSION } from "mosaic-ts";
+import { runGltf, runGltfPack } from "./gltf.js";
+import { runIfc, runIfcPack } from "./ifc.js";
 import { runSvgPack } from "./svg.js";
 
 export const PACK_USAGE =
-    `mosaic pack <input.json|.gltf|.glb|.ifc|.svg|url> [output${MOSAIC_ARCHIVE_EXTENSION}] [flags]`;
+    `mosaic pack <input.json|.gltf|.glb|.ifc|.svg|url> [output${MOSAIC_ARCHIVE_EXTENSION}|output${MOSAIC_SOURCE_EXTENSION}] [flags]`;
 
 /** What `mosaic help` prints under the usage line: which input does what, and its flags. */
 export const PACK_DETAILS = [
@@ -13,11 +13,16 @@ export const PACK_DETAILS = [
     `.gltf, .glb          a glTF model, or an http(s) URL to one   [--stable-ids]`,
     `.ifc                 an IFC4 / IFC2X3 model                   [--center] [--no-geometry] [--seed=<text>]`,
     `.svg                 a drawing, as one node`,
+    ``,
+    `The output is a ${MOSAIC_ARCHIVE_EXTENSION} archive. Name it ${MOSAIC_SOURCE_EXTENSION} to get an editable source`,
+    `document instead (glTF and IFC only), to change before packing.`,
 ];
+
+const isUrl = (input: string) => /^https?:\/\//i.test(input);
 
 /** The extension that decides what an input is, read off a URL's path for a URL. */
 function extensionOf(input: string): string {
-    const name = /^https?:\/\//i.test(input) ? new URL(input).pathname : input;
+    const name = isUrl(input) ? new URL(input).pathname : input;
     return path.extname(name).toLowerCase();
 }
 
@@ -36,38 +41,50 @@ async function packSource(argv: string[]): Promise<void> {
     console.log(`Wrote ${result.byteLength} bytes.`);
 }
 
+const details = () => `\n\n  ${PACK_DETAILS.join("\n  ")}`;
+
 /**
- * Packs anything Mosaic can read into a .tsr archive, choosing how by the extension.
+ * Packs anything Mosaic reads, choosing how by the extensions.
  *
- * A source document is packed as it is written. The other formats are converted first,
- * with their schemas inlined, so every archive this writes stands alone.
+ * The input's extension says what it is. The output's says what to write: a .tsr archive
+ * by default, or, named .mosaic.json, the converted model as an editable source document,
+ * which `mosaic pack` turns into an archive once it has been changed. Either way the
+ * schemas are inlined, so what this writes stands alone.
  */
 export async function runPack(argv: string[]): Promise<void> {
-    const input = argv.find(arg => !arg.startsWith("--"));
-    if (input === undefined) throw new Error(`Usage: ${PACK_USAGE}\n\n  ${PACK_DETAILS.join("\n  ")}`);
+    const [input, output] = argv.filter(arg => !arg.startsWith("--"));
+    if (input === undefined) throw new Error(`Usage: ${PACK_USAGE}${details()}`);
 
-    const isUrl = /^https?:\/\//i.test(input);
     const extension = extensionOf(input);
+    const toSource = output !== undefined && output.toLowerCase().endsWith(MOSAIC_SOURCE_EXTENSION);
+    const fromUrl = isUrl(input);
+
+    if (fromUrl && extension !== ".gltf" && extension !== ".glb") {
+        throw new Error(`Cannot pack ${input}: only glTF (.gltf, .glb) can be packed from a URL. `
+            + `Download it first and pack the file.`);
+    }
 
     switch (extension) {
         case ".gltf":
         case ".glb":
-            return runGltfPack(argv);
-        case ".json":
-            if (isUrl) break;
-            return packSource(argv);
+            return toSource ? runGltf(argv) : runGltfPack(argv);
         case ".ifc":
-            if (isUrl) break;
-            return runIfcPack(argv);
+            return toSource ? runIfc(argv) : runIfcPack(argv);
         case ".svg":
-            if (isUrl) break;
+            if (toSource) {
+                throw new Error(`Cannot write ${output}: an SVG is carried whole rather than taken apart, `
+                    + `so there is no source document to edit. Pack it to ${MOSAIC_ARCHIVE_EXTENSION} instead.`);
+            }
             return runSvgPack(argv);
+        case ".json":
+            if (toSource) {
+                throw new Error(`Cannot write ${output}: ${input} is already a source document. `
+                    + `Pack it to ${MOSAIC_ARCHIVE_EXTENSION} instead.`);
+            }
+            return packSource(argv);
         default:
-            throw new Error(
-                `Cannot pack ${input}: ${extension ? `"${extension}" is not` : "no extension says what it is, and it is not"} `
-                + `a format mosaic reads.\n\n  ${PACK_DETAILS.join("\n  ")}`);
+            throw new Error(`Cannot pack ${input}: `
+                + `${extension ? `"${extension}" is not` : "no extension says what it is, and it is not"} `
+                + `a format mosaic reads.${details()}`);
     }
-
-    throw new Error(`Cannot pack ${input}: only glTF (.gltf, .glb) can be packed from a URL. `
-        + `Download it first and pack the file.`);
 }

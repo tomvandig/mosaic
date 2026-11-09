@@ -3,8 +3,8 @@
 `mosaic` converts an IFC model the same way, reading `.ifc` files of either IFC4 or IFC2X3:
 
 ```bash
-mosaic ifc  <input.ifc> [output.mosaic.json] [--center] [--no-geometry] [--seed=<text>]   # to a source document
-mosaic pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]   # straight to an archive
+mosaic pack <input.ifc> [output.tsr]         [--center] [--no-geometry] [--seed=<text>]   # to an archive
+mosaic pack <input.ifc> output.mosaic.json   [--center] [--no-geometry] [--seed=<text>]   # to a source document
 ```
 
 Parsing and meshing are [web-ifc](https://github.com/ThatOpen/engine_web-ifc)'s job: it resolves

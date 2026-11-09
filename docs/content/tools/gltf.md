@@ -4,8 +4,8 @@
 container:
 
 ```bash
-mosaic gltf <input.gltf|input.glb|url> [output.mosaic.json] [--stable-ids]   # to a source document
-mosaic pack <input.gltf|input.glb|url> [output.tsr]         [--stable-ids]   # straight to an archive
+mosaic pack <input.gltf|input.glb|url> [output.tsr]         [--stable-ids]   # to an archive
+mosaic pack <input.gltf|input.glb|url> output.mosaic.json   [--stable-ids]   # to a source document
 ```
 
 The input can be an `http(s)` URL. The model is downloaded first, along with any buffers and images a
@@ -15,8 +15,8 @@ The input can be an `http(s)` URL. The model is downloaded first, along with any
 npx @tomvandig/mosaic pack https://tomvandig.github.io/mosaic/dist/docs/models/DamagedHelmet.glb
 ```
 
-Both read the same conversion; the first stops at the editable JSON document, the second packs it in
-one step. Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
+Both run the same conversion. Naming the output `.mosaic.json` stops at the editable JSON document;
+otherwise it is packed in one step. See [Packing](/tools/pack). Buffers are resolved from the GLB binary chunk, from `data:` URIs, or from files beside the
 input, and inlined as `data:` URIs so the result stands alone. The component schemas are inlined too,
 so a converted `.mosaic.json` packs anywhere without needing the schema files.
 
