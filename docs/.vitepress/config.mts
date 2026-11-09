@@ -126,6 +126,7 @@ export default defineConfig({
                     { text: "Importing glTF", link: "/tools/gltf" },
                     { text: "Importing IFC", link: "/tools/ifc" },
                     { text: "SVG", link: "/tools/svg" },
+                    { text: "Diffing", link: "/tools/diff" },
                     { text: "Composing a GLB", link: "/tools/compose" },
                     { text: "Code generation", link: "/tools/codegen" },
                 ],

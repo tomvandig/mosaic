@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collapseNodesByPath, diffFiles, federate } from "../src/MosaicFileOperations.ts";
-import { LoadMosaicFile, MosaicFile } from "../src/MosaicFile.ts";
+import { collapseNodesByPath, diffArchives, diffFiles, federate } from "../src/MosaicFileOperations.ts";
+import { LoadMosaicFile, MosaicFile, WriteMosaicFile } from "../src/MosaicFile.ts";
 import { Operation, Type, type ComponentElement } from "../src/MosaicIndexFile.ts";
 import { packMosaicSource } from "../src/MosaicPack.ts";
 import { componentsOf, loadExample, resolve } from "./fixtures.ts";
@@ -210,4 +210,90 @@ test("a delete for a component that is not there does nothing", async () => {
     const file = await layered(["a", "b"], [{ type: MARK, id: "gone", operation: Operation.Delete }]);
 
     assert.deepEqual(orderOf(file), ["a", "b"]);
+});
+
+// ---------------------------------------------------------------------------
+// diffArchives: the changes between two independent files
+// ---------------------------------------------------------------------------
+
+/** The leading state without nodes that hold nothing: a fully deleted node reads as absent. */
+function visibleState(file: MosaicFile) {
+    return Object.fromEntries(Object.entries(leadingState(file)).filter(([, components]) => Object.keys(components).length > 0));
+}
+
+/** The same file packed again with its history collapsed: same values, different rows. */
+function repacked(file: MosaicFile): MosaicFile {
+    return federate(new MosaicFile(), file, false);
+}
+
+test("diffArchives: applying the diff to the old file gives the new one", async () => {
+    const v1 = await loadExample("house-v1");
+    const v2 = await loadExample("house-v2");
+
+    const diff = diffArchives(v1, v2);
+
+    assert.equal(diff.index.sections.length, 1);
+    assert.deepEqual(diff.index.sections[0]!.nodes.map(n => n.id).sort(), [NORTH, EAST].sort());
+    assert.deepEqual(visibleState(federate(v1, diff, true)), visibleState(v2));
+});
+
+test("diffArchives: deletes carry the type they remove and no row", async () => {
+    const diff = diffArchives(await loadExample("house-v1"), await loadExample("house-v2"));
+
+    const north = diff.index.sections[0]!.nodes.find(n => n.id === NORTH)!.components!;
+    const paint = north.find(c => c.id === "paint")!;
+    assert.equal(operationOf(paint), Operation.Delete);
+    assert.notEqual(paint.type, "");
+    assert.equal(paint.index, undefined);
+});
+
+test("diffArchives: compares values, so a file packed differently has no changes", async () => {
+    const v2 = await loadExample("house-v2");
+    const again = repacked(v2);
+
+    // The rows moved, so comparing by row reports changes that are not there.
+    assert.ok(diffFiles(v2, again, false).nodes.length > 0);
+    assert.equal(diffArchives(v2, again).index.sections[0]!.nodes.length, 0);
+});
+
+test("diffArchives: a changed value at the same row is a change", async () => {
+    const v1 = await loadExample("house-v1");
+    const edited = await loadExample("house-v1");
+
+    const rows = edited.serializedComponents.get(WALL)!;
+    const row = JSON.parse(rows[0]!);
+    rows[0] = JSON.stringify({ ...row, height: row.height + 1 });
+
+    const diff = diffArchives(v1, edited);
+    assert.equal(diff.index.sections[0]!.nodes.length, 1);
+    assert.deepEqual(visibleState(federate(v1, diff, true)), visibleState(edited));
+});
+
+test("diffArchives: a node the new file lacks is deleted when applied", async () => {
+    const v1 = await loadExample("house-v1");
+    const v2 = await loadExample("house-v2");
+
+    // Backwards: v1 has no east wall and still has its paint.
+    const diff = diffArchives(v2, v1);
+    const east = diff.index.sections[0]!.nodes.find(n => n.id === EAST)!;
+    assert.ok(east.components!.every(c => operationOf(c) === Operation.Delete));
+
+    assert.deepEqual(visibleState(federate(v2, diff, true)), visibleState(v1));
+});
+
+test("diffArchives: without deletes, nothing is taken away", async () => {
+    const diff = diffArchives(await loadExample("house-v2"), await loadExample("house-v1"), { deletes: false });
+
+    const all = diff.index.sections[0]!.nodes.flatMap(n => n.components ?? []);
+    assert.ok(all.every(c => operationOf(c) !== Operation.Delete));
+    assert.ok(!diff.index.sections[0]!.nodes.some(n => n.id === EAST));
+});
+
+test("diffArchives: the diff is an archive of its own, with the schemas it needs", async () => {
+    const diff = diffArchives(await loadExample("house-v1"), await loadExample("house-v2"));
+
+    const reloaded = await LoadMosaicFile(await WriteMosaicFile(diff));
+    assert.deepEqual(reloaded.index.componentTables.map(t => t.filename), [`${WALL}.ndjson`]);
+    assert.ok(reloaded.index.componentTables[0]!.schema);
+    assert.deepEqual(visibleState(reloaded), visibleState(diff));
 });

@@ -88,7 +88,18 @@ export function collapseNodesByPath(file: MosaicFile): Map<string, NodeElement> 
 // DiffNodes / DiffFiles
 // ---------------------------------------------------------------------------
 
-function diffNodes(oldNode: NodeElement, newNode: NodeElement, markMissingFromNewAsDelete: boolean): NodeElement {
+/** Whether two references, of the same id, say the same thing. */
+type SameComponent = (oldRef: ComponentElement, newRef: ComponentElement) => boolean;
+
+/** Two references are the same when they point at the same row: right within one file's tables. */
+const sameRow: SameComponent = (a, b) => indexOf(a) === indexOf(b) && a.type === b.type;
+
+function diffNodes(
+    oldNode: NodeElement,
+    newNode: NodeElement,
+    markMissingFromNewAsDelete: boolean,
+    same: SameComponent = sameRow,
+): NodeElement {
     const result: NodeElement = {
         id: oldNode.id ?? newNode.id,
         components: [],
@@ -97,16 +108,15 @@ function diffNodes(oldNode: NodeElement, newNode: NodeElement, markMissingFromNe
     // components
     for (const item of (newNode.components ?? [])) {
         const match = (oldNode.components ?? []).find(x => x.id === item.id);
-        if (!match) {
-            result.components!.push(item);
-        } else if (indexOf(match) !== indexOf(item) || match.type !== item.type) {
+        if (!match || !same(match, item)) {
             result.components!.push(item);
         }
     }
     if (markMissingFromNewAsDelete) {
         for (const item of (oldNode.components ?? [])) {
             if (!(newNode.components ?? []).find(x => x.id === item.id)) {
-                result.components!.push({ id: item.id, operation: Operation.Delete, type: "", index: 0 });
+                // A delete carries no value, so no index; the type says what is going.
+                result.components!.push({ id: item.id, type: item.type, operation: Operation.Delete });
             }
         }
     }
@@ -137,6 +147,114 @@ export function diffFiles(oldFile: MosaicFile, newFile: MosaicFile, markMissingF
     result.nodes = result.nodes.filter(n =>
         (n.components?.length ?? 0) > 0
     );
+
+    return result;
+}
+
+// ---------------------------------------------------------------------------
+// DiffArchives: the changes between two independent files, as a file
+// ---------------------------------------------------------------------------
+
+export interface DiffArchivesOptions {
+    /**
+     * Write a DELETE for every component, and every node, the old file has and the new one
+     * does not. On by default: without them, applying the diff can add and change but never
+     * take anything away.
+     */
+    deletes?: boolean;
+    /** The provenance of the section the diff is written as. */
+    header?: Partial<SectionHeader>;
+}
+
+/** A row as a value: key order and spacing do not make two rows different. */
+function canonical(raw: string): string {
+    const sorted = (value: unknown): unknown => {
+        if (Array.isArray(value)) return value.map(sorted);
+        if (value !== null && typeof value === "object") {
+            return Object.fromEntries(Object.keys(value).sort().map(key => [key, sorted((value as Record<string, unknown>)[key])]));
+        }
+        return value;
+    };
+    try {
+        return JSON.stringify(sorted(JSON.parse(raw)));
+    } catch {
+        return raw;
+    }
+}
+
+/**
+ * The changes that turn one file into another, as a file of its own.
+ *
+ * `diffFiles` compares references by the row they point at, which is right when the newer
+ * file is the older one with sections added, since they share their tables. Two archives
+ * packed apart do not: each numbers its own rows, so the same value can sit at different
+ * rows and different values at the same one. This compares what the rows hold instead,
+ * then copies the rows the changes need into a file that stands alone -- one section,
+ * the new file's schemas for the types it carries, and the new file's imports.
+ *
+ * Applying it is federating it over the old file: `federate(old, diff, true)` reads, node
+ * for node and component for component, the same as `newFile`.
+ */
+export function diffArchives(oldFile: MosaicFile, newFile: MosaicFile, options: DiffArchivesOptions = {}): MosaicFile {
+    const deletes = options.deletes ?? true;
+    const oldNodes = collapseNodesByPath(oldFile);
+    const newNodes = collapseNodesByPath(newFile);
+
+    const valueOf = (file: MosaicFile, ref: ComponentElement) =>
+        hasValue(ref) ? canonical(file.readRawComponent(ref.type, indexOf(ref))) : undefined;
+
+    const sameValue: SameComponent = (oldRef, newRef) =>
+        oldRef.type === newRef.type
+        && hasValue(oldRef) === hasValue(newRef)
+        && valueOf(oldFile, oldRef) === valueOf(newFile, newRef);
+
+    const changed: NodeElement[] = [];
+    for (const [id, newNode] of newNodes) {
+        changed.push(diffNodes(oldNodes.get(id) ?? { id, components: [] }, newNode, deletes, sameValue));
+    }
+    if (deletes) {
+        for (const [id, oldNode] of oldNodes) {
+            if (!newNodes.has(id)) changed.push(diffNodes(oldNode, { id, components: [] }, true, sameValue));
+        }
+    }
+
+    // The rows the changes point at, copied out of the new file into this one.
+    const result = new MosaicFile();
+    result.index.header = { ...newFile.index.header };
+    result.index.imports = newFile.index.imports.map(entry => ({ ...entry }));
+
+    const nodes: NodeElement[] = [];
+    for (const node of changed) {
+        if ((node.components?.length ?? 0) === 0) continue;
+
+        nodes.push({
+            id: node.id,
+            components: node.components!.map(ref => {
+                if (operationOf(ref) !== Operation.Value || !hasValue(ref)) return { ...ref };
+                const index = result.addSerializedComponent(ref.type, newFile.readRawComponent(ref.type, indexOf(ref)));
+                return { ...ref, index };
+            }),
+        });
+    }
+
+    for (const type of result.serializedComponents.keys()) {
+        const table = newFile.index.componentTables.find(entry => entry.filename === `${type}.ndjson`);
+        if (table) result.index.componentTables.push({ ...table });
+    }
+
+    const latest = newFile.index.sections.at(-1)?.header;
+    result.AddSection({
+        header: {
+            id: latest?.id ?? "",
+            application: "mosaic diff",
+            author: latest?.author ?? "",
+            dataVersion: latest?.dataVersion ?? "",
+            timestamp: new Date().toISOString(),
+            message: "Changes",
+            ...options.header,
+        },
+        nodes,
+    });
 
     return result;
 }

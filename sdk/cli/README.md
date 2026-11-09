@@ -24,6 +24,7 @@ Needs Node.js 24 or later.
 | Command | |
 | --- | --- |
 | `mosaic pack <input> [output.tsr] [flags]` | Pack into a `.tsr` archive, by extension: a source document (`.json`), glTF (`.gltf`, `.glb`, or a URL), IFC (`.ifc`) or SVG (`.svg`). Name the output `.mosaic.json` to get an editable source document instead (glTF and IFC) |
+| `mosaic diff <old.tsr> <new.tsr> [output.tsr] [--no-deletes] [--message=<text>]` | Write the changes between two archives as an archive of their own |
 | `mosaic compose <input.tsr\|.duckdb> [output.glb]` | Compose an archive and its imports into a `.glb` |
 | `mosaic serve <database.duckdb> [--port <n>] [--host <name>]` | Serve the Mosaic API, and a viewer, over a database |
 | `mosaic codegen <input_dir> <output_dir> <ts\|cs>` | Generate typed classes from component schemas |
