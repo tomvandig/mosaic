@@ -6204,11 +6204,13 @@ async function startSharedEditing(options) {
   else document.querySelector("header")?.append(stats);
   const size = (bytes) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
   const plural = (count, one) => `${count} ${one}${count === 1 ? "" : "s"}`;
+  const encoder = new TextEncoder();
   const showStats = () => {
-    const edits = shared.edits().length;
-    const { sections, nodes, bytes } = source2.editStats();
-    stats.textContent = `${plural(edits, "edit")} \xB7 ${plural(sections, "section")} \xB7 ${size(bytes)}`;
-    stats.title = `${plural(edits, "edit")} made in this session, by every editor in it. They are written in ${plural(sections, "section")} of the archive, one per run of edits by one editor, setting ${plural(nodes, "node")}: ${size(bytes)} on top of the original, which is about what mosaic diff would keep.`;
+    const all = shared.edits();
+    const sent = all.reduce((sum, edit) => sum + encoder.encode(JSON.stringify(edit)).byteLength, 0);
+    const { sections, nodes, bytes: kept } = source2.editStats();
+    stats.textContent = `${plural(all.length, "edit")} \xB7 ${plural(sections, "section")} \xB7 ${size(sent)}`;
+    stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it: ${size(sent)} of edits in all, counting every one as it was sent. The archive keeps them in ${plural(sections, "section")}, one per run of edits by one editor, setting ${plural(nodes, "node")}: ${size(kept)} on top of the original, about what mosaic diff would keep.`;
   };
   const shared = new EditSession({
     author: me,

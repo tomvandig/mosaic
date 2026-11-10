@@ -78,14 +78,20 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
 
     const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
     const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? "" : "s"}`;
+    // The size counted is cumulative: every edit as it travels between editors, added up,
+    // including edits a later one replaced. What the archive keeps of them -- a layer where
+    // a part moved ten times holds one transform -- is in the tooltip beside it.
+    const encoder = new TextEncoder();
     const showStats = () => {
-        const edits = shared.edits().length;
-        const { sections, nodes, bytes } = source.editStats();
-        stats.textContent = `${plural(edits, "edit")} · ${plural(sections, "section")} · ${size(bytes)}`;
-        stats.title = `${plural(edits, "edit")} made in this session, by every editor in it. `
-            + `They are written in ${plural(sections, "section")} of the archive, one per run of edits by one editor, `
-            + `setting ${plural(nodes, "node")}: ${size(bytes)} on top of the original, `
-            + `which is about what mosaic diff would keep.`;
+        const all = shared.edits();
+        const sent = all.reduce((sum, edit) => sum + encoder.encode(JSON.stringify(edit)).byteLength, 0);
+        const { sections, nodes, bytes: kept } = source.editStats();
+        stats.textContent = `${plural(all.length, "edit")} · ${plural(sections, "section")} · ${size(sent)}`;
+        stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it: `
+            + `${size(sent)} of edits in all, counting every one as it was sent. `
+            + `The archive keeps them in ${plural(sections, "section")}, one per run of edits by one editor, `
+            + `setting ${plural(nodes, "node")}: ${size(kept)} on top of the original, `
+            + `about what mosaic diff would keep.`;
     };
 
     const shared = new EditSession({

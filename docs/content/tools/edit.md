@@ -57,8 +57,9 @@ from the example again.
 - **If two tabs move the same part, the later move wins**, in every tab. "Later" means made after
   seeing the other one, not by the clock on the wall, so all tabs agree on the result.
 - **The header counts what was edited**, such as `12 edits · 3 sections · 2.4 KB`: the edits made by
-  every editor, the sections they were written in (a new one each time the editor changes), and how
-  big that layer is on top of the original. Hover over it for the details.
+  every editor, the sections the archive keeps them in (a new one each time the editor changes), and
+  the size of all the edits sent so far, added up. Moving one part ten times counts ten times there,
+  though the archive keeps only its last position; hover over it for that size too.
 - **Only moves are shared.** Typing in the Files drawer stays in the tab where you typed it.
 
 Under the hood, a move is an *edit*: an id, an author, its place in the order of edits, and the
