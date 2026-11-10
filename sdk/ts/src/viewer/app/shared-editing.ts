@@ -1,6 +1,6 @@
 import type { ArchiveSource } from "../ArchiveSource.ts";
 import { CORE_TYPE } from "../../core/schemas.ts";
-import { EditSession, type EditTransport } from "../collab/EditSession.ts";
+import { EditSession, byOrder, opsOf, orderOf, type EditTransport } from "../collab/EditSession.ts";
 import type { EditorHandle } from "./editor.ts";
 // @ts-expect-error -- the viewer is plain JavaScript, deliberately.
 import { moveInPlace, reload, startEditing } from "./app.js";
@@ -62,9 +62,9 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
 
     // A move is shown by moving what is drawn; anything else, or a move that cannot be
     // shown that way, draws the model again.
-    const showInPlace = async (ops: Array<{ node: string; type: string; value: unknown }>) => {
-        for (const op of ops) {
-            const moved = op.type === CORE_TYPE.transform && !redrawPending && await moveInPlace(op.node, op.value) as boolean;
+    const showInPlace = async (moves: Array<{ node: string; type: string; value: unknown }>) => {
+        for (const move of moves) {
+            const moved = move.type === CORE_TYPE.transform && !redrawPending && await moveInPlace(move.node, move.value) as boolean;
             if (!moved) return redraw();
         }
     };
@@ -78,36 +78,51 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
 
     const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
     const plural = (count: number, one: string) => `${count} ${one}${count === 1 ? "" : "s"}`;
-    // The size counted is cumulative: every edit as it travels between editors, added up,
-    // including edits a later one replaced. What the archive keeps of them -- a layer where
-    // a part moved ten times holds one transform -- is in the tooltip beside it.
-    const encoder = new TextEncoder();
+    // The size counted is cumulative: every edit's .tsr, as it travels between editors,
+    // added up. The archive holds every edit too, as a section each, but there they share
+    // the archive's tables and index rather than each carrying its own.
     const showStats = () => {
         const all = shared.edits();
-        const sent = all.reduce((sum, edit) => sum + encoder.encode(JSON.stringify(edit)).byteLength, 0);
+        const sent = all.reduce((sum, edit) => sum + edit.bytes.byteLength, 0);
         const { sections, nodes, bytes: kept } = source.editStats();
-        stats.textContent = `${plural(all.length, "edit")} · ${plural(sections, "section")} · ${size(sent)}`;
-        stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it: `
-            + `${size(sent)} of edits in all, counting every one as it was sent. `
-            + `The archive keeps them in ${plural(sections, "section")}, one per run of edits by one editor, `
-            + `setting ${plural(nodes, "node")}: ${size(kept)} on top of the original, `
-            + `about what mosaic diff would keep.`;
+        stats.textContent = `${plural(all.length, "edit")} · ${size(sent)}`;
+        stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it, `
+            + `each a .tsr of one section: ${size(sent)} sent in all. `
+            + `The archive holds them as ${plural(sections, "edit section")} touching ${plural(nodes, "node")}, `
+            + `${size(kept)} on top of the original.`;
+    };
+
+    /** The archive an edit to these nodes goes in: the one the first of them belongs in. */
+    const archiveOfNode = (node: string) => {
+        const url = archiveFor(node);
+        if (!url) throw new Error(`no archive holds ${node}`);
+        return url;
     };
 
     const shared = new EditSession({
         author: me,
         transport,
-        apply: (ops, edit, remote) => {
-            for (const op of ops) {
-                const url = archiveFor(op.node);
-                if (url) source.setComponent(url, op.node, op.type, op.value, edit.author);
-            }
+        context: {
+            referenceOf: (node, type) => source.referenceOf(archiveOfNode(node), node, type),
+            schemaOf: (node, type) => source.schemaOf(archiveOfNode(node), type),
+        },
+        apply: (edit, remote) => {
+            const ops = opsOf(edit);
+            const url = ops[0] && archiveFor(ops[0].node);
+            if (!url) return;
+            source.addEdit(url, edit.file, orderOf, byOrder);
             const refreshed = editor.refresh();
             showStats();
-            if (remote) {
-                void showInPlace(ops);
-                say(`${edit.author}: ${edit.message ?? "edited"}` + drawerNote(refreshed));
-            }
+
+            // What shows is whatever the newest edit says, which is not always this one: an
+            // edit that arrives late goes in before the newer ones and changes nothing, and
+            // one made here can lose to another made at the same moment. So the drawing is
+            // put where the archive now says, not where the edit said.
+            const now = ops.map(op => ({ ...op, value: source.valueOf(url, op.node, op.type) }));
+            const changed = remote ? now
+                : now.filter((op, i) => JSON.stringify(op.value) !== JSON.stringify(ops[i]!.value));
+            if (changed.length > 0) void showInPlace(changed);
+            if (remote) say(`${edit.author}: ${edit.message || "edited"}` + drawerNote(refreshed));
         },
     });
     const caught = await shared.join();

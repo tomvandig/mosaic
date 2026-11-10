@@ -2617,6 +2617,18 @@ async function LoadMosaicFile(bytes) {
   }
   return mosaicFile;
 }
+async function WriteMosaicFile(file) {
+  const zip = new import_jszip.default();
+  await zip.file("index.json", JSON.stringify(file.index, null, 4));
+  for (let [typeID, components] of file.serializedComponents) {
+    await zip.file(`${typeID}.ndjson`, components.join("\n"));
+  }
+  return await zip.generateAsync({
+    type: "uint8array",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 }
+  });
+}
 var MosaicFile = class {
   index;
   serializedComponents;
@@ -4350,10 +4362,7 @@ var ArchiveSource = class {
       file.index.componentTables.push({ filename: `${type}.ndjson`, type: "NDJSON" /* Ndjson */, schema });
     }
     const rows = file.serializedComponents.get(type);
-    const merged = this.graphs().find((graph) => graph.has(url));
-    const seen = merged ? mergedFrom(merged, url) : file;
-    const current = collapseNodesByPath(seen).get(nodeId)?.components?.find((ref) => ref.type === type && operationOf(ref) === "VALUE" /* Value */);
-    const referenceId = current?.id ?? type.split("::").at(-1);
+    const referenceId = this.referenceOf(url, nodeId, type);
     const last = file.index.sections.at(-1);
     let section;
     if (last?.header.application === "mosaic edit" && (by === void 0 || last.header.author === by)) {
@@ -4388,6 +4397,99 @@ var ArchiveSource = class {
       node.components.push({ type, id: referenceId, index: rows.push(row) - 1 });
     }
     this.remerge(url);
+  }
+  /**
+   * An archive with its imports merged underneath: the version's merged file when there
+   * is a version on top of it, worked out otherwise.
+   */
+  mergedAt(url) {
+    for (const tessera of this.held.values()) {
+      for (const version of tessera.versions) if (version.top === url) return version.file;
+    }
+    const graph = this.graphs().find((one) => one.has(url));
+    return graph ? mergedFrom(graph, url) : void 0;
+  }
+  /**
+   * The reference id a node already gives a component, so that an edit setting it
+   * replaces it rather than sitting beside it -- looked up with the imports merged in,
+   * since an edit to an imported node goes in the archive that imports it and has to
+   * replace what the import gave it. A component the node does not have yet gets an id
+   * named for its type.
+   */
+  referenceOf(url, nodeId, type) {
+    const merged = this.mergedAt(url);
+    const current = merged && collapseNodesByPath(merged).get(nodeId)?.components?.find((ref) => ref.type === type && operationOf(ref) === "VALUE" /* Value */);
+    return current?.id ?? type.split("::").at(-1);
+  }
+  /** The schema of a component type: as the archive (or an import) declares it, else a core type's. */
+  schemaOf(url, type) {
+    const table = this.mergedAt(url)?.index.componentTables.find((one) => one.filename === `${type}.ndjson`);
+    const schema = table?.schema ?? CORE_SCHEMAS[type];
+    if (schema === void 0) throw new Error(`the schema of ${type} is not known here`);
+    return schema;
+  }
+  /** What a node's component reads as now, with every edit and import merged in. */
+  valueOf(url, nodeId, type) {
+    const merged = this.mergedAt(url);
+    const ref = merged && collapseNodesByPath(merged).get(nodeId)?.components?.find((one) => one.type === type && operationOf(one) === "VALUE" /* Value */);
+    if (!merged || !ref || indexOf(ref) < 0) return void 0;
+    return JSON.parse(merged.readRawComponent(type, indexOf(ref)));
+  }
+  /**
+   * Adds an edit -- an archive of one section, as `EditSession` writes them -- to an
+   * archive, as a section of its own.
+   *
+   * It goes in its place in the order of edits rather than at the end: the edit sections
+   * at the end of an archive are kept sorted by `order`, so an edit that arrives late is
+   * put before the newer ones it lost to, and since a later section wins, the newest edit
+   * shows whatever order they came in. Everyone who adds the same edits ends up with the
+   * same archive. Sections without an order -- the original ones, or edits saved without a
+   * clock -- are never reordered; edits go after them.
+   *
+   * Its rows are copied into the archive's tables and its references pointed at them. An
+   * edit already here, by section id, is not added twice. Says whether it was added.
+   */
+  addEdit(url, edit, order, compare) {
+    const archive = this.archiveAt(url);
+    if (!archive) throw new Error("that archive is not open");
+    const file = archive.alone;
+    const [incoming] = edit.index.sections;
+    if (!incoming) return false;
+    if (file.index.sections.some((section2) => section2.header.id === incoming.header.id && section2.header.application === incoming.header.application)) return false;
+    const placed = order(incoming.header);
+    if (!placed) throw new Error("an edit needs a place in the order");
+    const section = { header: { ...incoming.header }, nodes: [] };
+    for (const node of incoming.nodes) {
+      const components = [];
+      for (const ref of node.components ?? []) {
+        if (ref.index === void 0) {
+          components.push({ ...ref });
+          continue;
+        }
+        if (!file.serializedComponents.has(ref.type)) file.serializedComponents.set(ref.type, []);
+        if (!file.index.componentTables.some((table) => table.filename === `${ref.type}.ndjson`)) {
+          const table = edit.index.componentTables.find((one) => one.filename === `${ref.type}.ndjson`);
+          file.index.componentTables.push({
+            filename: `${ref.type}.ndjson`,
+            type: "NDJSON" /* Ndjson */,
+            schema: table?.schema ?? this.schemaOf(url, ref.type)
+          });
+        }
+        const row = edit.serializedComponents.get(ref.type)?.[ref.index];
+        if (row === void 0) throw new Error(`the edit's ${ref.type} row ${ref.index} is missing`);
+        components.push({ ...ref, index: file.serializedComponents.get(ref.type).push(row) - 1 });
+      }
+      section.nodes.push({ id: node.id, components });
+    }
+    let at = file.index.sections.length;
+    while (at > 0) {
+      const before = order(file.index.sections[at - 1].header);
+      if (!before || compare(before, placed) < 0) break;
+      at--;
+    }
+    file.index.sections.splice(at, 0, section);
+    this.remerge(url);
+    return true;
   }
   /**
    * How much has been edited, across every archive open: the sections editing wrote
@@ -4634,10 +4736,7 @@ function message(error) {
 }
 
 // src/viewer/collab/BroadcastTransport.ts
-function isEdit(value) {
-  const edit = value;
-  return typeof edit === "object" && edit !== null && typeof edit.id === "string" && typeof edit.author === "string" && typeof edit.clock === "number" && Array.isArray(edit.ops);
-}
+var isBytes = (value) => value instanceof Uint8Array;
 var BroadcastTransport = class {
   /** `name` picks the channel: tabs editing the same thing should use the same one. */
   constructor(name, options = {}) {
@@ -4651,33 +4750,33 @@ var BroadcastTransport = class {
     if (this.channel) throw new Error("already joined");
     const channel = new BroadcastChannel(this.name);
     this.channel = channel;
-    let collecting = /* @__PURE__ */ new Map();
+    let collecting = [];
     channel.onmessage = (event) => {
       const message2 = event.data;
       if (typeof message2 !== "object" || message2 === null) return;
-      if (message2.kind === "edit" && isEdit(message2.edit)) {
-        receive(message2.edit);
+      if (message2.kind === "edit" && isBytes(message2.tsr)) {
+        receive(message2.tsr);
       } else if (message2.kind === "hello" && typeof message2.from === "string") {
         const edits = known();
         if (edits.length > 0) channel.postMessage({ kind: "history", to: message2.from, edits });
       } else if (message2.kind === "history" && message2.to === this.me && Array.isArray(message2.edits)) {
-        for (const edit of message2.edits) {
-          if (!isEdit(edit)) continue;
-          if (collecting) collecting.set(edit.id, edit);
-          else receive(edit);
+        for (const tsr of message2.edits) {
+          if (!isBytes(tsr)) continue;
+          if (collecting) collecting.push(tsr);
+          else receive(tsr);
         }
       }
     };
     channel.postMessage({ kind: "hello", from: this.me });
     return new Promise((resolve) => setTimeout(() => {
-      const history2 = [...(collecting ?? /* @__PURE__ */ new Map()).values()];
+      const history2 = collecting ?? [];
       collecting = void 0;
       resolve(history2);
     }, this.wait));
   }
-  async send(edit) {
+  async send(tsr) {
     if (!this.channel) throw new Error("not joined");
-    this.channel.postMessage({ kind: "edit", edit });
+    this.channel.postMessage({ kind: "edit", tsr });
   }
   leave() {
     this.channel?.close();
@@ -4879,79 +4978,140 @@ async function mountEditor(options) {
 }
 
 // src/viewer/collab/EditSession.ts
-function isLater(a2, b) {
-  return a2.clock !== b.clock ? a2.clock > b.clock : a2.author > b.author;
-}
+var EDIT_APPLICATION = "mosaic edit";
 function byOrder(a2, b) {
-  return isLater(a2, b) ? 1 : isLater(b, a2) ? -1 : 0;
+  if (a2.clock !== b.clock) return a2.clock - b.clock;
+  if (a2.author !== b.author) return a2.author < b.author ? -1 : 1;
+  return a2.id < b.id ? -1 : a2.id > b.id ? 1 : 0;
+}
+function orderOf(header) {
+  if (header.application !== EDIT_APPLICATION || !/^\d+$/.test(header.dataVersion)) return void 0;
+  return { clock: Number(header.dataVersion), author: header.author, id: header.id };
+}
+function editFile(about, ops, context) {
+  const file = new MosaicFile();
+  const nodes = /* @__PURE__ */ new Map();
+  for (const op of ops) {
+    if (!file.serializedComponents.has(op.type)) {
+      file.serializedComponents.set(op.type, []);
+      file.index.componentTables.push({ filename: `${op.type}.ndjson`, type: "NDJSON" /* Ndjson */, schema: context.schemaOf(op.node, op.type) });
+    }
+    const rows = file.serializedComponents.get(op.type);
+    const index = rows.push(JSON.stringify(op.value)) - 1;
+    let node = nodes.get(op.node);
+    if (!node) {
+      node = { id: op.node, components: [] };
+      nodes.set(op.node, node);
+    }
+    node.components.push({ type: op.type, id: context.referenceOf(op.node, op.type), index });
+  }
+  file.AddSection({
+    header: {
+      id: about.id,
+      application: EDIT_APPLICATION,
+      author: about.author,
+      dataVersion: String(about.clock),
+      timestamp: about.time,
+      message: about.message
+    },
+    nodes: [...nodes.values()]
+  });
+  return file;
+}
+async function readEdit(bytes) {
+  const file = await LoadMosaicFile(bytes);
+  const [section, ...more] = file.index.sections;
+  if (!section || more.length > 0) throw new Error("an edit is an archive of exactly one section");
+  const order = orderOf(section.header);
+  if (!order) throw new Error(`not an edit: written by "${section.header.application}" without a clock`);
+  return { ...order, time: section.header.timestamp, message: section.header.message, file, bytes };
+}
+function opsOf(edit) {
+  const ops = [];
+  for (const node of edit.file.index.sections[0]?.nodes ?? []) {
+    for (const ref of node.components ?? []) {
+      const row = ref.index === void 0 ? void 0 : edit.file.serializedComponents.get(ref.type)?.[ref.index];
+      if (row !== void 0) ops.push({ node: node.id, type: ref.type, value: JSON.parse(row) });
+    }
+  }
+  return ops;
 }
 var EditSession = class {
   author;
   transport;
-  applyOps;
+  context;
+  applyEdit;
   /** Every edit seen, by id. */
   log = /* @__PURE__ */ new Map();
-  /** For each `node type` pair, the edit whose value is showing. */
-  winners = /* @__PURE__ */ new Map();
   clock = 0;
+  /** Edits are read one at a time, in the order they came, since reading is async. */
+  queue = Promise.resolve();
   constructor(options) {
     this.transport = options.transport;
-    this.applyOps = options.apply;
+    this.context = options.context;
+    this.applyEdit = options.apply;
     this.author = options.author ?? crypto.randomUUID();
   }
   /**
-   * Joins: listens for edits, and applies what was edited before this participant came,
-   * oldest first. Resolves with how many edits that was.
+   * Joins: listens for edits, and adds what was edited before this participant came.
+   * Resolves with how many edits that was.
    */
   async join() {
-    const history2 = await this.transport.join((edit) => this.receive(edit), () => this.edits());
-    const sorted = [...history2].sort(byOrder);
+    const history2 = await this.transport.join(
+      (bytes) => void this.receive(bytes).catch(() => {
+      }),
+      () => this.edits().map((edit) => edit.bytes)
+    );
     let caught = 0;
-    for (const edit of sorted) if (this.receive(edit)) caught++;
+    for (const bytes of history2) {
+      try {
+        if (await this.receive(bytes)) caught++;
+      } catch {
+      }
+    }
     return caught;
   }
   /** Every edit seen so far, oldest first. */
   edits() {
     return [...this.log.values()].sort(byOrder);
   }
-  /** Makes an edit here: applies it, and sends it to everyone else. */
-  async make(ops, message2) {
-    const edit = {
+  /** Makes an edit here: writes it as an archive, adds it, and sends it to everyone else. */
+  async make(ops, message2 = "") {
+    const about = {
       id: crypto.randomUUID(),
       author: this.author,
       clock: ++this.clock,
       time: (/* @__PURE__ */ new Date()).toISOString(),
-      ...message2 !== void 0 ? { message: message2 } : {},
-      ops
+      message: message2
     };
-    this.take(edit, false);
-    await this.transport.send(edit);
+    const file = editFile(about, ops, this.context);
+    const edit = { ...about, file, bytes: await WriteMosaicFile(file) };
+    await this.serially(async () => this.take(edit, false));
+    await this.transport.send(edit.bytes);
     return edit;
   }
-  /**
-   * An edit from elsewhere. Applies whichever of its ops are the latest for their
-   * component, and nothing if it was seen before. Returns whether it was new.
-   */
-  receive(edit) {
-    if (this.log.has(edit.id)) return false;
-    this.clock = Math.max(this.clock, edit.clock);
-    this.take(edit, edit.author !== this.author);
-    return true;
+  /** An edit from elsewhere, as bytes. Adds it, unless it was seen before; says which. */
+  receive(bytes) {
+    return this.serially(async () => {
+      const edit = await readEdit(bytes);
+      if (this.log.has(edit.id)) return false;
+      this.clock = Math.max(this.clock, edit.clock);
+      this.take(edit, edit.author !== this.author);
+      return true;
+    });
   }
   leave() {
     this.transport.leave();
   }
+  serially(work) {
+    const next = this.queue.then(work);
+    this.queue = next.catch(() => {
+    });
+    return next;
+  }
   take(edit, remote) {
     this.log.set(edit.id, edit);
-    const winning = [];
-    for (const op of edit.ops) {
-      const key = `${op.node} ${op.type}`;
-      const showing = this.winners.get(key);
-      if (showing && !isLater(edit, showing)) continue;
-      this.winners.set(key, edit);
-      winning.push(op);
-    }
-    if (winning.length > 0) this.applyOps(winning, edit, remote);
+    this.applyEdit(edit, remote);
   }
 };
 
@@ -6191,9 +6351,9 @@ async function startSharedEditing(options) {
       if (redrawPending) redraw();
     });
   };
-  const showInPlace = async (ops) => {
-    for (const op of ops) {
-      const moved = op.type === CORE_TYPE.transform && !redrawPending && await moveInPlace(op.node, op.value);
+  const showInPlace = async (moves) => {
+    for (const move of moves) {
+      const moved = move.type === CORE_TYPE.transform && !redrawPending && await moveInPlace(move.node, move.value);
       if (!moved) return redraw();
     }
   };
@@ -6204,28 +6364,36 @@ async function startSharedEditing(options) {
   else document.querySelector("header")?.append(stats);
   const size = (bytes) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
   const plural = (count, one) => `${count} ${one}${count === 1 ? "" : "s"}`;
-  const encoder = new TextEncoder();
   const showStats = () => {
     const all = shared.edits();
-    const sent = all.reduce((sum, edit) => sum + encoder.encode(JSON.stringify(edit)).byteLength, 0);
+    const sent = all.reduce((sum, edit) => sum + edit.bytes.byteLength, 0);
     const { sections, nodes, bytes: kept } = source2.editStats();
-    stats.textContent = `${plural(all.length, "edit")} \xB7 ${plural(sections, "section")} \xB7 ${size(sent)}`;
-    stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it: ${size(sent)} of edits in all, counting every one as it was sent. The archive keeps them in ${plural(sections, "section")}, one per run of edits by one editor, setting ${plural(nodes, "node")}: ${size(kept)} on top of the original, about what mosaic diff would keep.`;
+    stats.textContent = `${plural(all.length, "edit")} \xB7 ${size(sent)}`;
+    stats.title = `${plural(all.length, "edit")} made in this session, by every editor in it, each a .tsr of one section: ${size(sent)} sent in all. The archive holds them as ${plural(sections, "edit section")} touching ${plural(nodes, "node")}, ${size(kept)} on top of the original.`;
+  };
+  const archiveOfNode = (node) => {
+    const url = archiveFor(node);
+    if (!url) throw new Error(`no archive holds ${node}`);
+    return url;
   };
   const shared = new EditSession({
     author: me,
     transport,
-    apply: (ops, edit, remote) => {
-      for (const op of ops) {
-        const url = archiveFor(op.node);
-        if (url) source2.setComponent(url, op.node, op.type, op.value, edit.author);
-      }
+    context: {
+      referenceOf: (node, type) => source2.referenceOf(archiveOfNode(node), node, type),
+      schemaOf: (node, type) => source2.schemaOf(archiveOfNode(node), type)
+    },
+    apply: (edit, remote) => {
+      const ops = opsOf(edit);
+      const url = ops[0] && archiveFor(ops[0].node);
+      if (!url) return;
+      source2.addEdit(url, edit.file, orderOf, byOrder);
       const refreshed = editor2.refresh();
       showStats();
-      if (remote) {
-        void showInPlace(ops);
-        say3(`${edit.author}: ${edit.message ?? "edited"}` + drawerNote(refreshed));
-      }
+      const now = ops.map((op) => ({ ...op, value: source2.valueOf(url, op.node, op.type) }));
+      const changed = remote ? now : now.filter((op, i) => JSON.stringify(op.value) !== JSON.stringify(ops[i].value));
+      if (changed.length > 0) void showInPlace(changed);
+      if (remote) say3(`${edit.author}: ${edit.message || "edited"}` + drawerNote(refreshed));
     }
   });
   const caught = await shared.join();

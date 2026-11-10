@@ -349,14 +349,7 @@ export class ArchiveSource implements MosaicSource {
         }
         const rows = file.serializedComponents.get(type)!;
 
-        // Whatever the node already calls this component, so the new one replaces it --
-        // looked up with the imports merged in, since an edit to an imported node goes here
-        // and has to replace the transform the import gave it.
-        const merged = this.graphs().find(graph => graph.has(url));
-        const seen = merged ? mergedFrom(merged, url) : file;
-        const current = collapseNodesByPath(seen).get(nodeId)?.components
-            ?.find(ref => ref.type === type && operationOf(ref) === Operation.Value);
-        const referenceId = current?.id ?? type.split("::").at(-1)!;
+        const referenceId = this.referenceOf(url, nodeId, type);
 
         const last = file.index.sections.at(-1);
         let section: SectionElement;
@@ -395,6 +388,114 @@ export class ArchiveSource implements MosaicSource {
         }
 
         this.remerge(url);
+    }
+
+    /**
+     * An archive with its imports merged underneath: the version's merged file when there
+     * is a version on top of it, worked out otherwise.
+     */
+    private mergedAt(url: string): MosaicFile | undefined {
+        for (const tessera of this.held.values()) {
+            for (const version of tessera.versions) if (version.top === url) return version.file;
+        }
+        const graph = this.graphs().find(one => one.has(url));
+        return graph ? mergedFrom(graph, url) : undefined;
+    }
+
+    /**
+     * The reference id a node already gives a component, so that an edit setting it
+     * replaces it rather than sitting beside it -- looked up with the imports merged in,
+     * since an edit to an imported node goes in the archive that imports it and has to
+     * replace what the import gave it. A component the node does not have yet gets an id
+     * named for its type.
+     */
+    referenceOf(url: string, nodeId: string, type: string): string {
+        const merged = this.mergedAt(url);
+        const current = merged && collapseNodesByPath(merged).get(nodeId)?.components
+            ?.find(ref => ref.type === type && operationOf(ref) === Operation.Value);
+        return current?.id ?? type.split("::").at(-1)!;
+    }
+
+    /** The schema of a component type: as the archive (or an import) declares it, else a core type's. */
+    schemaOf(url: string, type: string): unknown {
+        const table = this.mergedAt(url)?.index.componentTables.find(one => one.filename === `${type}.ndjson`);
+        const schema = table?.schema ?? (CORE_SCHEMAS as Record<string, unknown>)[type];
+        if (schema === undefined) throw new Error(`the schema of ${type} is not known here`);
+        return schema;
+    }
+
+    /** What a node's component reads as now, with every edit and import merged in. */
+    valueOf(url: string, nodeId: string, type: string): unknown {
+        const merged = this.mergedAt(url);
+        const ref = merged && collapseNodesByPath(merged).get(nodeId)?.components
+            ?.find(one => one.type === type && operationOf(one) === Operation.Value);
+        if (!merged || !ref || indexOf(ref) < 0) return undefined;
+        return JSON.parse(merged.readRawComponent(type, indexOf(ref)));
+    }
+
+    /**
+     * Adds an edit -- an archive of one section, as `EditSession` writes them -- to an
+     * archive, as a section of its own.
+     *
+     * It goes in its place in the order of edits rather than at the end: the edit sections
+     * at the end of an archive are kept sorted by `order`, so an edit that arrives late is
+     * put before the newer ones it lost to, and since a later section wins, the newest edit
+     * shows whatever order they came in. Everyone who adds the same edits ends up with the
+     * same archive. Sections without an order -- the original ones, or edits saved without a
+     * clock -- are never reordered; edits go after them.
+     *
+     * Its rows are copied into the archive's tables and its references pointed at them. An
+     * edit already here, by section id, is not added twice. Says whether it was added.
+     */
+    addEdit(
+        url: string,
+        edit: MosaicFile,
+        order: (header: SectionElement["header"]) => { clock: number; author: string; id: string } | undefined,
+        compare: (a: { clock: number; author: string; id: string }, b: { clock: number; author: string; id: string }) => number,
+    ): boolean {
+        const archive = this.archiveAt(url);
+        if (!archive) throw new Error("that archive is not open");
+        const file = archive.alone;
+
+        const [incoming] = edit.index.sections;
+        if (!incoming) return false;
+        if (file.index.sections.some(section => section.header.id === incoming.header.id
+            && section.header.application === incoming.header.application)) return false;
+        const placed = order(incoming.header);
+        if (!placed) throw new Error("an edit needs a place in the order");
+
+        // Its rows, into the archive's tables.
+        const section: SectionElement = { header: { ...incoming.header }, nodes: [] };
+        for (const node of incoming.nodes) {
+            const components = [];
+            for (const ref of node.components ?? []) {
+                if (ref.index === undefined) { components.push({ ...ref }); continue; }
+                if (!file.serializedComponents.has(ref.type)) file.serializedComponents.set(ref.type, []);
+                if (!file.index.componentTables.some(table => table.filename === `${ref.type}.ndjson`)) {
+                    const table = edit.index.componentTables.find(one => one.filename === `${ref.type}.ndjson`);
+                    file.index.componentTables.push({
+                        filename: `${ref.type}.ndjson`, type: Type.Ndjson,
+                        schema: table?.schema ?? this.schemaOf(url, ref.type),
+                    });
+                }
+                const row = edit.serializedComponents.get(ref.type)?.[ref.index];
+                if (row === undefined) throw new Error(`the edit's ${ref.type} row ${ref.index} is missing`);
+                components.push({ ...ref, index: file.serializedComponents.get(ref.type)!.push(row) - 1 });
+            }
+            section.nodes.push({ id: node.id, components });
+        }
+
+        // Its place: after every section that comes before it.
+        let at = file.index.sections.length;
+        while (at > 0) {
+            const before = order(file.index.sections[at - 1]!.header);
+            if (!before || compare(before, placed) < 0) break;
+            at--;
+        }
+        file.index.sections.splice(at, 0, section);
+
+        this.remerge(url);
+        return true;
     }
 
     /**

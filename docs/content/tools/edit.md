@@ -30,8 +30,9 @@ the part, and everything under it moves along.
 | **Esc** | deselect; so does clicking empty space |
 
 Selecting a node in the tree puts the handle on it too. When you let go, the node's new position,
-relative to its parent, is written to its `core::transform`. All moves go in one section of the
-archive, written by "mosaic edit", so they stay one clear layer on top of the original.
+relative to its parent, is written to its `core::transform`. Every move is a section of its own at
+the end of the archive, written by "mosaic edit", so the moves stay a clear layer on top of the
+original.
 
 ### Editing together
 
@@ -51,21 +52,25 @@ one, every viewer editing that example in your browser does. Nothing is saved th
 from the example again.
 
 - **Each tab has a name**, such as `tab-3f2a`, shown in the status line and the tab's title. Its
-  moves go in a section of the archive written by that name, so a saved `.tsr` says who moved what.
+  moves are sections with that name as their author, so a saved `.tsr` says who moved what.
 - **A tab opened later catches up.** It asks the open tabs for everything done so far and applies it.
   If every tab is closed, the shared moves are gone; save first.
 - **If two tabs move the same part, the later move wins**, in every tab. "Later" means made after
-  seeing the other one, not by the clock on the wall, so all tabs agree on the result.
-- **The header counts what was edited**, such as `12 edits · 3 sections · 2.4 KB`: the edits made by
-  every editor, the sections the archive keeps them in (a new one each time the editor changes), and
-  the size of all the edits sent so far, added up. Moving one part ten times counts ten times there,
-  though the archive keeps only its last position; hover over it for that size too.
+  seeing the other one, not by the clock on the wall. Every tab keeps the edit sections in that
+  order, however they arrived, so all tabs end up with the same archive.
+- **The header counts what was edited**, such as `12 edits · 9.8 KB`: the edits made by every
+  editor, and the size of all of them as they were sent, added up. Hover over it to see how much
+  they take up once they're inside the archive.
 - **Only moves are shared.** Typing in the Files drawer stays in the tab where you typed it.
 
-Under the hood, a move is an *edit*: an id, an author, its place in the order of edits, and the
-components it sets on which nodes. That's what a Mosaic section holds, so the same edits can later
-travel through the [HTTP API](/sdk/http-api) instead, each published as a version, without changing
-anything but how they're carried.
+Under the hood, every move travels as a **`.tsr` of one section**: an archive like any other, which
+`mosaic diff`, `mosaic federate` or the viewer could open. The section header says who made it and
+when; its place in the order of edits, a counter that goes up with every edit seen, is in the
+header's `dataVersion`. The rows it sets are in the archive's tables, under the reference ids the
+node already uses, so the edit replaces the node's old transform rather than adding a second one.
+Each editor adds the edit to its archive as one more section. Because an edit is already a Mosaic
+archive, the same edits can later travel through the [HTTP API](/sdk/http-api), each published as a
+version, without changing anything but how they're carried.
 
 ### Editing the files
 
