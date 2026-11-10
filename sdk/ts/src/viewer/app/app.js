@@ -261,6 +261,7 @@ async function loadScene() {
     state.scene = null;
     state.selected = null;
     state.glb = null;
+    $("export-glb").disabled = true;
     $("tree").innerHTML = '<p class="empty">Tick a tessera to show it.</p>';
     $("components").innerHTML = '<p class="empty">Select a node.</p>';
     $("warnings").hidden = true;
@@ -283,6 +284,7 @@ async function loadScene() {
     const bytes = answered.buffer.slice(
       answered.byteOffset, answered.byteOffset + answered.byteLength);
     state.glb = bytes;
+    $("export-glb").disabled = false;
 
     state.scene = sceneFromGltf(gltfOf(bytes), versions);
     state.selected = null;
@@ -1802,6 +1804,73 @@ $("file").onchange = async event => {
 };
 
 $("whole").onclick = () => showEverything();
+
+/**
+ * Saves what is on show as a .glb: every tessera ticked, composed the way it is drawn, with
+ * every edit made since. It is built again rather than taken from what was drawn, since an
+ * edit moves the drawing without building a new glb.
+ *
+ * Where the browser has a real save dialog (Chrome, Edge) it asks where, and it has to ask
+ * first, straight from the click: a browser allows that only while the click is fresh, and
+ * building a large model takes long enough to lose it. Elsewhere the file is downloaded.
+ */
+async function exportGlb() {
+  const versions = shownVersions();
+  if (versions.length === 0) return;
+
+  const names = state.tesserae.filter(one => state.shown.has(one.id)).map(one => one.name);
+  const suggested = (names.length === 1 ? names[0] : names.length > 1 ? "scene" : "mosaic") + ".glb";
+
+  let target;
+  if (window.showSaveFilePicker) {
+    try {
+      target = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: "glTF binary", accept: { "model/gltf-binary": [".glb"] } }],
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") return say("not exported");
+      throw error;
+    }
+  }
+
+  const button = $("export-glb");
+  button.disabled = true;
+  say("composing the glb…");
+  try {
+    const bytes = await source.glb({
+      versions,
+      nodes: null,
+      includeChildren: true,
+      compose: compose(),
+      componentTypes: TREE_FROM_GLB,
+    });
+    const blob = new Blob([bytes], { type: "model/gltf-binary" });
+    const size = (blob.size / 1048576).toFixed(1) + " MB";
+
+    if (target) {
+      const writable = await target.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      say("exported " + target.name + " (" + size + ")");
+    } else {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = suggested;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
+      say("downloaded " + suggested + " (" + size + ")");
+    }
+  } catch (error) {
+    say("could not export: " + (error.message ?? error), true);
+  } finally {
+    button.disabled = !state.scene;
+  }
+}
+
+$("export-glb").onclick = () => void exportGlb().catch(error => say("could not export: " + (error.message ?? error), true));
 
 /**
  * Draws everything again, from whatever the source says now.

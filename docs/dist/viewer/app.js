@@ -5276,6 +5276,7 @@ async function loadScene() {
     state.scene = null;
     state.selected = null;
     state.glb = null;
+    $("export-glb").disabled = true;
     $("tree").innerHTML = '<p class="empty">Tick a tessera to show it.</p>';
     $("components").innerHTML = '<p class="empty">Select a node.</p>';
     $("warnings").hidden = true;
@@ -5300,6 +5301,7 @@ async function loadScene() {
       answered.byteOffset + answered.byteLength
     );
     state.glb = bytes;
+    $("export-glb").disabled = false;
     state.scene = sceneFromGltf(gltfOf(bytes), versions);
     state.selected = null;
     state.components.clear();
@@ -6309,6 +6311,58 @@ $("file").onchange = async (event) => {
   if (last) await loadScene();
 };
 $("whole").onclick = () => showEverything();
+async function exportGlb() {
+  const versions = shownVersions();
+  if (versions.length === 0) return;
+  const names = state.tesserae.filter((one) => state.shown.has(one.id)).map((one) => one.name);
+  const suggested = (names.length === 1 ? names[0] : names.length > 1 ? "scene" : "mosaic") + ".glb";
+  let target;
+  if (window.showSaveFilePicker) {
+    try {
+      target = await window.showSaveFilePicker({
+        suggestedName: suggested,
+        types: [{ description: "glTF binary", accept: { "model/gltf-binary": [".glb"] } }]
+      });
+    } catch (error) {
+      if (error?.name === "AbortError") return say("not exported");
+      throw error;
+    }
+  }
+  const button = $("export-glb");
+  button.disabled = true;
+  say("composing the glb\u2026");
+  try {
+    const bytes = await source.glb({
+      versions,
+      nodes: null,
+      includeChildren: true,
+      compose: compose(),
+      componentTypes: TREE_FROM_GLB
+    });
+    const blob = new Blob([bytes], { type: "model/gltf-binary" });
+    const size = (blob.size / 1048576).toFixed(1) + " MB";
+    if (target) {
+      const writable = await target.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      say("exported " + target.name + " (" + size + ")");
+    } else {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = suggested;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 6e4);
+      say("downloaded " + suggested + " (" + size + ")");
+    }
+  } catch (error) {
+    say("could not export: " + (error.message ?? error), true);
+  } finally {
+    button.disabled = !state.scene;
+  }
+}
+$("export-glb").onclick = () => void exportGlb().catch((error) => say("could not export: " + (error.message ?? error), true));
 async function reload() {
   const selected = state.selected;
   state.components.clear();

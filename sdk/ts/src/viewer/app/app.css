@@ -50,6 +50,10 @@
     display: flex; gap: 8px; align-items: center;
   }
   .scroll { overflow: auto; padding: 6px 0; flex: 1; }
+  /* A small button at the far end of a panel's title bar. */
+  h2 .bar-button {
+    margin-left: auto; padding: 1px 8px; font-size: 11px; letter-spacing: 0; text-transform: none;
+  }
   .tessera {
     display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center;
     padding: 3px 12px; color: var(--ink); white-space: nowrap;
