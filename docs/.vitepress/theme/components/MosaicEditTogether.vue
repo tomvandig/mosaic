@@ -4,6 +4,7 @@
  *
  *   <MosaicEditTogether />
  *   <MosaicEditTogether example="helmet" height="380" />
+ *   <MosaicEditTogether example="ferrari" credit="Model: www.vecarz.com" />
  *
  * Each is the viewer with `?edit`, in a frame of its own; the frames are on the same origin,
  * so they talk over a BroadcastChannel exactly as two tabs would. Each pair gets a channel
@@ -17,6 +18,8 @@ const props = withDefaults(defineProps<{
     example?: string;
     height?: number | string;
     caption?: string;
+    /** Who made the model, shown quietly under the caption. */
+    credit?: string;
 }>(), {
     example: "ferrari",
     height: 360,
@@ -66,7 +69,10 @@ const height = computed(() => {
       <span class="title">Click to load two editors</span>
       <span class="name"><code>{{ example }}</code></span>
     </button>
-    <figcaption>{{ caption ?? "Drag a part in one editor: when you let go, it moves in the other." }}</figcaption>
+    <figcaption>
+      {{ caption ?? "Drag a part in one editor: when you let go, it moves in the other." }}
+      <span v-if="credit" class="credit">{{ credit }}</span>
+    </figcaption>
   </figure>
 </template>
 
@@ -159,6 +165,13 @@ iframe {
 .cover:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: -4px; }
 .title { font-weight: 600; font-size: 15px; }
 .name { font-size: 13px; color: var(--vp-c-text-2); }
+/* There to say who made the model, not to be noticed. */
+.credit {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--vp-c-text-3);
+}
 figcaption {
   margin-top: 12px;
   font-size: 13px;

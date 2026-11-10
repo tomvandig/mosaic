@@ -27,7 +27,7 @@ the part, and everything under it moves along.
 | **E** | rotate |
 | **R** | scale |
 | **↑** | select the part's parent: a click picks the smallest part under the mouse, like one bolt rather than the wheel |
-| **Esc** | deselect |
+| **Esc** | deselect; so does clicking empty space |
 
 Selecting a node in the tree puts the handle on it too. When you let go, the node's new position,
 relative to its parent, is written to its `core::transform`. All moves go in one section of the
@@ -43,7 +43,7 @@ Try it here: these are two editors on a car. Click a part in one, such as a whee
 the handle, and let go. The same part moves in the other editor, and only that part: the other
 editor moves what it already drew instead of drawing the car again.
 
-<MosaicEditTogether example="ferrari" height="400" />
+<MosaicEditTogether example="ferrari" height="400" credit="Model: www.vecarz.com" />
 
 Any viewer link can edit like this: add `&edit` to it, as in
 `viewer/?example=ferrari&edit`. Viewers with the same `&channel=<name>` share their moves; without

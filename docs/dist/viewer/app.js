@@ -5278,6 +5278,13 @@ async function startEditing({ onMoved }) {
   editor = { onMoved };
   await drawing.enableEditing({
     onPick: (index) => {
+      if (index === null) {
+        state.selected = null;
+        drawTree();
+        drawComponents(null);
+        drawing.attach(null);
+        return;
+      }
       const picked = String(index);
       const chosen = placedOnce(picked);
       select(chosen);
@@ -5929,13 +5936,14 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
           return;
         }
       }
+      if (editing.selected !== null) onPick(null);
     });
     window.addEventListener("keydown", (event) => {
       if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select, .monaco-editor")) return;
       if (event.key === "w" || event.key === "W") handle.setMode("translate");
       else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
       else if (event.key === "r" || event.key === "R") handle.setMode("scale");
-      else if (event.key === "Escape") attach(null);
+      else if (event.key === "Escape") onPick(null);
       else if (event.key === "ArrowUp") {
         const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
         if (parent === null || parent === void 0) return;
@@ -6230,7 +6238,7 @@ async function startSharedEditing(options) {
   }));
   return { me, caught, leave: () => shared.leave() };
 }
-var EDIT_KEYS = "W move \xB7 E rotate \xB7 R scale \xB7 \u2191 parent \xB7 Esc deselect";
+var EDIT_KEYS = "W move \xB7 E rotate \xB7 R scale \xB7 \u2191 parent \xB7 Esc or click empty space to deselect";
 
 // src/viewer/app/boot-static.ts
 var EXAMPLES = "examples";

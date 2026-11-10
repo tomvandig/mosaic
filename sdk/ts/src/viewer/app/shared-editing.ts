@@ -124,4 +124,4 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
 }
 
 /** The keys, for a status line. */
-export const EDIT_KEYS = "W move · E rotate · R scale · ↑ parent · Esc deselect";
+export const EDIT_KEYS = "W move · E rotate · R scale · ↑ parent · Esc or click empty space to deselect";

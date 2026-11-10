@@ -35,10 +35,20 @@ Two editors on one car, each its own application with its own copy of the model.
 and only that change travels to the other, as a small layer on top of what both started from.
 [How it works](/tools/edit#editing-together).
 
-<MosaicEditTogether example="ferrari" height="400" />
+<MosaicEditTogether example="ferrari" height="400" credit="Model: www.vecarz.com" />
 
 ## Combine data sources
 
-<MosaicViewer example="s1" height="480" caption="S1: two buildings, a tree and a helmet, federated by imports." />
+S1 brings very different sources into one view. It contains an IFC model of a building's eleventh
+floor, with more than 9,000 nodes carrying their IFC entities, property sets and quantities. It adds
+an SVG underfloor heating plan, and two glTF models: a tree and a helmet. A small archive of ten
+nodes imports all four and arranges them into **one scene hierarchy**. The heating plan hangs under
+"Eleventh floor", right beside the IFC storey it was drawn for, and the tree is placed three times.
+
+Nothing is flattened into a common format on the way. The IFC elements keep their property sets, and
+the plan stays an SVG. Because they all share one tree of nodes, data from one source can point at,
+hold or sit beside data from another.
+
+<MosaicViewer example="s1" height="480" caption="S1: an IFC floor, an SVG heating plan and two glTF models, in one scene." />
 
 </div>

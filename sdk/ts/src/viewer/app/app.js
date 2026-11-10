@@ -494,6 +494,14 @@ export async function startEditing({ onMoved }) {
   editor = { onMoved };
   await drawing.enableEditing({
     onPick: index => {
+      if (index === null) {
+        // Deselecting: the tree, the components panel and the handle all let go.
+        state.selected = null;
+        drawTree();
+        drawComponents(null);
+        drawing.attach(null);
+        return;
+      }
       const picked = String(index);
       const chosen = placedOnce(picked);
       select(chosen);
@@ -1456,7 +1464,8 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
   /**
    * Turns on picking and the transform handle. Only `mosaic edit` asks for this.
    *
-   * `onPick(index)` is called with the glTF node index a click landed on. `onMoved(index,
+   * `onPick(index)` is called with the glTF node index a click landed on, or null for a click
+ * on nothing, or Esc. `onMoved(index,
    * local)` is called when a drag ends, with the node's new transform relative to its
    * parent, as translation, rotation and scale.
    */
@@ -1511,6 +1520,8 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         const index = placed3d.byInstance.get(hit.object)?.get(hit.batchId);
         if (index !== undefined) { onPick(index); return; }
       }
+      // A click on nothing -- the sky, the ground around the model -- lets go of the selection.
+      if (editing.selected !== null) onPick(null);
     });
 
     window.addEventListener("keydown", event => {
@@ -1518,7 +1529,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       if (event.key === "w" || event.key === "W") handle.setMode("translate");
       else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
       else if (event.key === "r" || event.key === "R") handle.setMode("scale");
-      else if (event.key === "Escape") attach(null);
+      else if (event.key === "Escape") onPick(null);
       else if (event.key === "ArrowUp") {
         // A click lands on the smallest part under it; this climbs to what holds it.
         const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
