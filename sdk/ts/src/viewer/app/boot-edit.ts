@@ -1,8 +1,10 @@
 import { ArchiveSource } from "../ArchiveSource.ts";
+import { BroadcastTransport } from "../collab/BroadcastTransport.ts";
 import { mountEditor } from "./editor.ts";
+import { EDIT_KEYS, startSharedEditing } from "./shared-editing.ts";
 // @ts-expect-error -- the viewer is plain JavaScript, deliberately: it is the same file
 // the other builds run, and nothing in it needs types to be correct.
-import { reload, start, startEditing } from "./app.js";
+import { reload, start } from "./app.js";
 
 /**
  * The viewer as an editor for one model, served by `mosaic edit`.
@@ -27,6 +29,7 @@ const say = (message: string, isError = false) => {
     const status = document.getElementById("status");
     if (!status) return;
     status.textContent = message;
+    status.title = message;
     status.dataset["error"] = String(isError);
 };
 
@@ -60,22 +63,16 @@ async function main(): Promise<void> {
     // --- writing it back to disk ---------------------------------------------
     const url = source.archives()[0]?.url;
 
-    // --- moving parts in 3D ----------------------------------------------------
-    // A drag has already moved the drawing; this writes the same move into the archive,
-    // so the Files drawer, Save .tsr and Export .glb all see it.
-    await startEditing({
-        onMoved: (nodeId: string, transform: { translation: number[]; rotation: number[]; scale: number[] }, label: string) => {
-            if (!url) return;
-            try {
-                source.setTransform(url, nodeId, transform);
-                const refreshed = editor.refresh();
-                say(`moved ${label}` + (refreshed ? "" : " — the Files drawer has unsaved typing, so it was not refreshed: "
-                    + "Revert there before saving, or the drawer will put the old transform back"));
-            } catch (error) {
-                say(`could not move ${label}: ${errorText(error)}`, true);
-            }
-        },
+    // --- moving parts in 3D, together -----------------------------------------
+    // Shared with every other tab open on this model; see shared-editing.ts.
+    const { me, caught } = await startSharedEditing({
+        source,
+        archiveFor: () => url,
+        transport: new BroadcastTransport(`mosaic-edit:${session.name}`),
+        editor,
+        say,
     });
+    document.title = `${session.name} — Mosaic edit (${me})`;
 
     /** What each button saves, and how the save dialog describes it. */
     const KINDS = {
@@ -177,8 +174,10 @@ async function main(): Promise<void> {
         else header?.append(made);
     }
 
-    say(`editing ${session.name}: click a part to move it (W move · E rotate · R scale · ↑ parent · Esc deselect), `
-        + `or change the files below`);
+    say(`editing ${session.name} as ${me}`
+        + (caught > 0 ? `, caught up on ${caught} edit${caught === 1 ? "" : "s"} from other tabs` : "")
+        + `: click a part to move it (${EDIT_KEYS}), `
+        + `or change the files below. Moves are shared with other tabs open on this page`);
 }
 
 main().catch(error => say(errorText(error), true));

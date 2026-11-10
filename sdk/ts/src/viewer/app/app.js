@@ -49,6 +49,7 @@ const state = {
 
 function say(message, isError = false) {
   $("status").textContent = message;
+  $("status").title = message;
   $("status").dataset.error = String(isError);
 }
 
@@ -430,26 +431,94 @@ function parentInScene(id) {
 }
 
 /**
+ * Shows a node's new transform by moving what is drawn, rather than drawing everything
+ * again: every place the node is drawn moves, with whatever hangs under it. Resolves with
+ * whether it could; if not -- the node is not drawn, or a part is being dragged -- the
+ * caller should `reload()` when it can.
+ */
+export async function moveInPlace(nodeId, value) {
+  const indices = Object.values(state.scene?.nodes ?? {})
+    .filter(node => node.nodeId === nodeId)
+    .map(node => Number(node.id));
+  if (indices.length === 0) return false;
+
+  const drawing = await viewer();
+  if (drawing.dragging()) return false;
+  if (!drawing.setLocal(indices, value)) return false;
+
+  // What the components panel holds for them is out of date now, and so is the glb the
+  // drawing was made from: anything that draws again has to build it again.
+  for (const index of indices) state.components.delete(String(index));
+  state.glb = null;
+  if (state.selected != null && indices.includes(Number(state.selected))) drawComponents(state.selected);
+  return true;
+}
+
+/**
+ * How many times a Mosaic node is placed in the scene on show.
+ *
+ * A node held by several parents is drawn once under each, and every one of those is the
+ * same node: its transform is one value, so moving one copy moves them all.
+ */
+function placements(nodeId) {
+  if (!nodeId) return 0;
+  let count = 0;
+  for (const node of Object.values(state.scene?.nodes ?? {})) if (node.nodeId === nodeId) count++;
+  return count;
+}
+
+/**
+ * What a click on a part selects: the part itself, or if it is placed more than once, the
+ * nearest part above it placed only once -- what someone pointing at one copy means to
+ * move. If everything above is shared too, the part itself.
+ */
+function placedOnce(id) {
+  for (let at = id; at !== null; at = parentInScene(at)) {
+    if (placements(state.scene.nodes[at]?.nodeId) === 1) return at;
+  }
+  return id;
+}
+
+/**
  * Turns the viewer into an editor: picking in 3D, and a handle to move what is picked.
  *
  * `onMoved(nodeId, transform, label)` is called when a part has been dragged, with the
  * Mosaic node it is and its new local transform. Whoever holds the archive writes it
  * there; the drawing has already moved, so nothing is rebuilt.
+ *
+ * Resolves with `dragging()`, which says whether a part is being dragged right now --
+ * redrawing then would pull it out from under the mouse.
  */
 export async function startEditing({ onMoved }) {
   const drawing = await viewer();
   editor = { onMoved };
   await drawing.enableEditing({
-    onPick: index => select(String(index)),
+    onPick: index => {
+      const picked = String(index);
+      const chosen = placedOnce(picked);
+      select(chosen);
+      if (chosen !== picked) {
+        const node = state.scene.nodes[picked];
+        say(labelOf(node) + " is placed " + placements(node.nodeId) + " times, so moving it would move every one: "
+          + "selected " + labelOf(state.scene.nodes[chosen]) + ", the nearest part placed once. "
+          + "Select it in the tree to move all of them");
+      }
+    },
     onMoved: (index, transform) => {
       const node = state.scene?.nodes[String(index)];
       if (!node?.nodeId) return;
-      // What the components panel holds for it is out of date now.
+      // What the components panel holds for it is out of date now, and so is the glb.
       state.components.delete(String(index));
+      state.glb = null;
       onMoved(node.nodeId, transform, labelOf(node));
       if (state.selected === String(index)) drawComponents(String(index));
+      // Only the copy that was dragged moved on screen; the others follow it now.
+      if (placements(node.nodeId) > 1) {
+        void moveInPlace(node.nodeId, transform).then(moved => { if (!moved) void reload(); });
+      }
     },
   });
+  return { dragging: () => drawing.dragging() };
 }
 
 /**
@@ -575,7 +644,8 @@ async function showNode(id) {
  * is already here, which is what "everything" means once a node has been looked at alone.
  */
 async function showEverything() {
-  if (!state.glb) return;
+  // Moved since it was drawn, so the bytes have to be built again.
+  if (!state.glb) return reload();
 
   say("drawing " + (state.glb.byteLength / 1048576).toFixed(1) + " MB of glb…");
   try {
@@ -1097,10 +1167,17 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     let drawnEdges = 0;
     if (placed > 0 && placed <= EDGE_BUDGET) {
       const baked = [];
+      // Where each part's lines sit in the merged buffer, so moving the part can move them.
+      const ranges = [];
+      let offset = 0;
       for (const mesh of toEdge) {
         const edges = edgesOf.get(mesh.geometry.uuid);
         if (!edges || edges.attributes.position.count === 0) continue;
+        const count = edges.attributes.position.count;
         baked.push(edges.clone().applyMatrix4(mesh.matrixWorld));
+        const index = placed3d.drawnMeshes.has(mesh) ? placed3d.nodeOf(mesh) : null;
+        if (index !== null) ranges.push({ index, start: offset, count });
+        offset += count;
       }
 
       // One buffer for every line in the model, so the whole drawing is a single call.
@@ -1116,6 +1193,11 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         }));
         lines.frustumCulled = false;
         out.add(lines);
+        placed3d.lines = lines;
+        for (const range of ranges) {
+          if (!placed3d.edges.has(range.index)) placed3d.edges.set(range.index, []);
+          placed3d.edges.get(range.index).push(range);
+        }
         drawnEdges = Math.round(merged.attributes.position.count / 2);
       }
     }
@@ -1281,11 +1363,15 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     children: new Map(),  // glTF node index -> child indices
     drawnBy: new Map(),   // glTF node index -> [{ batch, id, world }]
     byInstance: new Map(),// batch -> Map(instance id -> glTF node index)
+    drawnMeshes: new Set(), // the loaded meshes that went into a batch, so can be moved
+    lines: null,          // the one LineSegments holding every edge, in world space
+    edges: new Map(),     // glTF node index -> [{ start, count }] vertex ranges in lines
 
     reset(file) {
       this.associations = file.parser?.associations ?? new Map();
       this.world.clear(); this.parent.clear(); this.children.clear();
       this.drawnBy.clear(); this.byInstance.clear();
+      this.drawnMeshes.clear(); this.edges.clear(); this.lines = null;
       // The tinted instances belonged to batches that were just thrown away.
       if (editing) { editing.tinted = []; editing.outline.visible = false; }
 
@@ -1318,10 +1404,41 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     register(mesh, batch, id) {
       const index = this.nodeOf(mesh);
       if (index === null) return;
+      this.drawnMeshes.add(mesh);
       if (!this.drawnBy.has(index)) this.drawnBy.set(index, []);
       this.drawnBy.get(index).push({ batch, id, world: mesh.matrixWorld.clone() });
       if (!this.byInstance.has(batch)) this.byInstance.set(batch, new Map());
       this.byInstance.get(batch).set(id, index);
+    },
+
+    /** The edge ranges drawn for these nodes. */
+    edgeRanges(nodes) {
+      return nodes.flatMap(node => this.edges.get(node) ?? []);
+    },
+
+    /** A copy of the edge positions in these ranges, to move from. */
+    copyEdges(ranges) {
+      const positions = this.lines?.geometry.attributes.position;
+      return ranges.map(range => positions
+        ? positions.array.slice(range.start * 3, (range.start + range.count) * 3) : new Float32Array());
+    },
+
+    /**
+     * Puts the edges in these ranges at `matrix` times where they were: `from` holds the
+     * positions to start from, one array per range, or they move from where they are.
+     */
+    moveEdges(ranges, matrix, from) {
+      const positions = this.lines?.geometry.attributes.position;
+      if (!positions || ranges.length === 0) return;
+      const v = new THREE.Vector3();
+      ranges.forEach((range, r) => {
+        for (let i = 0; i < range.count; i++) {
+          const at = (range.start + i) * 3;
+          if (from) v.fromArray(from[r], i * 3); else v.fromArray(positions.array, at);
+          v.applyMatrix4(matrix).toArray(positions.array, at);
+        }
+      });
+      positions.needsUpdate = true;
     },
 
     subtree(index) {
@@ -1503,6 +1620,8 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       delta: new THREE.Matrix4(),
       scratch: new THREE.Matrix4(),
     };
+    editing.drag.edges = placed3d.edgeRanges(editing.drag.nodes);
+    editing.drag.edgesFrom = placed3d.copyEdges(editing.drag.edges);
   }
 
   /** Moves every instance under the node by however far the handle has gone. */
@@ -1516,6 +1635,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         one.batch.setMatrixAt(one.id, drag.scratch.multiplyMatrices(drag.delta, one.world));
       }
     }
+    placed3d.moveEdges(drag.edges, drag.delta, drag.edgesFrom);
     if (editing.outline.visible) editing.outline.box.copy(editing.bounds).applyMatrix4(drag.delta);
     invalidate();
   }
@@ -1559,7 +1679,60 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     });
   }
 
-  return { show, clear, enableEditing, attach };
+  /** Whether a part is being dragged right now. */
+  const dragging = () => !!editing?.drag;
+
+  /** A Mosaic `core::transform` value as a matrix: a glTF matrix, or translation, rotation, scale. */
+  function matrixOf(value) {
+    if (Array.isArray(value?.matrix) && value.matrix.length === 16) return new THREE.Matrix4().fromArray(value.matrix);
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(...(value?.translation ?? [0, 0, 0])),
+      new THREE.Quaternion(...(value?.rotation ?? [0, 0, 0, 1])),
+      new THREE.Vector3(...(value?.scale ?? [1, 1, 1])),
+    );
+  }
+
+  /**
+   * Gives glTF nodes a new local transform in place, moving everything drawn under them,
+   * without building the model again. How an edit someone else made is shown.
+   *
+   * Each node is put where its parent's world matrix and the new local transform say, and
+   * the move from where it was to there is applied to its whole subtree, the way a drag
+   * moves it. Says whether every node could be moved this way; if not, the caller draws
+   * the model again instead.
+   */
+  function setLocal(indices, value) {
+    const local = matrixOf(value);
+    const touched = new Set();
+    const delta = new THREE.Matrix4();
+    for (const index of indices) {
+      const old = placed3d.world.get(index);
+      if (!old) return false;
+      const parentIndex = placed3d.parent.get(index);
+      const parentWorld = parentIndex === null || parentIndex === undefined
+        ? new THREE.Matrix4() : placed3d.world.get(parentIndex);
+      if (!parentWorld) return false;
+
+      delta.multiplyMatrices(parentWorld, local).multiply(old.clone().invert());
+      placed3d.moveEdges(placed3d.edgeRanges(placed3d.subtree(index)), delta);
+      for (const node of placed3d.subtree(index)) {
+        placed3d.world.get(node)?.premultiply(delta);
+        for (const one of placed3d.drawnBy.get(node) ?? []) {
+          one.world.premultiply(delta);
+          one.batch.setMatrixAt(one.id, one.world);
+          touched.add(one.batch);
+        }
+      }
+    }
+    for (const batch of touched) { batch.computeBoundingBox(); batch.computeBoundingSphere(); }
+
+    // The handle and the outline follow, if what moved was under the selection or above it.
+    if (editing && !editing.drag && editing.selected !== null) attach(editing.selected);
+    invalidate();
+    return true;
+  }
+
+  return { show, clear, enableEditing, attach, dragging, setLocal };
 }
 
 async function intoViewer(saying, pending) {

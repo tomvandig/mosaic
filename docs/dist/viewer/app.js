@@ -4323,21 +4323,40 @@ var ArchiveSource = class {
    * transform per node it touched. The reference keeps the id the node's transform
    * already had, which is what makes it replace that transform rather than sit beside it.
    */
-  setTransform(url, nodeId, value) {
+  setTransform(url, nodeId, value, by) {
+    this.setComponent(url, nodeId, CORE_TYPE.transform, value, by);
+  }
+  /**
+   * Sets one component of a node, as an edit layered on top -- what `setTransform` does,
+   * for any component type.
+   *
+   * `by` names who made the edit. Each author's edits go in a section of their own, so
+   * when several people edit one archive, who changed what stays readable in it: a run of
+   * edits by one author shares a section, and an edit by someone else starts a new one
+   * after it. Since the last section wins, the edit applied last is the one that shows.
+   * Left out, the edit joins whatever "mosaic edit" section is last.
+   *
+   * A type the archive has no table for needs a schema to start one, and only the core
+   * types' are known here.
+   */
+  setComponent(url, nodeId, type, value, by) {
     const archive = this.archiveAt(url);
     if (!archive) throw new Error("that archive is not open");
     const file = archive.alone;
-    const type = CORE_TYPE.transform;
     if (!file.serializedComponents.has(type)) file.serializedComponents.set(type, []);
     if (!file.index.componentTables.some((table) => table.filename === `${type}.ndjson`)) {
-      file.index.componentTables.push({ filename: `${type}.ndjson`, type: "NDJSON" /* Ndjson */, schema: CORE_SCHEMAS[type] });
+      const schema = CORE_SCHEMAS[type];
+      if (schema === void 0) throw new Error(`the archive has no ${type} table, and its schema is not known here`);
+      file.index.componentTables.push({ filename: `${type}.ndjson`, type: "NDJSON" /* Ndjson */, schema });
     }
     const rows = file.serializedComponents.get(type);
-    const current = collapseNodesByPath(file).get(nodeId)?.components?.find((ref) => ref.type === type && operationOf(ref) === "VALUE" /* Value */);
-    const referenceId = current?.id ?? "transform";
+    const merged = this.graphs().find((graph) => graph.has(url));
+    const seen = merged ? mergedFrom(merged, url) : file;
+    const current = collapseNodesByPath(seen).get(nodeId)?.components?.find((ref) => ref.type === type && operationOf(ref) === "VALUE" /* Value */);
+    const referenceId = current?.id ?? type.split("::").at(-1);
     const last = file.index.sections.at(-1);
     let section;
-    if (last?.header.application === "mosaic edit") {
+    if (last?.header.application === "mosaic edit" && (by === void 0 || last.header.author === by)) {
       section = last;
     } else {
       const before = last?.header;
@@ -4345,10 +4364,10 @@ var ArchiveSource = class {
         header: {
           id: before?.id ?? archive.name,
           application: "mosaic edit",
-          author: before?.author ?? "",
+          author: by ?? before?.author ?? "",
           dataVersion: before?.dataVersion ?? "",
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          message: "Edited in mosaic edit"
+          message: by === void 0 ? "Edited in mosaic edit" : `Edited by ${by} in mosaic edit`
         },
         nodes: []
       };
@@ -4369,6 +4388,51 @@ var ArchiveSource = class {
       node.components.push({ type, id: referenceId, index: rows.push(row) - 1 });
     }
     this.remerge(url);
+  }
+  /**
+   * How much has been edited, across every archive open: the sections editing wrote
+   * ("mosaic edit"), the nodes they touch, and their size in bytes -- the sections as JSON
+   * plus the table rows they point at, which is roughly what `mosaic diff` would keep.
+   */
+  editStats() {
+    const encoder = new TextEncoder();
+    let sections = 0, nodes = 0, bytes = 0;
+    const seen = /* @__PURE__ */ new Set();
+    for (const graph of this.graphs()) {
+      for (const archive of graph.values()) {
+        if (seen.has(archive)) continue;
+        seen.add(archive);
+        for (const section of archive.alone.index.sections) {
+          if (section.header.application !== "mosaic edit") continue;
+          sections++;
+          nodes += section.nodes.length;
+          bytes += encoder.encode(JSON.stringify(section)).byteLength;
+          for (const node of section.nodes) {
+            for (const ref of node.components ?? []) {
+              const row = archive.alone.serializedComponents.get(ref.type)?.[indexOf(ref)];
+              if (row !== void 0) bytes += encoder.encode(row).byteLength + 1;
+            }
+          }
+        }
+      }
+    }
+    return { sections, nodes, bytes };
+  }
+  /**
+   * The archive an edit to a node belongs in: the top of the newest version of whichever
+   * tessera has the node -- written there itself if one does, or reached through an
+   * import otherwise. An edit to an imported node goes in the archive that imports it, as
+   * a layer over the import, so the imported file is left as it is.
+   */
+  archiveOf(nodeId) {
+    let reached;
+    for (const tessera of this.held.values()) {
+      const newest = tessera.versions.at(-1);
+      if (!newest) continue;
+      if (newest.own.has(nodeId)) return newest.top;
+      reached ??= newest.file.index.sections.some((section) => section.nodes.some((node) => node.id === nodeId)) ? newest.top : void 0;
+    }
+    return reached;
   }
   /** The versions named, in the order they were named, skipping any that are not here. */
   resolve(refs) {
@@ -4569,6 +4633,58 @@ function message(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+// src/viewer/collab/BroadcastTransport.ts
+function isEdit(value) {
+  const edit = value;
+  return typeof edit === "object" && edit !== null && typeof edit.id === "string" && typeof edit.author === "string" && typeof edit.clock === "number" && Array.isArray(edit.ops);
+}
+var BroadcastTransport = class {
+  /** `name` picks the channel: tabs editing the same thing should use the same one. */
+  constructor(name, options = {}) {
+    this.name = name;
+    this.wait = options.wait ?? 300;
+  }
+  channel;
+  me = crypto.randomUUID();
+  wait;
+  join(receive, known) {
+    if (this.channel) throw new Error("already joined");
+    const channel = new BroadcastChannel(this.name);
+    this.channel = channel;
+    let collecting = /* @__PURE__ */ new Map();
+    channel.onmessage = (event) => {
+      const message2 = event.data;
+      if (typeof message2 !== "object" || message2 === null) return;
+      if (message2.kind === "edit" && isEdit(message2.edit)) {
+        receive(message2.edit);
+      } else if (message2.kind === "hello" && typeof message2.from === "string") {
+        const edits = known();
+        if (edits.length > 0) channel.postMessage({ kind: "history", to: message2.from, edits });
+      } else if (message2.kind === "history" && message2.to === this.me && Array.isArray(message2.edits)) {
+        for (const edit of message2.edits) {
+          if (!isEdit(edit)) continue;
+          if (collecting) collecting.set(edit.id, edit);
+          else receive(edit);
+        }
+      }
+    };
+    channel.postMessage({ kind: "hello", from: this.me });
+    return new Promise((resolve) => setTimeout(() => {
+      const history2 = [...(collecting ?? /* @__PURE__ */ new Map()).values()];
+      collecting = void 0;
+      resolve(history2);
+    }, this.wait));
+  }
+  async send(edit) {
+    if (!this.channel) throw new Error("not joined");
+    this.channel.postMessage({ kind: "edit", edit });
+  }
+  leave() {
+    this.channel?.close();
+    this.channel = void 0;
+  }
+};
+
 // src/viewer/app/editor.ts
 var MONACO = "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min";
 var loading;
@@ -4762,6 +4878,83 @@ async function mountEditor(options) {
   };
 }
 
+// src/viewer/collab/EditSession.ts
+function isLater(a2, b) {
+  return a2.clock !== b.clock ? a2.clock > b.clock : a2.author > b.author;
+}
+function byOrder(a2, b) {
+  return isLater(a2, b) ? 1 : isLater(b, a2) ? -1 : 0;
+}
+var EditSession = class {
+  author;
+  transport;
+  applyOps;
+  /** Every edit seen, by id. */
+  log = /* @__PURE__ */ new Map();
+  /** For each `node type` pair, the edit whose value is showing. */
+  winners = /* @__PURE__ */ new Map();
+  clock = 0;
+  constructor(options) {
+    this.transport = options.transport;
+    this.applyOps = options.apply;
+    this.author = options.author ?? crypto.randomUUID();
+  }
+  /**
+   * Joins: listens for edits, and applies what was edited before this participant came,
+   * oldest first. Resolves with how many edits that was.
+   */
+  async join() {
+    const history2 = await this.transport.join((edit) => this.receive(edit), () => this.edits());
+    const sorted = [...history2].sort(byOrder);
+    let caught = 0;
+    for (const edit of sorted) if (this.receive(edit)) caught++;
+    return caught;
+  }
+  /** Every edit seen so far, oldest first. */
+  edits() {
+    return [...this.log.values()].sort(byOrder);
+  }
+  /** Makes an edit here: applies it, and sends it to everyone else. */
+  async make(ops, message2) {
+    const edit = {
+      id: crypto.randomUUID(),
+      author: this.author,
+      clock: ++this.clock,
+      time: (/* @__PURE__ */ new Date()).toISOString(),
+      ...message2 !== void 0 ? { message: message2 } : {},
+      ops
+    };
+    this.take(edit, false);
+    await this.transport.send(edit);
+    return edit;
+  }
+  /**
+   * An edit from elsewhere. Applies whichever of its ops are the latest for their
+   * component, and nothing if it was seen before. Returns whether it was new.
+   */
+  receive(edit) {
+    if (this.log.has(edit.id)) return false;
+    this.clock = Math.max(this.clock, edit.clock);
+    this.take(edit, edit.author !== this.author);
+    return true;
+  }
+  leave() {
+    this.transport.leave();
+  }
+  take(edit, remote) {
+    this.log.set(edit.id, edit);
+    const winning = [];
+    for (const op of edit.ops) {
+      const key = `${op.node} ${op.type}`;
+      const showing = this.winners.get(key);
+      if (showing && !isLater(edit, showing)) continue;
+      this.winners.set(key, edit);
+      winning.push(op);
+    }
+    if (winning.length > 0) this.applyOps(winning, edit, remote);
+  }
+};
+
 // src/viewer/app/app.js
 var $ = (id) => document.getElementById(id);
 var GEOMETRY_COMPONENTS = [
@@ -4797,6 +4990,7 @@ var state = {
 };
 function say(message2, isError = false) {
   $("status").textContent = message2;
+  $("status").title = message2;
   $("status").dataset.error = String(isError);
 }
 var source = null;
@@ -5056,6 +5250,58 @@ function parentInScene(id) {
   }
   return null;
 }
+async function moveInPlace(nodeId, value) {
+  const indices = Object.values(state.scene?.nodes ?? {}).filter((node) => node.nodeId === nodeId).map((node) => Number(node.id));
+  if (indices.length === 0) return false;
+  const drawing = await viewer();
+  if (drawing.dragging()) return false;
+  if (!drawing.setLocal(indices, value)) return false;
+  for (const index of indices) state.components.delete(String(index));
+  state.glb = null;
+  if (state.selected != null && indices.includes(Number(state.selected))) drawComponents(state.selected);
+  return true;
+}
+function placements(nodeId) {
+  if (!nodeId) return 0;
+  let count = 0;
+  for (const node of Object.values(state.scene?.nodes ?? {})) if (node.nodeId === nodeId) count++;
+  return count;
+}
+function placedOnce(id) {
+  for (let at = id; at !== null; at = parentInScene(at)) {
+    if (placements(state.scene.nodes[at]?.nodeId) === 1) return at;
+  }
+  return id;
+}
+async function startEditing({ onMoved }) {
+  const drawing = await viewer();
+  editor = { onMoved };
+  await drawing.enableEditing({
+    onPick: (index) => {
+      const picked = String(index);
+      const chosen = placedOnce(picked);
+      select(chosen);
+      if (chosen !== picked) {
+        const node = state.scene.nodes[picked];
+        say(labelOf(node) + " is placed " + placements(node.nodeId) + " times, so moving it would move every one: selected " + labelOf(state.scene.nodes[chosen]) + ", the nearest part placed once. Select it in the tree to move all of them");
+      }
+    },
+    onMoved: (index, transform2) => {
+      const node = state.scene?.nodes[String(index)];
+      if (!node?.nodeId) return;
+      state.components.delete(String(index));
+      state.glb = null;
+      onMoved(node.nodeId, transform2, labelOf(node));
+      if (state.selected === String(index)) drawComponents(String(index));
+      if (placements(node.nodeId) > 1) {
+        void moveInPlace(node.nodeId, transform2).then((moved) => {
+          if (!moved) void reload();
+        });
+      }
+    }
+  });
+  return { dragging: () => drawing.dragging() };
+}
 async function componentsOf(id) {
   if (state.components.has(id)) return state.components.get(id);
   const versions = shownVersions();
@@ -5137,7 +5383,7 @@ async function showNode(id) {
   );
 }
 async function showEverything() {
-  if (!state.glb) return;
+  if (!state.glb) return reload();
   say("drawing " + (state.glb.byteLength / 1048576).toFixed(1) + " MB of glb\u2026");
   try {
     const summary = await (await viewer()).show(state.glb);
@@ -5416,10 +5662,16 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     let drawnEdges = 0;
     if (placed > 0 && placed <= EDGE_BUDGET) {
       const baked = [];
+      const ranges = [];
+      let offset = 0;
       for (const mesh of toEdge) {
         const edges = edgesOf.get(mesh.geometry.uuid);
         if (!edges || edges.attributes.position.count === 0) continue;
+        const count = edges.attributes.position.count;
         baked.push(edges.clone().applyMatrix4(mesh.matrixWorld));
+        const index = placed3d.drawnMeshes.has(mesh) ? placed3d.nodeOf(mesh) : null;
+        if (index !== null) ranges.push({ index, start: offset, count });
+        offset += count;
       }
       const merged = baked.length === 1 ? baked[0] : utils.mergeGeometries(baked);
       if (baked.length > 1) for (const one of baked) one.dispose();
@@ -5432,6 +5684,11 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         }));
         lines.frustumCulled = false;
         out.add(lines);
+        placed3d.lines = lines;
+        for (const range of ranges) {
+          if (!placed3d.edges.has(range.index)) placed3d.edges.set(range.index, []);
+          placed3d.edges.get(range.index).push(range);
+        }
         drawnEdges = Math.round(merged.attributes.position.count / 2);
       }
     }
@@ -5531,6 +5788,12 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     // glTF node index -> [{ batch, id, world }]
     byInstance: /* @__PURE__ */ new Map(),
     // batch -> Map(instance id -> glTF node index)
+    drawnMeshes: /* @__PURE__ */ new Set(),
+    // the loaded meshes that went into a batch, so can be moved
+    lines: null,
+    // the one LineSegments holding every edge, in world space
+    edges: /* @__PURE__ */ new Map(),
+    // glTF node index -> [{ start, count }] vertex ranges in lines
     reset(file) {
       this.associations = file.parser?.associations ?? /* @__PURE__ */ new Map();
       this.world.clear();
@@ -5538,6 +5801,9 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       this.children.clear();
       this.drawnBy.clear();
       this.byInstance.clear();
+      this.drawnMeshes.clear();
+      this.edges.clear();
+      this.lines = null;
       if (editing) {
         editing.tinted = [];
         editing.outline.visible = false;
@@ -5569,10 +5835,38 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     register(mesh, batch, id) {
       const index = this.nodeOf(mesh);
       if (index === null) return;
+      this.drawnMeshes.add(mesh);
       if (!this.drawnBy.has(index)) this.drawnBy.set(index, []);
       this.drawnBy.get(index).push({ batch, id, world: mesh.matrixWorld.clone() });
       if (!this.byInstance.has(batch)) this.byInstance.set(batch, /* @__PURE__ */ new Map());
       this.byInstance.get(batch).set(id, index);
+    },
+    /** The edge ranges drawn for these nodes. */
+    edgeRanges(nodes) {
+      return nodes.flatMap((node) => this.edges.get(node) ?? []);
+    },
+    /** A copy of the edge positions in these ranges, to move from. */
+    copyEdges(ranges) {
+      const positions = this.lines?.geometry.attributes.position;
+      return ranges.map((range) => positions ? positions.array.slice(range.start * 3, (range.start + range.count) * 3) : new Float32Array());
+    },
+    /**
+     * Puts the edges in these ranges at `matrix` times where they were: `from` holds the
+     * positions to start from, one array per range, or they move from where they are.
+     */
+    moveEdges(ranges, matrix, from) {
+      const positions = this.lines?.geometry.attributes.position;
+      if (!positions || ranges.length === 0) return;
+      const v = new THREE.Vector3();
+      ranges.forEach((range, r2) => {
+        for (let i = 0; i < range.count; i++) {
+          const at = (range.start + i) * 3;
+          if (from) v.fromArray(from[r2], i * 3);
+          else v.fromArray(positions.array, at);
+          v.applyMatrix4(matrix).toArray(positions.array, at);
+        }
+      });
+      positions.needsUpdate = true;
     },
     subtree(index) {
       const all = [index];
@@ -5719,6 +6013,8 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       delta: new THREE.Matrix4(),
       scratch: new THREE.Matrix4()
     };
+    editing.drag.edges = placed3d.edgeRanges(editing.drag.nodes);
+    editing.drag.edgesFrom = placed3d.copyEdges(editing.drag.edges);
   }
   function duringDrag() {
     const drag = editing?.drag;
@@ -5730,6 +6026,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
         one.batch.setMatrixAt(one.id, drag.scratch.multiplyMatrices(drag.delta, one.world));
       }
     }
+    placed3d.moveEdges(drag.edges, drag.delta, drag.edgesFrom);
     if (editing.outline.visible) editing.outline.box.copy(editing.bounds).applyMatrix4(drag.delta);
     invalidate();
   }
@@ -5765,7 +6062,45 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       scale: round(scale.toArray())
     });
   }
-  return { show: show2, clear, enableEditing, attach };
+  const dragging = () => !!editing?.drag;
+  function matrixOf(value) {
+    if (Array.isArray(value?.matrix) && value.matrix.length === 16) return new THREE.Matrix4().fromArray(value.matrix);
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(...value?.translation ?? [0, 0, 0]),
+      new THREE.Quaternion(...value?.rotation ?? [0, 0, 0, 1]),
+      new THREE.Vector3(...value?.scale ?? [1, 1, 1])
+    );
+  }
+  function setLocal(indices, value) {
+    const local = matrixOf(value);
+    const touched = /* @__PURE__ */ new Set();
+    const delta = new THREE.Matrix4();
+    for (const index of indices) {
+      const old = placed3d.world.get(index);
+      if (!old) return false;
+      const parentIndex = placed3d.parent.get(index);
+      const parentWorld = parentIndex === null || parentIndex === void 0 ? new THREE.Matrix4() : placed3d.world.get(parentIndex);
+      if (!parentWorld) return false;
+      delta.multiplyMatrices(parentWorld, local).multiply(old.clone().invert());
+      placed3d.moveEdges(placed3d.edgeRanges(placed3d.subtree(index)), delta);
+      for (const node of placed3d.subtree(index)) {
+        placed3d.world.get(node)?.premultiply(delta);
+        for (const one of placed3d.drawnBy.get(node) ?? []) {
+          one.world.premultiply(delta);
+          one.batch.setMatrixAt(one.id, one.world);
+          touched.add(one.batch);
+        }
+      }
+    }
+    for (const batch of touched) {
+      batch.computeBoundingBox();
+      batch.computeBoundingSphere();
+    }
+    if (editing && !editing.drag && editing.selected !== null) attach(editing.selected);
+    invalidate();
+    return true;
+  }
+  return { show: show2, clear, enableEditing, attach, dragging, setLocal };
 }
 async function intoViewer(saying, pending) {
   say(saying);
@@ -5828,11 +6163,84 @@ async function start(from) {
   await loadTesserae();
 }
 
+// src/viewer/app/shared-editing.ts
+var errorText = (error) => error instanceof Error ? error.message : String(error);
+async function startSharedEditing(options) {
+  const { source: source2, archiveFor, transport, editor: editor2, say: say3 } = options;
+  const me = options.me ?? "tab-" + crypto.randomUUID().slice(0, 4);
+  const drawerNote = (refreshed) => refreshed ? "" : " \u2014 the Files drawer has unsaved typing, so it was not refreshed: Revert there before saving, or the drawer will put the old transform back";
+  let dragging = () => false;
+  let redrawPending = false;
+  let redrawing;
+  const redraw = () => {
+    if (dragging()) {
+      redrawPending = true;
+      return;
+    }
+    redrawPending = false;
+    redrawing ??= Promise.resolve().then(() => reload()).finally(() => {
+      redrawing = void 0;
+      if (redrawPending) redraw();
+    });
+  };
+  const showInPlace = async (ops) => {
+    for (const op of ops) {
+      const moved = op.type === CORE_TYPE.transform && !redrawPending && await moveInPlace(op.node, op.value);
+      if (!moved) return redraw();
+    }
+  };
+  const stats = document.createElement("span");
+  stats.className = "edit-stats";
+  const status = document.getElementById("status");
+  if (status) status.before(stats);
+  else document.querySelector("header")?.append(stats);
+  const size = (bytes) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  const plural = (count, one) => `${count} ${one}${count === 1 ? "" : "s"}`;
+  const showStats = () => {
+    const edits = shared.edits().length;
+    const { sections, nodes, bytes } = source2.editStats();
+    stats.textContent = `${plural(edits, "edit")} \xB7 ${plural(sections, "section")} \xB7 ${size(bytes)}`;
+    stats.title = `${plural(edits, "edit")} made in this session, by every editor in it. They are written in ${plural(sections, "section")} of the archive, one per run of edits by one editor, setting ${plural(nodes, "node")}: ${size(bytes)} on top of the original, which is about what mosaic diff would keep.`;
+  };
+  const shared = new EditSession({
+    author: me,
+    transport,
+    apply: (ops, edit, remote) => {
+      for (const op of ops) {
+        const url = archiveFor(op.node);
+        if (url) source2.setComponent(url, op.node, op.type, op.value, edit.author);
+      }
+      const refreshed = editor2.refresh();
+      showStats();
+      if (remote) {
+        void showInPlace(ops);
+        say3(`${edit.author}: ${edit.message ?? "edited"}` + drawerNote(refreshed));
+      }
+    }
+  });
+  const caught = await shared.join();
+  showStats();
+  window.addEventListener("pagehide", () => shared.leave());
+  ({ dragging } = await startEditing({
+    onMoved: (nodeId, transform2, label) => {
+      shared.make([{ node: nodeId, type: CORE_TYPE.transform, value: transform2 }], `moved ${label}`).then(() => say3(`moved ${label}` + drawerNote(!editor2.dirty()))).catch((error) => say3(`could not move ${label}: ${errorText(error)}`, true)).finally(() => {
+        if (redrawPending) redraw();
+      });
+    }
+  }));
+  return { me, caught, leave: () => shared.leave() };
+}
+var EDIT_KEYS = "W move \xB7 E rotate \xB7 R scale \xB7 \u2191 parent \xB7 Esc deselect";
+
 // src/viewer/app/boot-static.ts
 var EXAMPLES = "examples";
 var EMBEDDED = new URLSearchParams(location.search).has("embed");
+var EDITING = new URLSearchParams(location.search).has("edit");
+var CHANNEL = new URLSearchParams(location.search).get("channel");
 if (EMBEDDED) {
   document.body.classList.add("embed");
+}
+if (EMBEDDED && !EDITING) {
   const open = document.createElement("a");
   open.className = "embed-open";
   open.target = "_blank";
@@ -5856,6 +6264,7 @@ var say2 = (message2, isError = false) => {
   const status = document.getElementById("status");
   if (!status) return;
   status.textContent = message2;
+  status.title = message2;
   status.dataset["error"] = String(isError);
 };
 function picker(examples, onChoose) {
@@ -5909,7 +6318,7 @@ async function show(example, openFiles, onFilesToggled) {
   document.getElementById("files-toggle")?.remove();
   document.getElementById("editor")?.remove();
   document.body.classList.remove("editing");
-  await mountEditor({
+  const editor2 = await mountEditor({
     source: source2,
     onSaved: () => reload(),
     say: say2,
@@ -5922,6 +6331,17 @@ async function show(example, openFiles, onFilesToggled) {
     if (!stems.has(tessera.name)) continue;
     const tick = [...document.querySelectorAll(".tessera input[type=checkbox]")].find((box) => box.closest(".tessera")?.title === tessera.id);
     if (tick && !tick.checked) tick.click();
+  }
+  if (EDITING) {
+    const { me, caught } = await startSharedEditing({
+      source: source2,
+      archiveFor: (node) => source2.archiveOf(node),
+      transport: new BroadcastTransport(`mosaic-edit:example:${CHANNEL ?? example.id}`),
+      editor: editor2,
+      say: say2
+    });
+    document.title = `${example.name} \u2014 Mosaic edit (${me})`;
+    say2(`editing as ${me}` + (caught > 0 ? `, caught up on ${caught} edit${caught === 1 ? "" : "s"}` : "") + ` \u2014 click a part and drag it (${EDIT_KEYS})`);
   }
   if (warnings.length > 0) {
     const panel = document.getElementById("warnings");
@@ -5963,12 +6383,16 @@ async function main() {
   };
   const wanted = asked();
   const opening = index.examples.find((one) => one.id === wanted.id) ?? index.examples[0];
-  const select2 = picker(index.examples, (id) => void choose(id, filesOpen));
-  select2.value = opening.id;
+  if (!EDITING) {
+    const select2 = picker(index.examples, (id) => void choose(id, filesOpen));
+    select2.value = opening.id;
+  }
   window.addEventListener("popstate", () => {
     const now = asked();
     const id = index.examples.some((one) => one.id === now.id) ? now.id : opening.id;
-    select2.value = id;
+    const select2 = document.getElementById("example");
+    if (select2) select2.value = id;
+    if (EDITING) return;
     void choose(id, now.files, true);
   });
   await choose(opening.id, wanted.files, true);

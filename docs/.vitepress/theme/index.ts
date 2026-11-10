@@ -3,6 +3,7 @@ import DefaultTheme from "vitepress/theme";
 import type { Theme } from "vitepress";
 import MosaicViewer from "./components/MosaicViewer.vue";
 import HeroCommand from "./components/HeroCommand.vue";
+import MosaicEditTogether from "./components/MosaicEditTogether.vue";
 import "./style.css";
 
 export default {
@@ -14,5 +15,6 @@ export default {
     enhanceApp({ app }) {
         app.component("MosaicViewer", MosaicViewer);
         app.component("HeroCommand", HeroCommand);
+        app.component("MosaicEditTogether", MosaicEditTogether);
     },
 } satisfies Theme;

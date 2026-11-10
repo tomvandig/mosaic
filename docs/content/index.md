@@ -29,6 +29,16 @@ features:
 
 <div class="vp-doc" style="max-width: 960px; margin: 48px auto 0; padding: 0 24px;">
 
+## Edit together
+
+Two editors on one car, each its own application with its own copy of the model. Move a part in one
+and only that change travels to the other, as a small layer on top of what both started from.
+[How it works](/tools/edit#editing-together).
+
+<MosaicEditTogether example="ferrari" height="400" />
+
+## Combine data sources
+
 <MosaicViewer example="s1" height="480" caption="S1: two buildings, a tree and a helmet, federated by imports." />
 
 </div>

@@ -1,6 +1,8 @@
 import { ArchiveSource } from "../ArchiveSource.ts";
 import { loadExample, type ExampleIndex, type ExampleManifest } from "../FetchArchives.ts";
+import { BroadcastTransport } from "../collab/BroadcastTransport.ts";
 import { mountEditor } from "./editor.ts";
+import { EDIT_KEYS, startSharedEditing } from "./shared-editing.ts";
 // @ts-expect-error -- the viewer is plain JavaScript, deliberately: it is the same file
 // the served build runs, and nothing in it needs types to be correct.
 import { reload, start } from "./app.js";
@@ -26,9 +28,23 @@ const EXAMPLES = "examples";
  */
 const EMBEDDED = new URLSearchParams(location.search).has("embed");
 
+/**
+ * `?edit` makes the parts movable, the way `mosaic edit` does, with every move shared with
+ * any other viewer in this browser editing the same example: other tabs, or other frames on
+ * one page -- which is how the documentation shows two editors working together.
+ * `&channel=<name>` keeps a group of them to themselves; left out, everyone editing the
+ * example shares one. Nothing is saved: reloading starts from the example again.
+ */
+const EDITING = new URLSearchParams(location.search).has("edit");
+const CHANNEL = new URLSearchParams(location.search).get("channel");
+
 if (EMBEDDED) {
     document.body.classList.add("embed");
+}
 
+// Not while editing: the header is busy with the status line and the edit count there, and
+// the link would only open a third editor.
+if (EMBEDDED && !EDITING) {
     const open = document.createElement("a");
     open.className = "embed-open";
     open.target = "_blank";
@@ -52,6 +68,7 @@ const say = (message: string, isError = false) => {
     const status = document.getElementById("status");
     if (!status) return;
     status.textContent = message;
+    status.title = message;
     status.dataset["error"] = String(isError);
 };
 
@@ -145,7 +162,7 @@ async function show(
     document.getElementById("editor")?.remove();
     document.body.classList.remove("editing");
 
-    await mountEditor({
+    const editor = await mountEditor({
         source,
         onSaved: () => reload(),
         say,
@@ -164,6 +181,20 @@ async function show(
         const tick = [...document.querySelectorAll<HTMLInputElement>(".tessera input[type=checkbox]")]
             .find(box => box.closest<HTMLElement>(".tessera")?.title === tessera.id);
         if (tick && !tick.checked) tick.click();
+    }
+
+    if (EDITING) {
+        const { me, caught } = await startSharedEditing({
+            source,
+            archiveFor: node => source.archiveOf(node),
+            transport: new BroadcastTransport(`mosaic-edit:example:${CHANNEL ?? example.id}`),
+            editor,
+            say,
+        });
+        document.title = `${example.name} — Mosaic edit (${me})`;
+        say(`editing as ${me}`
+            + (caught > 0 ? `, caught up on ${caught} edit${caught === 1 ? "" : "s"}` : "")
+            + ` — click a part and drag it (${EDIT_KEYS})`);
     }
 
     if (warnings.length > 0) {
@@ -215,14 +246,20 @@ async function main(): Promise<void> {
     const wanted = asked();
     const opening = index.examples.find(one => one.id === wanted.id) ?? index.examples[0]!;
 
-    const select = picker(index.examples, id => void choose(id, filesOpen));
-    select.value = opening.id;
+    // Editing stays on the example it opened with: moves are shared per example, and a
+    // session cannot be carried over to another one.
+    if (!EDITING) {
+        const select = picker(index.examples, id => void choose(id, filesOpen));
+        select.value = opening.id;
+    }
 
     // Back and forward walk through what was looked at, rather than leaving the page.
     window.addEventListener("popstate", () => {
         const now = asked();
         const id = index.examples.some(one => one.id === now.id) ? now.id : opening.id;
-        select.value = id;
+        const select = document.getElementById("example") as HTMLSelectElement | null;
+        if (select) select.value = id;
+        if (EDITING) return;
         void choose(id, now.files, true);
     });
 

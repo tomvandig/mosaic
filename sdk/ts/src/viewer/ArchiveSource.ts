@@ -313,27 +313,54 @@ export class ArchiveSource implements MosaicSource {
      * transform per node it touched. The reference keeps the id the node's transform
      * already had, which is what makes it replace that transform rather than sit beside it.
      */
-    setTransform(url: string, nodeId: string, value: { translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[] }): void {
+    setTransform(
+        url: string,
+        nodeId: string,
+        value: { translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[] },
+        by?: string,
+    ): void {
+        this.setComponent(url, nodeId, CORE_TYPE.transform, value, by);
+    }
+
+    /**
+     * Sets one component of a node, as an edit layered on top -- what `setTransform` does,
+     * for any component type.
+     *
+     * `by` names who made the edit. Each author's edits go in a section of their own, so
+     * when several people edit one archive, who changed what stays readable in it: a run of
+     * edits by one author shares a section, and an edit by someone else starts a new one
+     * after it. Since the last section wins, the edit applied last is the one that shows.
+     * Left out, the edit joins whatever "mosaic edit" section is last.
+     *
+     * A type the archive has no table for needs a schema to start one, and only the core
+     * types' are known here.
+     */
+    setComponent(url: string, nodeId: string, type: string, value: unknown, by?: string): void {
         const archive = this.archiveAt(url);
         if (!archive) throw new Error("that archive is not open");
         const file = archive.alone;
-        const type = CORE_TYPE.transform;
 
-        // The table, and its schema, if the archive has never placed anything.
+        // The table, and its schema, if the archive has never had one of these.
         if (!file.serializedComponents.has(type)) file.serializedComponents.set(type, []);
         if (!file.index.componentTables.some(table => table.filename === `${type}.ndjson`)) {
-            file.index.componentTables.push({ filename: `${type}.ndjson`, type: Type.Ndjson, schema: CORE_SCHEMAS[type] });
+            const schema = (CORE_SCHEMAS as Record<string, unknown>)[type];
+            if (schema === undefined) throw new Error(`the archive has no ${type} table, and its schema is not known here`);
+            file.index.componentTables.push({ filename: `${type}.ndjson`, type: Type.Ndjson, schema: schema as never });
         }
         const rows = file.serializedComponents.get(type)!;
 
-        // Whatever the node already calls its transform, so the new one replaces it.
-        const current = collapseNodesByPath(file).get(nodeId)?.components
+        // Whatever the node already calls this component, so the new one replaces it --
+        // looked up with the imports merged in, since an edit to an imported node goes here
+        // and has to replace the transform the import gave it.
+        const merged = this.graphs().find(graph => graph.has(url));
+        const seen = merged ? mergedFrom(merged, url) : file;
+        const current = collapseNodesByPath(seen).get(nodeId)?.components
             ?.find(ref => ref.type === type && operationOf(ref) === Operation.Value);
-        const referenceId = current?.id ?? "transform";
+        const referenceId = current?.id ?? type.split("::").at(-1)!;
 
         const last = file.index.sections.at(-1);
         let section: SectionElement;
-        if (last?.header.application === "mosaic edit") {
+        if (last?.header.application === "mosaic edit" && (by === undefined || last.header.author === by)) {
             section = last;
         } else {
             const before = last?.header;
@@ -341,10 +368,10 @@ export class ArchiveSource implements MosaicSource {
                 header: {
                     id: before?.id ?? archive.name,
                     application: "mosaic edit",
-                    author: before?.author ?? "",
+                    author: by ?? before?.author ?? "",
                     dataVersion: before?.dataVersion ?? "",
                     timestamp: new Date().toISOString(),
-                    message: "Edited in mosaic edit",
+                    message: by === undefined ? "Edited in mosaic edit" : `Edited by ${by} in mosaic edit`,
                 },
                 nodes: [],
             };
@@ -368,6 +395,54 @@ export class ArchiveSource implements MosaicSource {
         }
 
         this.remerge(url);
+    }
+
+    /**
+     * How much has been edited, across every archive open: the sections editing wrote
+     * ("mosaic edit"), the nodes they touch, and their size in bytes -- the sections as JSON
+     * plus the table rows they point at, which is roughly what `mosaic diff` would keep.
+     */
+    editStats(): { sections: number; nodes: number; bytes: number } {
+        const encoder = new TextEncoder();
+        let sections = 0, nodes = 0, bytes = 0;
+        const seen = new Set<LoadedArchive>();
+        for (const graph of this.graphs()) {
+            for (const archive of graph.values()) {
+                if (seen.has(archive)) continue;
+                seen.add(archive);
+                for (const section of archive.alone.index.sections) {
+                    if (section.header.application !== "mosaic edit") continue;
+                    sections++;
+                    nodes += section.nodes.length;
+                    bytes += encoder.encode(JSON.stringify(section)).byteLength;
+                    for (const node of section.nodes) {
+                        for (const ref of node.components ?? []) {
+                            const row = archive.alone.serializedComponents.get(ref.type)?.[indexOf(ref)];
+                            if (row !== undefined) bytes += encoder.encode(row).byteLength + 1;
+                        }
+                    }
+                }
+            }
+        }
+        return { sections, nodes, bytes };
+    }
+
+    /**
+     * The archive an edit to a node belongs in: the top of the newest version of whichever
+     * tessera has the node -- written there itself if one does, or reached through an
+     * import otherwise. An edit to an imported node goes in the archive that imports it, as
+     * a layer over the import, so the imported file is left as it is.
+     */
+    archiveOf(nodeId: string): string | undefined {
+        let reached: string | undefined;
+        for (const tessera of this.held.values()) {
+            const newest = tessera.versions.at(-1);
+            if (!newest) continue;
+            if (newest.own.has(nodeId)) return newest.top;
+            reached ??= newest.file.index.sections.some(section => section.nodes.some(node => node.id === nodeId))
+                ? newest.top : undefined;
+        }
+        return reached;
     }
 
     /** The versions named, in the order they were named, skipping any that are not here. */

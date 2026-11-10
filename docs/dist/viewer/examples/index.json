@@ -25,6 +25,14 @@
       ]
     },
     {
+      "id": "ferrari",
+      "name": "Ferrari F40",
+      "description": "A car converted from glTF, one Mosaic node per part. Used by the docs to show editing together.",
+      "archives": [
+        "ferrari.tsr"
+      ]
+    },
+    {
       "id": "s1",
       "name": "S1",
       "archives": [

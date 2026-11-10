@@ -18,6 +18,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LoadMosaicFile, WriteMosaicFile } from "../src/MosaicFile.ts";
+import { packMosaicSource } from "../src/MosaicPack.ts";
+import { convertGltfFile } from "../src/gltf/GltfConvertFs.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repo = path.resolve(root, "..", "..");
@@ -29,6 +31,9 @@ const into = path.join(repo, "docs", "dist", "viewer", "examples");
  * `archives` names what becomes a tessera in the viewer -- one row in its list. Imports
  * are not tesserae: they are merged underneath the archive that imports them, so a scene
  * that places a model is one row, not two.
+ *
+ * `model` is a glTF to convert instead, the way `mosaic pack --stable-ids` does, into the
+ * one archive `archives` names.
  */
 const EXAMPLES = [
     {
@@ -52,6 +57,13 @@ const EXAMPLES = [
             + "Turn compose off and they disappear.",
         from: "sdk/ts/test-data",
         archives: ["typed-boxes.tsr"],
+    },
+    {
+        id: "ferrari",
+        name: "Ferrari F40",
+        description: "A car converted from glTF, one Mosaic node per part. Used by the docs to show editing together.",
+        model: "docs/content/public/models/lb-works_ferrari_f40__www.vecarz.com.glb",
+        archives: ["ferrari.tsr"],
     },
 ];
 
@@ -156,11 +168,14 @@ const manifests = [];
 let totalBefore = 0, totalAfter = 0;
 
 for (const example of EXAMPLES) {
-    const directory = path.join(repo, example.from);
+    const directory = path.join(repo, example.from ?? ".");
     const warnings = [];
 
-    const files = await reachable(directory, example.archives, warnings);
     const target = path.join(into, example.id);
+    const files = example.model
+        ? new Map([[example.archives[0], await LoadMosaicFile(
+            await packMosaicSource(convertGltfFile(path.join(repo, example.model), { stableIds: true }).document))]])
+        : await reachable(directory, example.archives, warnings);
 
     let before = 0, after = 0;
     for (const [relative, loaded] of files) {
@@ -170,7 +185,8 @@ for (const example of EXAMPLES) {
         fs.mkdirSync(path.dirname(file), { recursive: true });
         fs.writeFileSync(file, wrote);
 
-        before += fs.statSync(path.join(directory, relative)).size;
+        before += example.model ? fs.statSync(path.join(repo, example.model)).size
+            : fs.statSync(path.join(directory, relative)).size;
         after += wrote.byteLength;
     }
 

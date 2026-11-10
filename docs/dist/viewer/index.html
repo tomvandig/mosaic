@@ -145,8 +145,19 @@
      `?embed`: the viewer inside another page. The 3D panel takes the whole frame; the
      header keeps only the status line and a way out to the full viewer. */
   .embed-open { display: none; }
-  body.embed header { padding: 4px 10px; gap: 8px; }
-  body.embed header > :not(.status):not(.embed-open) { display: none; }
+  /* One line, always the same height, whatever the status says: a header that wrapped to a
+     second line would shrink the 3D panel, and a canvas that is resized is cleared for a
+     frame, which flashes. Long messages are cut short; the whole of one is on hover. */
+  body.embed header {
+    padding: 0 10px; gap: 8px; height: 30px; box-sizing: border-box;
+    flex-wrap: nowrap; overflow: hidden;
+  }
+  body.embed .status {
+    flex: 1 1 auto; min-width: 0; text-align: right;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  body.embed .edit-stats { flex: none; }
+  body.embed header > :not(.status):not(.embed-open):not(.edit-stats) { display: none; }
   body.embed .embed-open {
     display: inline; color: var(--accent); text-decoration: none; font-size: 12px;
   }
@@ -155,6 +166,17 @@
   body.embed main > .column,
   body.embed main > section:last-child { display: none; }
   body.embed main > section { border-right: 0; }
+
+/* How much has been edited, while editing: small, beside the status line. */
+.edit-stats {
+  white-space: nowrap;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dim);
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
 </style>
 </head>
 <body>

@@ -33,6 +33,39 @@ Selecting a node in the tree puts the handle on it too. When you let go, the nod
 relative to its parent, is written to its `core::transform`. All moves go in one section of the
 archive, written by "mosaic edit", so they stay one clear layer on top of the original.
 
+### Editing together
+
+Open the editor's address in a second tab, and the two tabs edit the same model together. A part
+moved in one tab moves in the other when you let go. There's no server in between: tabs of one
+browser on the same page talk to each other directly.
+
+Try it here: these are two editors on a car. Click a part in one, such as a wheel or a door, drag
+the handle, and let go. The same part moves in the other editor, and only that part: the other
+editor moves what it already drew instead of drawing the car again.
+
+<MosaicEditTogether example="ferrari" height="400" />
+
+Any viewer link can edit like this: add `&edit` to it, as in
+`viewer/?example=ferrari&edit`. Viewers with the same `&channel=<name>` share their moves; without
+one, every viewer editing that example in your browser does. Nothing is saved there: reloading starts
+from the example again.
+
+- **Each tab has a name**, such as `tab-3f2a`, shown in the status line and the tab's title. Its
+  moves go in a section of the archive written by that name, so a saved `.tsr` says who moved what.
+- **A tab opened later catches up.** It asks the open tabs for everything done so far and applies it.
+  If every tab is closed, the shared moves are gone; save first.
+- **If two tabs move the same part, the later move wins**, in every tab. "Later" means made after
+  seeing the other one, not by the clock on the wall, so all tabs agree on the result.
+- **The header counts what was edited**, such as `12 edits · 3 sections · 2.4 KB`: the edits made by
+  every editor, the sections they were written in (a new one each time the editor changes), and how
+  big that layer is on top of the original. Hover over it for the details.
+- **Only moves are shared.** Typing in the Files drawer stays in the tab where you typed it.
+
+Under the hood, a move is an *edit*: an id, an author, its place in the order of edits, and the
+components it sets on which nodes. That's what a Mosaic section holds, so the same edits can later
+travel through the [HTTP API](/sdk/http-api) instead, each published as a version, without changing
+anything but how they're carried.
+
 ### Editing the files
 
 The **Files** drawer underneath shows the archive as it really is: an `index.json` naming the nodes
@@ -87,8 +120,12 @@ mosaic diff original.tsr car.tsr       # only your edits
 - **The page needs internet** for three.js and the code editor, which load from a CDN. Your model
   never leaves your machine: the server listens on `127.0.0.1` only, and it writes nothing to disk
   itself. Files go only where you save them.
-- **A part placed more than once** (the same node under several parents) moves in every place when
-  the archive is saved, but only the copy you dragged moves on screen until the model is redrawn.
+- **A part placed more than once** (the same node under several parents) is one node with one
+  transform, so moving it moves every copy. Clicking such a part in 3D selects the nearest part above
+  it that is placed only once, which is usually what you meant by pointing at one copy. To move every
+  copy, select the part in the tree.
+- **Editing together needs the tabs in one browser**, on the same address. Two machines, or two
+  browsers, don't see each other's moves.
 - **There's no undo yet.** Move it back, or reload the page to return to what was last written.
 - **Imports aren't followed.** A `.tsr` that imports others opens on its own, showing only what it
   holds itself.

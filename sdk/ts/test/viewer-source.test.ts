@@ -357,6 +357,61 @@ test("moving the same node again changes its edit rather than adding another", a
     assert.equal(index.sections.filter((s: { header: { application: string } }) => s.header.application === "mosaic edit").length, 1);
 });
 
+test("each author's edits go in a section of their own, and the last one wins", async () => {
+    const source = await sourceOf("typed-boxes.tsr");
+    const url = urlOf("typed-boxes.tsr");
+    const edits = () => JSON.parse(source.filesOf(url)!.files["index.json"]!).sections
+        .filter((s: { header: { application: string } }) => s.header.application === "mosaic edit")
+        .map((s: { header: { author: string } }) => s.header.author);
+
+    source.setTransform(url, NEAR_BOX, { translation: [1, 0, 0] }, "tab-a");
+    source.setTransform(url, NEAR_BOX, { translation: [2, 0, 0] }, "tab-a");
+    assert.deepEqual(edits(), ["tab-a"], "a run of edits by one author shares a section");
+
+    source.setTransform(url, NEAR_BOX, { translation: [3, 0, 0] }, "tab-b");
+    assert.deepEqual(edits(), ["tab-a", "tab-b"]);
+    assert.deepEqual(transformOf(source, "typed-boxes.tsr", NEAR_BOX), { translation: [3, 0, 0] });
+
+    source.setTransform(url, NEAR_BOX, { translation: [4, 0, 0] }, "tab-a");
+    assert.deepEqual(edits(), ["tab-a", "tab-b", "tab-a"], "an edit after someone else's comes after it");
+    assert.deepEqual(transformOf(source, "typed-boxes.tsr", NEAR_BOX), { translation: [4, 0, 0] });
+});
+
+test("an edit to an imported node goes in the archive that imports it", async () => {
+    const source = await sourceOf("helmet-plaza.tsr");
+    const [ref] = allOf(source, ["helmet-plaza.tsr"]);
+    const scene = await source.scene({ versions: [ref!] });
+
+    const own = Object.entries(scene.nodes).find(([, node]) => node.tessera !== null)?.[0];
+    const imported = Object.entries(scene.nodes).find(([, node]) => node.tessera === null)?.[0];
+    assert.ok(own && imported);
+
+    assert.equal(source.archiveOf(own), urlOf("helmet-plaza.tsr"));
+    assert.equal(source.archiveOf(imported), urlOf("helmet-plaza.tsr"), "not helmet.tsr, which stays as it is");
+    assert.equal(source.archiveOf("not-a-node"), undefined);
+
+    // And the move shows, layered over the import.
+    source.setTransform(source.archiveOf(imported)!, imported, { translation: [3, 2, 1] });
+    assert.deepEqual(transformOf(source, "helmet-plaza.tsr", imported), { translation: [3, 2, 1] });
+});
+
+test("how much was edited is counted from the edit sections", async () => {
+    const source = await sourceOf("typed-boxes.tsr");
+    const url = urlOf("typed-boxes.tsr");
+    assert.deepEqual(source.editStats(), { sections: 0, nodes: 0, bytes: 0 });
+
+    source.setTransform(url, NEAR_BOX, { translation: [1, 0, 0] }, "tab-a");
+    const one = source.editStats();
+    assert.equal(one.sections, 1);
+    assert.equal(one.nodes, 1);
+    assert.ok(one.bytes > 0);
+
+    source.setTransform(url, NEAR_BOX, { translation: [2, 0, 0] }, "tab-b");
+    const two = source.editStats();
+    assert.equal(two.sections, 2);
+    assert.ok(two.bytes > one.bytes);
+});
+
 test("a moved node is drawn where it was moved to", async () => {
     const source = await sourceOf("typed-boxes.tsr");
     source.setTransform(urlOf("typed-boxes.tsr"), NEAR_BOX, { translation: [9, 0, 0] });
