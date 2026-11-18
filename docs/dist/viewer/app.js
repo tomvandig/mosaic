@@ -6455,7 +6455,10 @@ async function startSharedEditing(options) {
   window.addEventListener("pagehide", () => shared.leave());
   ({ dragging } = await startEditing({
     onMoved: (nodeId, transform2, label) => {
-      shared.make([{ node: nodeId, type: CORE_TYPE.transform, value: transform2 }], `moved ${label}`).then(() => say3(`moved ${label}` + drawerNote(!editor2.dirty()))).catch((error) => say3(`could not move ${label}: ${errorText(error)}`, true)).finally(() => {
+      shared.make([{ node: nodeId, type: CORE_TYPE.transform, value: transform2 }], `moved ${label}`).then((edit) => {
+        say3(`moved ${label}` + drawerNote(!editor2.dirty()));
+        options.onMade?.(edit, label);
+      }).catch((error) => say3(`could not move ${label}: ${errorText(error)}`, true)).finally(() => {
         if (redrawPending) redraw();
       });
     }
@@ -6469,6 +6472,19 @@ var EXAMPLES = "examples";
 var EMBEDDED = new URLSearchParams(location.search).has("embed");
 var EDITING = new URLSearchParams(location.search).has("edit");
 var CHANNEL = new URLSearchParams(location.search).get("channel");
+var ME = new URLSearchParams(location.search).get("me") ?? void 0;
+var tellParent = EMBEDDED && window.parent !== window ? (edit, label) => {
+  window.parent.postMessage({
+    kind: "mosaic-edit",
+    channel: CHANNEL,
+    id: edit.id,
+    author: edit.author,
+    time: edit.time,
+    message: edit.message,
+    label,
+    tsr: edit.bytes
+  }, location.origin);
+} : void 0;
 if (EMBEDDED) {
   document.body.classList.add("embed");
 }
@@ -6570,7 +6586,9 @@ async function show(example, openFiles, onFilesToggled) {
       archiveFor: (node) => source2.archiveOf(node),
       transport: new BroadcastTransport(`mosaic-edit:example:${CHANNEL ?? example.id}`),
       editor: editor2,
-      say: say2
+      say: say2,
+      me: ME,
+      onMade: tellParent
     });
     document.title = `${example.name} \u2014 Mosaic edit (${me})`;
     say2(`editing as ${me}` + (caught > 0 ? `, caught up on ${caught} edit${caught === 1 ? "" : "s"}` : "") + ` \u2014 click a part and drag it (${EDIT_KEYS})`);

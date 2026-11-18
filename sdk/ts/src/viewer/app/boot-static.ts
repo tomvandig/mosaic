@@ -37,6 +37,29 @@ const EMBEDDED = new URLSearchParams(location.search).has("embed");
  */
 const EDITING = new URLSearchParams(location.search).has("edit");
 const CHANNEL = new URLSearchParams(location.search).get("channel");
+/** `&me=<name>` names this editor, as the author of its edits; a fresh `tab-xxxx` when left out. */
+const ME = new URLSearchParams(location.search).get("me") ?? undefined;
+
+/**
+ * Embedded and editing, each edit made here is also told to the page around the frame, so
+ * the documentation can list the edits of both its editors: who made it, when, its message,
+ * the part it moved and its `.tsr`. Only to a page on the same origin -- the bytes are the
+ * edit itself.
+ */
+const tellParent = EMBEDDED && window.parent !== window
+    ? (edit: { id: string; author: string; time: string; message: string; bytes: Uint8Array }, label: string) => {
+        window.parent.postMessage({
+            kind: "mosaic-edit",
+            channel: CHANNEL,
+            id: edit.id,
+            author: edit.author,
+            time: edit.time,
+            message: edit.message,
+            label,
+            tsr: edit.bytes,
+        }, location.origin);
+    }
+    : undefined;
 
 if (EMBEDDED) {
     document.body.classList.add("embed");
@@ -190,6 +213,8 @@ async function show(
             transport: new BroadcastTransport(`mosaic-edit:example:${CHANNEL ?? example.id}`),
             editor,
             say,
+            me: ME,
+            onMade: tellParent,
         });
         document.title = `${example.name} — Mosaic edit (${me})`;
         say(`editing as ${me}`

@@ -1,6 +1,6 @@
 import type { ArchiveSource } from "../ArchiveSource.ts";
 import { CORE_TYPE } from "../../core/schemas.ts";
-import { EditSession, byOrder, opsOf, orderOf, type EditTransport } from "../collab/EditSession.ts";
+import { EditSession, byOrder, opsOf, orderOf, type Edit, type EditTransport } from "../collab/EditSession.ts";
 import type { EditorHandle } from "./editor.ts";
 // @ts-expect-error -- the viewer is plain JavaScript, deliberately.
 import { moveInPlace, reload, startEditing } from "./app.js";
@@ -27,6 +27,8 @@ export interface SharedEditingOptions {
     say: (message: string, isError?: boolean) => void;
     /** This participant's name; a fresh `tab-xxxx` when left out. */
     me?: string;
+    /** Told of each edit made here, once it is made: the edit, and the name of the part moved. */
+    onMade?: (edit: Edit, label: string) => void;
 }
 
 export interface SharedEditing {
@@ -134,7 +136,10 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
     ({ dragging } = await startEditing({
         onMoved: (nodeId: string, transform: { translation: number[]; rotation: number[]; scale: number[] }, label: string) => {
             shared.make([{ node: nodeId, type: CORE_TYPE.transform, value: transform }], `moved ${label}`)
-                .then(() => say(`moved ${label}` + drawerNote(!editor.dirty())))
+                .then(edit => {
+                    say(`moved ${label}` + drawerNote(!editor.dirty()));
+                    options.onMade?.(edit, label);
+                })
                 .catch(error => say(`could not move ${label}: ${errorText(error)}`, true))
                 // Whatever others did during the drag can be drawn now.
                 .finally(() => { if (redrawPending) redraw(); });
