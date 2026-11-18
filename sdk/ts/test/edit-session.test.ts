@@ -85,12 +85,14 @@ test("edits are ordered by clock, then author, then id", () => {
 const serve: Fetcher = async url => new Uint8Array(fs.readFileSync(url));
 const DIR = DATA_DIR.split(path.sep).join("/");
 
-async function boxes(): Promise<{ source: ArchiveSource; url: string }> {
+async function opened(archive: string): Promise<{ source: ArchiveSource; url: string }> {
     const graph = new Map();
-    const { top } = await loadArchive(DIR, "typed-boxes.tsr", serve, [], graph);
-    const loaded: LoadedTessera[] = [{ id: "t", name: "typed-boxes", versions: [versionFrom(graph, top, { versionId: "v" })] }];
+    const { top } = await loadArchive(DIR, archive, serve, [], graph);
+    const loaded: LoadedTessera[] = [{ id: "t", name: archive.replace(/\.tsr$/, ""), versions: [versionFrom(graph, top, { versionId: "v" })] }];
     return { source: new ArchiveSource(loaded), url: top };
 }
+
+const boxes = () => opened("typed-boxes.tsr");
 
 test("the newest edit shows, whatever order the edits arrive in, and the archives come out the same", async () => {
     const edits = [
@@ -121,6 +123,57 @@ test("an edit already in the archive is not added again", async () => {
     const edit = await readEdit(await sent("a", 1, [move(NODE, 1)]));
     assert.equal(source.addEdit(url, edit.file, orderOf, byOrder), true);
     assert.equal(source.addEdit(url, edit.file, orderOf, byOrder), false);
+});
+
+test("a delete travels as a DELETE reference with no row, and reads back as it was made", async () => {
+    const remove: EditOp = { node: NODE, type: "core::child", value: undefined, ref: "child-id", delete: true };
+    const edit = await readEdit(await sent("a", 1, [remove]));
+
+    const reference = edit.file.index.sections[0]!.nodes[0]!.components![0]!;
+    assert.equal(reference.type, "core::child");
+    assert.equal(reference.id, "child-id");
+    assert.equal(reference.operation, "DELETE");
+    assert.equal(reference.index, undefined, "a delete points at no row");
+    assert.deepEqual(edit.file.index.componentTables, [], "a delete carries no value, so no table");
+    assert.deepEqual(opsOf(edit), [remove]);
+});
+
+test("deleting a child link takes the part out of its parent, and leaves the rest", async () => {
+    // A glTF hierarchy converted to Mosaic, as the docs' car is: one node per part.
+    const { source, url } = await opened("gltf-box-hierarchy.tsr");
+    const versions = [{ tesseraId: "t", versionId: "v" }];
+    const before = await source.scene({ versions });
+    const [parentId, parent] = Object.entries(before.nodes).find(([, node]) => node.children.length > 0)!;
+    const [gone, ...kept] = parent.children;
+
+    const edit = await readEdit(await sent("a", 1, [
+        { node: parentId, type: "core::child", value: undefined, ref: gone!, delete: true },
+    ]));
+    source.addEdit(url, edit.file, orderOf, byOrder);
+
+    const after = await source.scene({ versions });
+    assert.deepEqual(after.nodes[parentId]!.children, kept);
+});
+
+test("deleting every component of a node leaves it nothing to draw, and leaves its children alone", async () => {
+    const { source, url } = await opened("gltf-box-hierarchy.tsr");
+    const versions = [{ tesseraId: "t", versionId: "v" }];
+    const before = await source.scene({ versions });
+    // A root that holds others: there is no parent to take it out of.
+    const nodeId = before.roots.find(id => before.nodes[id]!.children.length > 0)!;
+    const children = before.nodes[nodeId]!.children;
+    const components = source.componentsOf(url, nodeId);
+    assert.ok(components.some(one => one.type === "core::child"), "its links to its children are components of it");
+
+    const edit = await readEdit(await sent("a", 1,
+        components.map(one => ({ node: nodeId, type: one.type, value: undefined, ref: one.id, delete: true as const }))));
+    source.addEdit(url, edit.file, orderOf, byOrder);
+
+    assert.deepEqual(source.componentsOf(url, nodeId), []);
+    // The children are still there, each with everything it had.
+    for (const child of children) {
+        assert.deepEqual(source.componentsOf(url, child).length, before.nodes[child]!.components.length);
+    }
 });
 
 test("an edit replaces the component the node already has rather than adding one beside it", async () => {

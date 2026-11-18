@@ -1,5 +1,6 @@
 import { LoadMosaicFile, MosaicFile, WriteMosaicFile } from "../../MosaicFile.ts";
-import { Type, type NodeElement } from "../../MosaicIndexFile.ts";
+import { Operation, Type, type ComponentElement, type NodeElement } from "../../MosaicIndexFile.ts";
+import { operationOf } from "../../ComponentReference.ts";
 
 /**
  * Several people editing one archive at once.
@@ -23,14 +24,28 @@ import { Type, type NodeElement } from "../../MosaicIndexFile.ts";
 /** The `application` an edit's section is written by. */
 export const EDIT_APPLICATION = "mosaic edit";
 
-/** One component set on one node. */
+/**
+ * One component set on one node, or taken off it.
+ *
+ * A delete is Mosaic's own DELETE: a reference with that operation and no row, which takes
+ * away whatever the sections before it gave that reference. Removing a part from what is
+ * drawn is a delete of the `core::child` link its parent has to it -- whose reference id is
+ * the child's node id -- so the part is left as it was, only no longer placed there.
+ */
 export interface EditOp {
     /** The Mosaic node id. */
     node: string;
     /** The component type, such as `core::transform`. */
     type: string;
-    /** The component's new value, as its table row holds it. */
+    /** The component's new value, as its table row holds it; nothing for a delete. */
     value: unknown;
+    /**
+     * The reference id, when the op names it rather than the node already having one of
+     * this type -- as a `core::child` link does, whose id is the child.
+     */
+    ref?: string;
+    /** Takes the reference away, rather than setting it. */
+    delete?: true;
 }
 
 /** One edit: an archive of one section, and what its header says. */
@@ -111,20 +126,33 @@ export function editFile(
     const file = new MosaicFile();
     const nodes = new Map<string, NodeElement>();
 
+    const nodeOf = (id: string) => {
+        let node = nodes.get(id);
+        if (!node) {
+            node = { id, components: [] };
+            nodes.set(id, node);
+        }
+        return node;
+    };
+
     for (const op of ops) {
+        if (op.delete) {
+            // No row, so no table either: the type says what is going, the id which one.
+            const reference: ComponentElement = {
+                type: op.type,
+                id: op.ref ?? context.referenceOf(op.node, op.type),
+                operation: Operation.Delete,
+            };
+            nodeOf(op.node).components!.push(reference);
+            continue;
+        }
         if (!file.serializedComponents.has(op.type)) {
             file.serializedComponents.set(op.type, []);
             file.index.componentTables.push({ filename: `${op.type}.ndjson`, type: Type.Ndjson, schema: context.schemaOf(op.node, op.type) });
         }
         const rows = file.serializedComponents.get(op.type)!;
         const index = rows.push(JSON.stringify(op.value)) - 1;
-
-        let node = nodes.get(op.node);
-        if (!node) {
-            node = { id: op.node, components: [] };
-            nodes.set(op.node, node);
-        }
-        node.components!.push({ type: op.type, id: context.referenceOf(op.node, op.type), index });
+        nodeOf(op.node).components!.push({ type: op.type, id: op.ref ?? context.referenceOf(op.node, op.type), index });
     }
 
     file.AddSection({
@@ -156,6 +184,10 @@ export function opsOf(edit: Edit): EditOp[] {
     const ops: EditOp[] = [];
     for (const node of edit.file.index.sections[0]?.nodes ?? []) {
         for (const ref of node.components ?? []) {
+            if (operationOf(ref) === Operation.Delete) {
+                ops.push({ node: node.id, type: ref.type, value: undefined, ref: ref.id, delete: true });
+                continue;
+            }
             const row = ref.index === undefined ? undefined : edit.file.serializedComponents.get(ref.type)?.[ref.index];
             if (row !== undefined) ops.push({ node: node.id, type: ref.type, value: JSON.parse(row) });
         }

@@ -1,9 +1,9 @@
 import type { ArchiveSource } from "../ArchiveSource.ts";
 import { CORE_TYPE } from "../../core/schemas.ts";
-import { EditSession, byOrder, opsOf, orderOf, type Edit, type EditTransport } from "../collab/EditSession.ts";
+import { EditSession, byOrder, opsOf, orderOf, type Edit, type EditOp, type EditTransport } from "../collab/EditSession.ts";
 import type { EditorHandle } from "./editor.ts";
 // @ts-expect-error -- the viewer is plain JavaScript, deliberately.
-import { moveInPlace, reload, startEditing } from "./app.js";
+import { deleteInPlace, moveInPlace, reload, startEditing } from "./app.js";
 
 /**
  * Moving parts in 3D, shared with whoever else is editing the same model.
@@ -71,6 +71,21 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
         }
     };
 
+    // A delete that leaves a node with nothing -- as deleting a part does -- is shown by
+    // hiding that node where it is drawn, along with the links to it. Anything else taken
+    // away, such as one component of a node that keeps others, draws the model again.
+    // As with a move, it is what the archive now says that is shown, not what the edit said.
+    const showDeletes = async (url: string, ops: EditOp[]) => {
+        const emptied = new Set([...new Set(ops.filter(op => op.delete).map(op => op.node))]
+            .filter(node => source.componentsOf(url, node).length === 0));
+        const shownInPlace = ops.every(op => !op.delete || emptied.has(op.node)
+            || (op.type === CORE_TYPE.child && op.ref !== undefined && emptied.has(op.ref)));
+        if (!shownInPlace || redrawPending) return redraw();
+        for (const node of emptied) {
+            if (!await deleteInPlace(node)) return redraw();
+        }
+    };
+
     // --- how much has been edited, in the header ---------------------------------
     const stats = document.createElement("span");
     stats.className = "edit-stats";
@@ -116,6 +131,14 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
             const refreshed = editor.refresh();
             showStats();
 
+            // A delete is shown by taking away what is drawn -- here too, where nothing has
+            // changed on screen yet.
+            if (ops.some(op => op.delete)) {
+                void showDeletes(url, ops);
+                if (remote) say(`${edit.author}: ${edit.message || "deleted"}` + drawerNote(refreshed));
+                return;
+            }
+
             // What shows is whatever the newest edit says, which is not always this one: an
             // edit that arrives late goes in before the newer ones and changes nothing, and
             // one made here can lose to another made at the same moment. So the drawing is
@@ -144,10 +167,34 @@ export async function startSharedEditing(options: SharedEditingOptions): Promise
                 // Whatever others did during the drag can be drawn now.
                 .finally(() => { if (redrawPending) redraw(); });
         },
+        // Deleting a part takes away every component it has -- so it draws nothing, root or
+        // not -- and the link its parent has to it, if it has one. Its children are left as
+        // they are: only its links to them go, and they may be placed elsewhere too. All of
+        // it is DELETEs layered on top; the original rows stay in the archive beneath.
+        onDeleted: (parentId: string | null, nodeId: string, label: string) => {
+            let ops: EditOp[];
+            try {
+                ops = [
+                    ...(parentId === null ? [] : [{ node: parentId, type: CORE_TYPE.child, value: undefined, ref: nodeId, delete: true as const }]),
+                    ...source.componentsOf(archiveOfNode(nodeId), nodeId)
+                        .map(component => ({ node: nodeId, type: component.type, value: undefined, ref: component.id, delete: true as const })),
+                ];
+            } catch (error) {
+                say(`could not delete ${label}: ${errorText(error)}`, true);
+                return;
+            }
+            if (ops.length === 0) return say(`${label} has nothing left to delete`, true);
+            shared.make(ops, `deleted ${label}`)
+                .then(edit => {
+                    say(`deleted ${label}` + drawerNote(!editor.dirty()));
+                    options.onMade?.(edit, label);
+                })
+                .catch(error => say(`could not delete ${label}: ${errorText(error)}`, true));
+        },
     }) as { dragging: () => boolean });
 
     return { me, caught, leave: () => shared.leave() };
 }
 
 /** The keys, for a status line. */
-export const EDIT_KEYS = "W move · E rotate · R scale · ↑ parent · Esc or click empty space to deselect";
+export const EDIT_KEYS = "W move · E rotate · R scale · ↑ parent · Del delete · Esc or click empty space to deselect";

@@ -61,6 +61,8 @@ interface Change {
 }
 
 const changes = ref<Change[]>([]);
+/** The list as shown: the newest change on top, each keeping the number it arrived with. */
+const newestFirst = computed(() => [...changes.value].reverse());
 
 const fileName = (index: number, label: string) => {
     const slug = label.replace(/[^\w.-]+/g, "_").replace(/^_+|_+$/g, "") || "edit";
@@ -133,10 +135,10 @@ const height = computed(() => {
       <p v-if="changes.length === 0" class="empty">No changes yet. Move a part in either editor and it shows up here.</p>
       <table v-else>
         <thead>
-          <tr><th class="num">#</th><th>Author</th><th>Message</th><th>Timestamp</th><th class="num">Size</th><th>Delta file</th></tr>
+          <tr><th class="num">#</th><th>Author</th><th>Message</th><th>Timestamp</th><th class="num">Size</th><th>Log</th></tr>
         </thead>
         <tbody>
-          <tr v-for="change in changes" :key="change.id" :class="'side-' + change.side">
+          <tr v-for="change in newestFirst" :key="change.id" :class="'side-' + change.side">
             <td class="num index">{{ change.index }}</td>
             <td><span class="who">{{ change.side }}</span></td>
             <td class="message" :title="change.message">{{ change.message || "(no message)" }}</td>
@@ -167,7 +169,7 @@ const height = computed(() => {
       <span class="name"><code>{{ example }}</code></span>
     </button>
     <figcaption>
-      {{ caption ?? "Drag a part in one editor: when you let go, it moves in the other." }}
+      {{ caption ?? "Drag a part in one editor: when you let go, it moves in the other. Select a part and press Delete to remove it from both." }}
       <span v-if="credit" class="credit">{{ credit }}</span>
     </figcaption>
   </figure>

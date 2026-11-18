@@ -457,6 +457,45 @@ export async function moveInPlace(nodeId, value) {
 }
 
 /**
+ * Shows a node's delete by taking it out of what is drawn, rather than drawing everything
+ * again: every place it is drawn stops drawing its own geometry, and the tree drops it,
+ * with its children hung where it was -- they are not deleted, and are drawn on where they
+ * were. Resolves with whether it could; if not -- a part is being dragged -- the caller
+ * should `reload()` when it can.
+ */
+export async function deleteInPlace(nodeId) {
+  const ids = Object.values(state.scene?.nodes ?? {})
+    .filter(node => node.nodeId === nodeId)
+    .map(node => node.id);
+  if (ids.length === 0) return true; // not on show: nothing to take away
+
+  const drawing = await viewer();
+  if (drawing.dragging()) return false;
+  drawing.hide(ids.map(Number));
+
+  // The tree: each copy's children take its place in whatever held it.
+  const replace = (list, id, children) => {
+    const at = list.indexOf(id);
+    if (at >= 0) list.splice(at, 1, ...children);
+  };
+  for (const id of ids) {
+    const children = state.scene.nodes[id]?.children ?? [];
+    for (const node of Object.values(state.scene.nodes)) replace(node.children, id, children);
+    replace(state.scene.roots, id, children);
+    for (const version of state.scene.versions ?? []) replace(version.roots, id, children);
+    delete state.scene.nodes[id];
+    state.components.delete(id);
+  }
+  state.glb = null;
+  if (state.selected != null && ids.includes(String(state.selected))) {
+    state.selected = null;
+    drawComponents(null);
+  }
+  drawTree();
+  return true;
+}
+
+/**
  * How many times a Mosaic node is placed in the scene on show.
  *
  * A node held by several parents is drawn once under each, and every one of those is the
@@ -488,20 +527,27 @@ function placedOnce(id) {
  * Mosaic node it is and its new local transform. Whoever holds the archive writes it
  * there; the drawing has already moved, so nothing is rebuilt.
  *
+ * `onDeleted(parentId, nodeId, label)` is called when the selected part is deleted (the
+ * Delete key), with the Mosaic node it is and the node that places it, or null for a
+ * root. Whoever holds the archive writes the delete, and draws again.
+ *
  * Resolves with `dragging()`, which says whether a part is being dragged right now --
  * redrawing then would pull it out from under the mouse.
  */
-export async function startEditing({ onMoved }) {
+export async function startEditing({ onMoved, onDeleted }) {
   const drawing = await viewer();
-  editor = { onMoved };
+  editor = { onMoved, onDeleted };
+  const deselect = () => {
+    // Deselecting: the tree, the components panel and the handle all let go.
+    state.selected = null;
+    drawTree();
+    drawComponents(null);
+    drawing.attach(null);
+  };
   await drawing.enableEditing({
     onPick: index => {
       if (index === null) {
-        // Deselecting: the tree, the components panel and the handle all let go.
-        state.selected = null;
-        drawTree();
-        drawComponents(null);
-        drawing.attach(null);
+        deselect();
         return;
       }
       const picked = String(index);
@@ -526,6 +572,16 @@ export async function startEditing({ onMoved }) {
       if (placements(node.nodeId) > 1) {
         void moveInPlace(node.nodeId, transform).then(moved => { if (!moved) void reload(); });
       }
+    },
+    onDelete: () => {
+      if (!onDeleted || state.selected === null) return;
+      const node = state.scene?.nodes[state.selected];
+      if (!node?.nodeId) return;
+      // A root has no parent to take it out of; deleting its components is enough there.
+      const parentIndex = parentInScene(state.selected);
+      const parent = parentIndex === null ? null : state.scene.nodes[parentIndex];
+      deselect();
+      onDeleted(parent?.nodeId ?? null, node.nodeId, labelOf(node));
     },
   });
   return { dragging: () => drawing.dragging() };
@@ -1469,9 +1525,10 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
    * `onPick(index)` is called with the glTF node index a click landed on, or null for a click
  * on nothing, or Esc. `onMoved(index,
    * local)` is called when a drag ends, with the node's new transform relative to its
-   * parent, as translation, rotation and scale.
+   * parent, as translation, rotation and scale. `onDelete()` is called for the Delete or
+   * Backspace key, to delete whatever is selected.
    */
-  async function enableEditing({ onPick, onMoved }) {
+  async function enableEditing({ onPick, onMoved, onDelete }) {
     if (editing) return;
     const { TransformControls } = await import("three/addons/controls/TransformControls.js");
 
@@ -1493,8 +1550,26 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     outline.visible = false;
     scene.add(outline);
 
+    // A button for the Delete key, in the corner of the 3D panel while something is
+    // selected: on a phone or tablet there is no key to press.
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "stage-delete";
+    remove.title = "Delete the selected part (Delete)";
+    remove.setAttribute("aria-label", "Delete the selected part");
+    remove.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">'
+      + '<path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" fill="none" '
+      + 'stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      + '<span>Delete</span>';
+    remove.hidden = true;
+    remove.addEventListener("click", event => {
+      event.stopPropagation();
+      if (editing.selected !== null && !handle.dragging) onDelete?.();
+    });
+    canvas.parentElement?.append(remove);
+
     editing = {
-      handle, proxy, outline, selected: null, drag: null, reattach: () => {},
+      handle, proxy, outline, remove, selected: null, drag: null, reattach: () => {},
       /** The instances tinted for the selection, to put back when it changes. */
       tinted: [],
       /** The selection's bounds in world space, as of the last time it was placed. */
@@ -1532,6 +1607,11 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
       else if (event.key === "r" || event.key === "R") handle.setMode("scale");
       else if (event.key === "Escape") onPick(null);
+      else if (event.key === "Delete" || event.key === "Backspace") {
+        if (editing.selected === null || handle.dragging) return;
+        onDelete?.();
+        event.preventDefault();
+      }
       else if (event.key === "ArrowUp") {
         // A click lands on the smallest part under it; this climbs to what holds it.
         const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
@@ -1592,6 +1672,8 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     untint();
     editing.selected = index;
     const world = index === null ? undefined : placed3d.world.get(index);
+    // The delete button is there while something is selected, and only then.
+    editing.remove.hidden = !world;
     if (!world) {
       editing.handle.detach();
       editing.outline.visible = false;
@@ -1745,7 +1827,39 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     return true;
   }
 
-  return { show, clear, enableEditing, attach, dragging, setLocal };
+  /**
+   * Stops drawing glTF nodes' own geometry and edges, in place, without building the model
+   * again: how a delete is shown. Only the nodes themselves go -- what hangs under them is
+   * drawn on where it was.
+   *
+   * Their batch instances are hidden, which picking skips too, and their edges are folded
+   * onto a point. They are forgotten as drawn, so a later move does not bring them back.
+   */
+  function hide(indices) {
+    const touched = new Set();
+    const positions = placed3d.lines?.geometry.attributes.position;
+    for (const index of indices) {
+      for (const one of placed3d.drawnBy.get(index) ?? []) {
+        one.batch.setVisibleAt(one.id, false);
+        touched.add(one.batch);
+      }
+      if (positions) {
+        for (const range of placed3d.edgeRanges([index])) {
+          const first = range.start * 3;
+          for (let i = 1; i < range.count; i++) positions.array.copyWithin(first + i * 3, first, first + 3);
+        }
+        positions.needsUpdate = true;
+      }
+      placed3d.drawnBy.delete(index);
+      placed3d.edges.delete(index);
+    }
+    for (const batch of touched) { batch.computeBoundingBox(); batch.computeBoundingSphere(); }
+
+    if (editing && editing.selected !== null && indices.includes(Number(editing.selected))) attach(null);
+    invalidate();
+  }
+
+  return { show, clear, enableEditing, attach, dragging, setLocal, hide };
 }
 
 async function intoViewer(saying, pending) {

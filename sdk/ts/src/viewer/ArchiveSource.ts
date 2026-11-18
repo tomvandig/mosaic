@@ -424,6 +424,19 @@ export class ArchiveSource implements MosaicSource {
         return schema;
     }
 
+    /**
+     * Every component a node has now, with every edit and import merged in, by type and
+     * reference id -- what an edit deleting the node has to take away, one DELETE each. Its
+     * `core::child` links are among them; the children they lead to are not.
+     */
+    componentsOf(url: string, nodeId: string): Array<{ type: string; id: string }> {
+        const merged = this.mergedAt(url);
+        const components = merged && collapseNodesByPath(merged).get(nodeId)?.components;
+        return (components ?? [])
+            .filter(ref => operationOf(ref) === Operation.Value)
+            .map(ref => ({ type: ref.type, id: ref.id }));
+    }
+
     /** What a node's component reads as now, with every edit and import merged in. */
     valueOf(url: string, nodeId: string, type: string): unknown {
         const merged = this.mergedAt(url);

@@ -4428,6 +4428,16 @@ var ArchiveSource = class {
     if (schema === void 0) throw new Error(`the schema of ${type} is not known here`);
     return schema;
   }
+  /**
+   * Every component a node has now, with every edit and import merged in, by type and
+   * reference id -- what an edit deleting the node has to take away, one DELETE each. Its
+   * `core::child` links are among them; the children they lead to are not.
+   */
+  componentsOf(url, nodeId) {
+    const merged = this.mergedAt(url);
+    const components = merged && collapseNodesByPath(merged).get(nodeId)?.components;
+    return (components ?? []).filter((ref) => operationOf(ref) === "VALUE" /* Value */).map((ref) => ({ type: ref.type, id: ref.id }));
+  }
   /** What a node's component reads as now, with every edit and import merged in. */
   valueOf(url, nodeId, type) {
     const merged = this.mergedAt(url);
@@ -4991,19 +5001,31 @@ function orderOf(header) {
 function editFile(about, ops, context) {
   const file = new MosaicFile();
   const nodes = /* @__PURE__ */ new Map();
+  const nodeOf = (id) => {
+    let node = nodes.get(id);
+    if (!node) {
+      node = { id, components: [] };
+      nodes.set(id, node);
+    }
+    return node;
+  };
   for (const op of ops) {
+    if (op.delete) {
+      const reference = {
+        type: op.type,
+        id: op.ref ?? context.referenceOf(op.node, op.type),
+        operation: "DELETE" /* Delete */
+      };
+      nodeOf(op.node).components.push(reference);
+      continue;
+    }
     if (!file.serializedComponents.has(op.type)) {
       file.serializedComponents.set(op.type, []);
       file.index.componentTables.push({ filename: `${op.type}.ndjson`, type: "NDJSON" /* Ndjson */, schema: context.schemaOf(op.node, op.type) });
     }
     const rows = file.serializedComponents.get(op.type);
     const index = rows.push(JSON.stringify(op.value)) - 1;
-    let node = nodes.get(op.node);
-    if (!node) {
-      node = { id: op.node, components: [] };
-      nodes.set(op.node, node);
-    }
-    node.components.push({ type: op.type, id: context.referenceOf(op.node, op.type), index });
+    nodeOf(op.node).components.push({ type: op.type, id: op.ref ?? context.referenceOf(op.node, op.type), index });
   }
   file.AddSection({
     header: {
@@ -5030,6 +5052,10 @@ function opsOf(edit) {
   const ops = [];
   for (const node of edit.file.index.sections[0]?.nodes ?? []) {
     for (const ref of node.components ?? []) {
+      if (operationOf(ref) === "DELETE" /* Delete */) {
+        ops.push({ node: node.id, type: ref.type, value: void 0, ref: ref.id, delete: true });
+        continue;
+      }
       const row = ref.index === void 0 ? void 0 : edit.file.serializedComponents.get(ref.type)?.[ref.index];
       if (row !== void 0) ops.push({ node: node.id, type: ref.type, value: JSON.parse(row) });
     }
@@ -5423,6 +5449,32 @@ async function moveInPlace(nodeId, value) {
   if (state.selected != null && indices.includes(Number(state.selected))) drawComponents(state.selected);
   return true;
 }
+async function deleteInPlace(nodeId) {
+  const ids = Object.values(state.scene?.nodes ?? {}).filter((node) => node.nodeId === nodeId).map((node) => node.id);
+  if (ids.length === 0) return true;
+  const drawing = await viewer();
+  if (drawing.dragging()) return false;
+  drawing.hide(ids.map(Number));
+  const replace = (list, id, children) => {
+    const at = list.indexOf(id);
+    if (at >= 0) list.splice(at, 1, ...children);
+  };
+  for (const id of ids) {
+    const children = state.scene.nodes[id]?.children ?? [];
+    for (const node of Object.values(state.scene.nodes)) replace(node.children, id, children);
+    replace(state.scene.roots, id, children);
+    for (const version of state.scene.versions ?? []) replace(version.roots, id, children);
+    delete state.scene.nodes[id];
+    state.components.delete(id);
+  }
+  state.glb = null;
+  if (state.selected != null && ids.includes(String(state.selected))) {
+    state.selected = null;
+    drawComponents(null);
+  }
+  drawTree();
+  return true;
+}
 function placements(nodeId) {
   if (!nodeId) return 0;
   let count = 0;
@@ -5435,16 +5487,19 @@ function placedOnce(id) {
   }
   return id;
 }
-async function startEditing({ onMoved }) {
+async function startEditing({ onMoved, onDeleted }) {
   const drawing = await viewer();
-  editor = { onMoved };
+  editor = { onMoved, onDeleted };
+  const deselect = () => {
+    state.selected = null;
+    drawTree();
+    drawComponents(null);
+    drawing.attach(null);
+  };
   await drawing.enableEditing({
     onPick: (index) => {
       if (index === null) {
-        state.selected = null;
-        drawTree();
-        drawComponents(null);
-        drawing.attach(null);
+        deselect();
         return;
       }
       const picked = String(index);
@@ -5467,6 +5522,15 @@ async function startEditing({ onMoved }) {
           if (!moved) void reload();
         });
       }
+    },
+    onDelete: () => {
+      if (!onDeleted || state.selected === null) return;
+      const node = state.scene?.nodes[state.selected];
+      if (!node?.nodeId) return;
+      const parentIndex = parentInScene(state.selected);
+      const parent = parentIndex === null ? null : state.scene.nodes[parentIndex];
+      deselect();
+      onDeleted(parent?.nodeId ?? null, node.nodeId, labelOf(node));
     }
   });
   return { dragging: () => drawing.dragging() };
@@ -6045,7 +6109,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
   };
   let editing = null;
   let lookedOnce = false;
-  async function enableEditing({ onPick, onMoved }) {
+  async function enableEditing({ onPick, onMoved, onDelete }) {
     if (editing) return;
     const { TransformControls } = await import("three/addons/controls/TransformControls.js");
     const handle = new TransformControls(camera, canvas);
@@ -6061,10 +6125,23 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     outline.renderOrder = 999;
     outline.visible = false;
     scene.add(outline);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "stage-delete";
+    remove.title = "Delete the selected part (Delete)";
+    remove.setAttribute("aria-label", "Delete the selected part");
+    remove.innerHTML = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2.5 4h11M6.5 4V2.5h3V4M4 4l.7 9.5h6.6L12 4M6.8 6.5v4.5M9.2 6.5v4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Delete</span>';
+    remove.hidden = true;
+    remove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (editing.selected !== null && !handle.dragging) onDelete?.();
+    });
+    canvas.parentElement?.append(remove);
     editing = {
       handle,
       proxy,
       outline,
+      remove,
       selected: null,
       drag: null,
       reattach: () => {
@@ -6106,7 +6183,11 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
       else if (event.key === "e" || event.key === "E") handle.setMode("rotate");
       else if (event.key === "r" || event.key === "R") handle.setMode("scale");
       else if (event.key === "Escape") onPick(null);
-      else if (event.key === "ArrowUp") {
+      else if (event.key === "Delete" || event.key === "Backspace") {
+        if (editing.selected === null || handle.dragging) return;
+        onDelete?.();
+        event.preventDefault();
+      } else if (event.key === "ArrowUp") {
         const parent = editing.selected === null ? null : placed3d.parent.get(editing.selected);
         if (parent === null || parent === void 0) return;
         onPick(parent);
@@ -6146,6 +6227,7 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     untint();
     editing.selected = index;
     const world = index === null ? void 0 : placed3d.world.get(index);
+    editing.remove.hidden = !world;
     if (!world) {
       editing.handle.detach();
       editing.outline.visible = false;
@@ -6270,7 +6352,32 @@ function build(THREE, orbit, gltf, environment, utils, svg) {
     invalidate();
     return true;
   }
-  return { show: show2, clear, enableEditing, attach, dragging, setLocal };
+  function hide(indices) {
+    const touched = /* @__PURE__ */ new Set();
+    const positions = placed3d.lines?.geometry.attributes.position;
+    for (const index of indices) {
+      for (const one of placed3d.drawnBy.get(index) ?? []) {
+        one.batch.setVisibleAt(one.id, false);
+        touched.add(one.batch);
+      }
+      if (positions) {
+        for (const range of placed3d.edgeRanges([index])) {
+          const first = range.start * 3;
+          for (let i = 1; i < range.count; i++) positions.array.copyWithin(first + i * 3, first, first + 3);
+        }
+        positions.needsUpdate = true;
+      }
+      placed3d.drawnBy.delete(index);
+      placed3d.edges.delete(index);
+    }
+    for (const batch of touched) {
+      batch.computeBoundingBox();
+      batch.computeBoundingSphere();
+    }
+    if (editing && editing.selected !== null && indices.includes(Number(editing.selected))) attach(null);
+    invalidate();
+  }
+  return { show: show2, clear, enableEditing, attach, dragging, setLocal, hide };
 }
 async function intoViewer(saying, pending) {
   say(saying);
@@ -6411,6 +6518,14 @@ async function startSharedEditing(options) {
       if (!moved) return redraw();
     }
   };
+  const showDeletes = async (url, ops) => {
+    const emptied = new Set([...new Set(ops.filter((op) => op.delete).map((op) => op.node))].filter((node) => source2.componentsOf(url, node).length === 0));
+    const shownInPlace = ops.every((op) => !op.delete || emptied.has(op.node) || op.type === CORE_TYPE.child && op.ref !== void 0 && emptied.has(op.ref));
+    if (!shownInPlace || redrawPending) return redraw();
+    for (const node of emptied) {
+      if (!await deleteInPlace(node)) return redraw();
+    }
+  };
   const stats = document.createElement("span");
   stats.className = "edit-stats";
   const status = document.getElementById("status");
@@ -6444,6 +6559,11 @@ async function startSharedEditing(options) {
       source2.addEdit(url, edit.file, orderOf, byOrder);
       const refreshed = editor2.refresh();
       showStats();
+      if (ops.some((op) => op.delete)) {
+        void showDeletes(url, ops);
+        if (remote) say3(`${edit.author}: ${edit.message || "deleted"}` + drawerNote(refreshed));
+        return;
+      }
       const now = ops.map((op) => ({ ...op, value: source2.valueOf(url, op.node, op.type) }));
       const changed = remote ? now : now.filter((op, i) => JSON.stringify(op.value) !== JSON.stringify(ops[i].value));
       if (changed.length > 0) void showInPlace(changed);
@@ -6461,11 +6581,32 @@ async function startSharedEditing(options) {
       }).catch((error) => say3(`could not move ${label}: ${errorText(error)}`, true)).finally(() => {
         if (redrawPending) redraw();
       });
+    },
+    // Deleting a part takes away every component it has -- so it draws nothing, root or
+    // not -- and the link its parent has to it, if it has one. Its children are left as
+    // they are: only its links to them go, and they may be placed elsewhere too. All of
+    // it is DELETEs layered on top; the original rows stay in the archive beneath.
+    onDeleted: (parentId, nodeId, label) => {
+      let ops;
+      try {
+        ops = [
+          ...parentId === null ? [] : [{ node: parentId, type: CORE_TYPE.child, value: void 0, ref: nodeId, delete: true }],
+          ...source2.componentsOf(archiveOfNode(nodeId), nodeId).map((component) => ({ node: nodeId, type: component.type, value: void 0, ref: component.id, delete: true }))
+        ];
+      } catch (error) {
+        say3(`could not delete ${label}: ${errorText(error)}`, true);
+        return;
+      }
+      if (ops.length === 0) return say3(`${label} has nothing left to delete`, true);
+      shared.make(ops, `deleted ${label}`).then((edit) => {
+        say3(`deleted ${label}` + drawerNote(!editor2.dirty()));
+        options.onMade?.(edit, label);
+      }).catch((error) => say3(`could not delete ${label}: ${errorText(error)}`, true));
     }
   }));
   return { me, caught, leave: () => shared.leave() };
 }
-var EDIT_KEYS = "W move \xB7 E rotate \xB7 R scale \xB7 \u2191 parent \xB7 Esc or click empty space to deselect";
+var EDIT_KEYS = "W move \xB7 E rotate \xB7 R scale \xB7 \u2191 parent \xB7 Del delete \xB7 Esc or click empty space to deselect";
 
 // src/viewer/app/boot-static.ts
 var EXAMPLES = "examples";

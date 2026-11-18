@@ -85,6 +85,20 @@
   .kids[hidden] { display: none; }
   .stage { flex: 1; min-height: 0; position: relative; background: var(--stage); }
   #viewer { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+  /* Delete, for whoever has no Delete key: in the corner, while something is selected. */
+  .stage-delete {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    display: inline-flex; align-items: center; gap: 5px;
+    min-height: 32px; padding: 6px 12px;
+    border: 1px solid var(--warn); border-radius: 8px;
+    background: var(--warn-soft); color: var(--warn);
+    font: inherit; font-size: 12px; font-weight: 600;
+    cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 1px 4px rgba(40, 30, 10, 0.15);
+  }
+  .stage-delete:hover { background: var(--warn); color: #fff; }
+  .stage-delete:focus-visible { outline: 2px solid var(--warn); outline-offset: 2px; }
+  .stage-delete[hidden] { display: none; }
   .stats {
     margin-left: auto; color: var(--dim); font-size: 10px;
     text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums;
