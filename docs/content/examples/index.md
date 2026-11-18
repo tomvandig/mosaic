@@ -30,6 +30,13 @@ imports them all. About 20 MB, so it takes a moment.
 
 <MosaicViewer example="s1" height="520" />
 
+## Chesapeake Bay Bridge-Tunnel
+
+An IFC 4.3 infrastructure model of bridges, roads, tunnels and marine assets along an alignment.
+Its 18,000 IFC entities come with their property sets, quantities and classifications. About 9 MB.
+
+<MosaicViewer example="chesapeake" height="520" />
+
 ## Adding an example
 
 Put a folder of `.tsr` files under `docs/dist/viewer/examples/` and run `npm run build:examples` in

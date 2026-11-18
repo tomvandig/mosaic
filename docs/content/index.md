@@ -51,4 +51,14 @@ hold or sit beside data from another.
 
 <MosaicViewer example="s1" height="480" caption="S1: an IFC floor, an SVG heating plan and two glTF models, in one scene." />
 
+## Infrastructure at geospatial scale
+
+Mosaic also handles models measured in kilometres. The Chesapeake Bay Bridge-Tunnel is an IFC 4.3
+infrastructure model of bridges, roads, tunnels and marine assets laid out along an alignment. It
+was converted to Mosaic with its 18,000 IFC entities, along with their property sets, quantities and
+classifications. Every element is a node carrying its IFC data as components, and it can be selected,
+inspected and layered on like any other.
+
+<MosaicViewer example="chesapeake" height="480" caption="The Chesapeake Bay Bridge-Tunnel: an IFC 4.3 bridge, road and tunnel model." />
+
 </div>
