@@ -6,7 +6,7 @@
   },
   "tags": [],
   "paths": {
-    "/Mosaic-api/download/{blobId}": {
+    "/mosaic-api/download/{blobId}": {
       "put": {
         "operationId": "download",
         "parameters": [
@@ -34,7 +34,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae": {
+    "/mosaic-api/tesserae": {
       "get": {
         "operationId": "Tesserae_tesserae",
         "parameters": [],
@@ -74,7 +74,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}": {
+    "/mosaic-api/tesserae/{tesseraId}": {
       "get": {
         "operationId": "TesseraRoutes_get_tessera",
         "parameters": [
@@ -119,7 +119,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url": {
+    "/mosaic-api/tesserae/{tesseraId}/upload-mosaic-blob-url": {
       "post": {
         "operationId": "TesseraRoutes_uploadMosaicBlobUrl",
         "parameters": [
@@ -146,7 +146,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/versions": {
+    "/mosaic-api/tesserae/{tesseraId}/versions": {
       "post": {
         "operationId": "VersionsRoutes_createTesseraVersion",
         "parameters": [
@@ -183,7 +183,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}": {
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}": {
       "get": {
         "operationId": "TesseraVersionRoutes_get_tessera_version",
         "parameters": [
@@ -218,7 +218,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic": {
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-mosaic": {
       "put": {
         "operationId": "TesseraVersionRoutes_tessera_Mosaic",
         "parameters": [
@@ -262,7 +262,7 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes": {
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes": {
       "post": {
         "operationId": "TesseraVersionRoutes_fetchNodes",
         "parameters": [
@@ -317,9 +317,9 @@
         }
       }
     },
-    "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/query": {
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql": {
       "get": {
-        "operationId": "TesseraVersionRoutes_query",
+        "operationId": "TesseraVersionRoutes_sparqlQuery",
         "parameters": [
           {
             "name": "tesseraId",
@@ -338,38 +338,20 @@
             }
           },
           {
-            "name": "path",
+            "$ref": "#/components/parameters/SparqlQueryParameters.default-graph-uri"
+          },
+          {
+            "$ref": "#/components/parameters/SparqlQueryParameters.named-graph-uri"
+          },
+          {
+            "$ref": "#/components/parameters/SparqlQueryParameters.accept"
+          },
+          {
+            "name": "query",
             "in": "query",
             "required": true,
             "schema": {
               "type": "string"
-            },
-            "explode": false
-          },
-          {
-            "name": "provenance",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "boolean"
-            },
-            "explode": false
-          },
-          {
-            "name": "expandChildren",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "boolean"
-            },
-            "explode": false
-          },
-          {
-            "name": "expandChildrenRecursive",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "boolean"
             },
             "explode": false
           }
@@ -378,9 +360,203 @@
           "200": {
             "description": "The request has succeeded.",
             "content": {
+              "application/sparql-results+json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/sparql-results+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/tab-separated-values": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/turtle": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/n-triples": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/ld+json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/rdf+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The query could not be parsed, or the request was not a valid protocol request.",
+            "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MosaicQueryApiResponse"
+                  "$ref": "#/components/schemas/SparqlQueryError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "TesseraVersionRoutes_sparqlQueryPost",
+        "parameters": [
+          {
+            "name": "tesseraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/SparqlQueryParameters.default-graph-uri"
+          },
+          {
+            "$ref": "#/components/parameters/SparqlQueryParameters.named-graph-uri"
+          },
+          {
+            "$ref": "#/components/parameters/SparqlQueryParameters.accept"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/sparql-results+json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/sparql-results+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/tab-separated-values": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/turtle": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/n-triples": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/ld+json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "application/rdf+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The query could not be parsed, or the request was not a valid protocol request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SparqlQueryError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/sparql-query": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/types": {
+      "get": {
+        "operationId": "TesseraVersionRoutes_get_types",
+        "parameters": [
+          {
+            "name": "tesseraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request has succeeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {}
                 }
               }
             }
@@ -388,7 +564,7 @@
         }
       }
     },
-    "/Mosaic-api/upload/{blobId}": {
+    "/mosaic-api/upload/{blobId}": {
       "put": {
         "operationId": "upload",
         "parameters": [
@@ -421,6 +597,41 @@
     }
   },
   "components": {
+    "parameters": {
+      "SparqlQueryParameters.accept": {
+        "name": "accept",
+        "in": "header",
+        "required": false,
+        "description": "Which result format to answer with, as media types with optional q-values.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "SparqlQueryParameters.default-graph-uri": {
+        "name": "default-graph-uri",
+        "in": "query",
+        "required": false,
+        "description": "The graphs that make up the default graph. Overrides FROM in the query.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "SparqlQueryParameters.named-graph-uri": {
+        "name": "named-graph-uri",
+        "in": "query",
+        "required": false,
+        "description": "The named graphs the query can see. Overrides FROM NAMED in the query.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "schemas": {
       "BlobResponse": {
         "type": "object",
@@ -532,51 +743,6 @@
           }
         }
       },
-      "MosaicQueryApiNodeComponent": {
-        "type": "object",
-        "required": [
-          "name",
-          "type",
-          "value"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "value": {}
-        }
-      },
-      "MosaicQueryApiNodeResponse": {
-        "type": "object",
-        "required": [
-          "components"
-        ],
-        "properties": {
-          "components": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MosaicQueryApiNodeComponent"
-            }
-          }
-        }
-      },
-      "MosaicQueryApiResponse": {
-        "type": "object",
-        "required": [
-          "nodes"
-        ],
-        "properties": {
-          "nodes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MosaicQueryApiNodeResponse"
-            }
-          }
-        }
-      },
       "NodeFetchFormat": {
         "type": "string",
         "enum": [
@@ -609,6 +775,18 @@
             "type": "boolean"
           }
         }
+      },
+      "SparqlQueryError": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "description": "The query could not be parsed, or the request was not a valid protocol request."
       },
       "TesseraDetails": {
         "type": "object",

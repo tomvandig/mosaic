@@ -208,7 +208,7 @@ test("the 3D view goes through the real nodes endpoint", async () => {
 
         // Exactly the call the page makes when a node is selected.
         const response = await fetch(
-            `${running.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+            `${running.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -235,7 +235,7 @@ test("composing through the 3D call gives a node its type's geometry", async () 
 
         const ask = async (compose: boolean) => {
             const response = await fetch(
-                `${running.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+                `${running.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
                 {
                     method: "POST",
                     headers: { "content-type": "application/json" },
@@ -262,7 +262,7 @@ test("an answer with no geometry says so, rather than looking like a broken view
         const box = (Object.values(answer.nodes) as any[]).find(node => node.name === "Near box");
 
         const ask = async (compose: boolean) => await fetch(
-            `${running.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+            `${running.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -413,7 +413,7 @@ test("the 3D view of an imported node goes through that tessera's own version", 
         assert.notEqual(imported.tesseraId, plaza.tesseraId);
 
         const response = await fetch(
-            `${running.url}/Mosaic-api/tesserae/${imported.tesseraId}/versions/${imported.versionId}/nodes?format=glb`,
+            `${running.url}/mosaic-api/tesserae/${imported.tesseraId}/versions/${imported.versionId}/nodes?format=glb`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -680,7 +680,7 @@ test("a glb is compressed too, and arrives as the same file", async () => {
         const roots = (await scene(running.url, tesseraId, versionId)).roots;
 
         const ask = (encoding: string) => new Promise<{ headers: any; body: Buffer }>((resolve, reject) => {
-            const target = new URL(`${running.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`);
+            const target = new URL(`${running.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`);
             const request = http.request(
                 {
                     hostname: target.hostname, port: target.port, path: target.pathname + target.search,

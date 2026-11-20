@@ -677,7 +677,7 @@ export class ApiStore {
 
 /** Builds the response for a blob the client is about to upload. */
 export function blobResponse(blobId: string, baseUrl: string): BlobResponse {
-    return { blobId, putURL: `${baseUrl}/Mosaic-api/upload/${blobId}` };
+    return { blobId, putURL: `${baseUrl}/mosaic-api/upload/${blobId}` };
 }
 
 function literal(value: string): string {

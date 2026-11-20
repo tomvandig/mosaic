@@ -251,7 +251,7 @@ test("asking for a node that is not there says so", async () => {
         // The generated client hands back the bytes, so the raw response is read here to
         // get at the headers the server reports the misses in.
         const response = await fetch(
-            `${server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=tsr`,
+            `${server.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=tsr`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },

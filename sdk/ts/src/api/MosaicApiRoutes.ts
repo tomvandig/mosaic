@@ -17,7 +17,7 @@ export const API_ROUTES = [
     {
         "operationId": "download",
         "method": "PUT",
-        "path": "/Mosaic-api/download/{blobId}",
+        "path": "/mosaic-api/download/{blobId}",
         "pathParameters": [
             "blobId"
         ],
@@ -27,7 +27,7 @@ export const API_ROUTES = [
     {
         "operationId": "Tesserae_createTessera",
         "method": "POST",
-        "path": "/Mosaic-api/tesserae",
+        "path": "/mosaic-api/tesserae",
         "pathParameters": [],
         "queryParameters": [],
         "hasBody": true
@@ -35,7 +35,7 @@ export const API_ROUTES = [
     {
         "operationId": "Tesserae_tesserae",
         "method": "GET",
-        "path": "/Mosaic-api/tesserae",
+        "path": "/mosaic-api/tesserae",
         "pathParameters": [],
         "queryParameters": [],
         "hasBody": false
@@ -43,7 +43,7 @@ export const API_ROUTES = [
     {
         "operationId": "TesseraRoutes_delete_tessera",
         "method": "DELETE",
-        "path": "/Mosaic-api/tesserae/{tesseraId}",
+        "path": "/mosaic-api/tesserae/{tesseraId}",
         "pathParameters": [
             "tesseraId"
         ],
@@ -53,7 +53,7 @@ export const API_ROUTES = [
     {
         "operationId": "TesseraRoutes_get_tessera",
         "method": "GET",
-        "path": "/Mosaic-api/tesserae/{tesseraId}",
+        "path": "/mosaic-api/tesserae/{tesseraId}",
         "pathParameters": [
             "tesseraId"
         ],
@@ -63,7 +63,7 @@ export const API_ROUTES = [
     {
         "operationId": "TesseraRoutes_uploadMosaicBlobUrl",
         "method": "POST",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url",
+        "path": "/mosaic-api/tesserae/{tesseraId}/upload-mosaic-blob-url",
         "pathParameters": [
             "tesseraId"
         ],
@@ -73,7 +73,7 @@ export const API_ROUTES = [
     {
         "operationId": "TesseraVersionRoutes_fetchNodes",
         "method": "POST",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes",
         "pathParameters": [
             "tesseraId",
             "versionId"
@@ -89,7 +89,7 @@ export const API_ROUTES = [
     {
         "operationId": "TesseraVersionRoutes_get_tessera_version",
         "method": "GET",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}",
         "pathParameters": [
             "tesseraId",
             "versionId"
@@ -98,37 +98,64 @@ export const API_ROUTES = [
         "hasBody": false
     },
     {
-        "operationId": "TesseraVersionRoutes_query",
+        "operationId": "TesseraVersionRoutes_get_types",
         "method": "GET",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/query",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/types",
+        "pathParameters": [
+            "tesseraId",
+            "versionId"
+        ],
+        "queryParameters": [],
+        "hasBody": false
+    },
+    {
+        "operationId": "TesseraVersionRoutes_sparqlQuery",
+        "method": "GET",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql",
         "pathParameters": [
             "tesseraId",
             "versionId"
         ],
         "queryParameters": [
             {
-                "name": "path",
-                "required": true
+                "name": "default-graph-uri",
+                "required": false
             },
             {
-                "name": "provenance",
-                "required": true
+                "name": "named-graph-uri",
+                "required": false
             },
             {
-                "name": "expandChildren",
-                "required": true
-            },
-            {
-                "name": "expandChildrenRecursive",
+                "name": "query",
                 "required": true
             }
         ],
         "hasBody": false
     },
     {
+        "operationId": "TesseraVersionRoutes_sparqlQueryPost",
+        "method": "POST",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql",
+        "pathParameters": [
+            "tesseraId",
+            "versionId"
+        ],
+        "queryParameters": [
+            {
+                "name": "default-graph-uri",
+                "required": false
+            },
+            {
+                "name": "named-graph-uri",
+                "required": false
+            }
+        ],
+        "hasBody": true
+    },
+    {
         "operationId": "TesseraVersionRoutes_tessera_Mosaic",
         "method": "PUT",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-mosaic",
         "pathParameters": [
             "tesseraId",
             "versionId"
@@ -144,7 +171,7 @@ export const API_ROUTES = [
     {
         "operationId": "upload",
         "method": "PUT",
-        "path": "/Mosaic-api/upload/{blobId}",
+        "path": "/mosaic-api/upload/{blobId}",
         "pathParameters": [
             "blobId"
         ],
@@ -154,7 +181,7 @@ export const API_ROUTES = [
     {
         "operationId": "VersionsRoutes_createTesseraVersion",
         "method": "POST",
-        "path": "/Mosaic-api/tesserae/{tesseraId}/versions",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions",
         "pathParameters": [
             "tesseraId"
         ],

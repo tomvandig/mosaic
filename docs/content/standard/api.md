@@ -46,7 +46,8 @@ Every route is under `/mosaic-api`.
 | `PUT` | `/tesserae/{tesseraId}/versions/{versionId}/download-mosaic` | `tessera_Mosaic` | Build a download, answered with a blob URL |
 | `PUT` | `/download/{blobId}` | `download` | Fetch a blob's bytes |
 | `POST` | `/tesserae/{tesseraId}/versions/{versionId}/nodes` | `fetchNodes` | A subset of nodes, as `.glb` or `.tsr` |
-| `GET` | `/tesserae/{tesseraId}/versions/{versionId}/query` | `query` | Query nodes by path |
+| `GET` | `/tesserae/{tesseraId}/versions/{versionId}/sparql` | `sparqlQuery` | A SPARQL query, in the URL |
+| `POST` | `/tesserae/{tesseraId}/versions/{versionId}/sparql` | `sparqlQueryPost` | A SPARQL query, as the body |
 | `GET` | `/tesserae/{tesseraId}/versions/{versionId}/types` | `get_types` | The component types in a version |
 
 ## Publishing a version
@@ -128,21 +129,56 @@ viewer) or `tsr` (a Mosaic archive in its own right), and the body is a `NodeFet
 | `includeChildren` | Take everything beneath them as well, following `core::child` |
 | `compose` | Resolve `core::inherit` first, as composing does |
 
-## Querying
+## Querying with SPARQL
 
-`query` answers with nodes as JSON, each a list of `{ name, type, value }` components, rather than
-as a file. It takes:
+Each version is a SPARQL query service, as the
+[SPARQL 1.1 Protocol](https://www.w3.org/TR/sparql11-protocol/#query-operation) describes one: a
+single URL, `…/versions/{versionId}/sparql`, that takes a query either of the two ways the protocol
+allows and answers in the format the client asks for. Any SPARQL client can be pointed at it.
 
-| Parameter | |
+::: code-group
+
+```http [GET]
+GET /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql?query=ASK%20%7B%20%3Fs%20%3Fp%20%3Fo%20%7D
+Accept: application/sparql-results+json
+```
+
+```http [POST]
+POST /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql
+Content-Type: application/sparql-query
+Accept: application/sparql-results+json
+
+ASK { ?s ?p ?o }
+```
+
+:::
+
+GET suits short queries and caching. POST is there for queries too long for a URL. Both take:
+
+| Parameter | In | |
+| --- | --- | --- |
+| `query` | query string (GET) or body (POST) | The SPARQL query |
+| `default-graph-uri` | query string, repeatable | The graphs that make up the default graph. Overrides `FROM` |
+| `named-graph-uri` | query string, repeatable | The named graphs the query can see. Overrides `FROM NAMED` |
+| `Accept` | header | Which result format to answer with |
+
+What comes back depends on the query, and on `Accept`:
+
+| Query | Media types |
 | --- | --- |
-| `path` | Which nodes to answer about |
-| `provenance` | Include provenance |
-| `expandChildren` | Include each node's direct children |
-| `expandChildrenRecursive` | Include everything beneath them |
+| `SELECT`, `ASK` | `application/sparql-results+json`, `application/sparql-results+xml`, `text/csv`, `text/tab-separated-values` |
+| `CONSTRUCT`, `DESCRIBE` | `text/turtle`, `application/n-triples`, `application/ld+json`, `application/rdf+xml` |
+
+A query that does not parse answers `400` with a `SparqlQueryError`, `{ "error": "…" }`.
+
+The protocol's third form, a `POST` of `application/x-www-form-urlencoded` with `query=` in the body,
+is not in the spec, and nor is the update operation: the endpoint reads a version, and versions are
+not changed in place.
 
 ::: warning
-The query operation is specified but not implemented by the reference server, which answers
-`501 Not Implemented`.
+The SPARQL endpoint is specified but not implemented by the reference server, which answers
+`501 Not Implemented`. How nodes and components become RDF — which IRIs nodes and component types
+get — is not decided yet, and is what an implementation needs first.
 :::
 
 ## Models
@@ -160,7 +196,7 @@ The query operation is specified but not implemented by the reference server, wh
 | `BlobResponse` | `blobId`, `putURL` |
 | `TesseraVersionMosaicFile` | `blobUrl` |
 | `NodeFetchRequest` | `nodes`, `componentTypes?`, `includeChildren?`, `compose?` |
-| `MosaicQueryApiResponse` | `nodes: { components: { name, type, value }[] }[]` |
+| `SparqlQueryError` | `error` |
 
 All ids are UUIDs.
 

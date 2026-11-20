@@ -358,16 +358,20 @@ mosaic serve scene.duckdb --port 8791
 A **tessera** is one model kept by the API — a tile of the mosaic — and every route is named for it:
 
 ```
-GET    /Mosaic-api/tesserae
-POST   /Mosaic-api/tesserae
-GET    /Mosaic-api/tesserae/{tesseraId}
-DELETE /Mosaic-api/tesserae/{tesseraId}
-POST   /Mosaic-api/tesserae/{tesseraId}/upload-Mosaic-blob-url
-POST   /Mosaic-api/tesserae/{tesseraId}/versions
-GET    /Mosaic-api/tesserae/{tesseraId}/versions/{versionId}
-PUT    /Mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-Mosaic
-PUT    /Mosaic-api/upload/{blobId}
-PUT    /Mosaic-api/download/{blobId}
+GET    /mosaic-api/tesserae
+POST   /mosaic-api/tesserae
+GET    /mosaic-api/tesserae/{tesseraId}
+DELETE /mosaic-api/tesserae/{tesseraId}
+POST   /mosaic-api/tesserae/{tesseraId}/upload-mosaic-blob-url
+POST   /mosaic-api/tesserae/{tesseraId}/versions
+GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}
+PUT    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/download-mosaic
+PUT    /mosaic-api/upload/{blobId}
+PUT    /mosaic-api/download/{blobId}
+POST   /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes
+GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql     (501)
+POST   /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql     (501)
+GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/types      (501)
 ```
 
 Tesserae, versions and blob bookkeeping go in `api_tessera`, `api_tessera_version` and `api_blob`, beside
@@ -379,7 +383,7 @@ SELECT file_id, name FROM "acme::geometry::wall";   -- file_id is "<tesseraId>/<
 ```
 
 **Nothing is on disk but the database.** Uploaded bytes are a `BLOB` in `api_blob`, not a file, and
-they are the only bytes kept as bytes. `upload-Mosaic-blob-url` hands out an id and a `putURL`, the
+they are the only bytes kept as bytes. `upload-mosaic-blob-url` hands out an id and a `putURL`, the
 client PUTs the archive there, and `POST /versions` reads it *once* — to check it and to unpack it
 into the component tables. A version that does not follow the one the tessera is actually on answers
 `OUT_OF_DATE`, and a blob that is not a readable archive answers `VALIDATION_ERROR` with the reason,
@@ -438,7 +442,7 @@ does not carry. The component filter applies to the nodes that were asked for, n
 in for them. Nodes the version does not have are named in an `x-mosaic-missing` header, and the number
 built in `x-mosaic-nodes`, so the body stays nothing but the file.
 
-`download-Mosaic` builds what the `downloadType` asks for and answers with a blob url:
+`download-mosaic` builds what the `downloadType` asks for and answers with a blob url:
 `just_this_version` hands back the archive as uploaded, `whole_tessera_history_intact` federates every
 version up to that one keeping all sections, and the condensed forms collapse them to what is still
 leading.
@@ -508,8 +512,8 @@ it. Compression is at the fastest level deliberately; on a body this size the sl
 hundreds of milliseconds to find another few percent, which is the wrong trade for something a
 browser is waiting on.
 
-Two things to know. **The query API is not implemented** — it answers 501, deliberately, and is the
-one operation with no real handler. And DuckDB takes an exclusive lock on the database file, so
+Two things to know. **The SPARQL endpoint and `types` are not implemented** — they answer 501,
+deliberately, and are the only operations with no real handler. And DuckDB takes an exclusive lock on the database file, so
 `mosaic compose scene.duckdb` will not run while a server is holding it; stop the server first.
 
 ## Edges

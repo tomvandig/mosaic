@@ -62,7 +62,7 @@ async function readJson<T>(request: Request): Promise<T> {
  *
  * The keys are operation ids from the generated route table, so an operation that is added
  * to mosaic-api.tsp and regenerated shows up here as a missing key rather than as a route
- * nobody noticed. The query operation is the exception, and answers 501 on purpose.
+ * nobody noticed. The SPARQL and types operations are the exceptions, and answer 501 on purpose.
  */
 const HANDLERS: Record<string, Handler> = {
     // --- blobs --------------------------------------------------------------
@@ -120,7 +120,7 @@ const HANDLERS: Record<string, Handler> = {
         if (!known.includes(asked)) throw new BadRequest(`Unknown downloadType "${asked}"; expected one of ${known.join(", ")}`);
 
         const blobId = await store.materialiseDownload(params.tesseraId!, params.versionId!, asked as MosaicFileDownloadType);
-        return json({ blobUrl: `${baseUrl}/Mosaic-api/download/${blobId}` });
+        return json({ blobUrl: `${baseUrl}/mosaic-api/download/${blobId}` });
     },
 
     async TesseraVersionRoutes_fetchNodes(request) {
@@ -156,8 +156,17 @@ const HANDLERS: Record<string, Handler> = {
     },
 
     // --- not yet ------------------------------------------------------------
-    async TesseraVersionRoutes_query() {
-        return json({ error: "The query API is not implemented yet" }, 501);
+    // These answer 501 on purpose: the routes are real, the work behind them is not written.
+    async TesseraVersionRoutes_sparqlQuery() {
+        return json({ error: "The SPARQL endpoint is not implemented yet" }, 501);
+    },
+
+    async TesseraVersionRoutes_sparqlQueryPost() {
+        return json({ error: "The SPARQL endpoint is not implemented yet" }, 501);
+    },
+
+    async TesseraVersionRoutes_get_types() {
+        return json({ error: "Listing a version's types is not implemented yet" }, 501);
     },
 };
 

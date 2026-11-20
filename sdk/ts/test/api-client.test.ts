@@ -125,7 +125,8 @@ test("the client has a method for every operation in the spec", () => {
 
     assert.equal(methods.length, API_ROUTES.length);
     for (const name of ["tesserae", "createTessera", "getTessera", "deleteTessera", "uploadMosaicBlobUrl",
-        "createTesseraVersion", "getTesseraVersion", "tesseraMosaic", "upload", "download", "query"]) {
+        "createTesseraVersion", "getTesseraVersion", "tesseraMosaic", "upload", "download", "fetchNodes",
+        "sparqlQuery", "sparqlQueryPost", "getTypes"]) {
         assert.ok(methods.includes(name), `no client method ${name}`);
     }
 });
@@ -143,7 +144,7 @@ test("a tessera goes through its whole life over HTTP", async () => {
 
         // A blob url, an upload, and a version built on it.
         const blob = await client.uploadMosaicBlobUrl({ tesseraId });
-        assert.equal(blob.putURL, `${running.server.url}/Mosaic-api/upload/${blob.blobId}`);
+        assert.equal(blob.putURL, `${running.server.url}/mosaic-api/upload/${blob.blobId}`);
 
         const uploaded = await archiveBytes("house-v1");
         await client.upload({ blobId: blob.blobId, body: uploaded });
@@ -302,24 +303,55 @@ test("a state the API answers with is not an error", async () => {
     }
 });
 
-test("the query operation reaches the server and reports that it is not written yet", async () => {
+test("the SPARQL operations reach the server and report that they are not written yet", async () => {
     const running = await started();
+    const ids = { tesseraId: randomUUID(), versionId: randomUUID() };
+    const notWritten = (error: unknown) => {
+        assert.ok(error instanceof ApiError);
+        assert.equal(error.status, 501);
+        return true;
+    };
 
     try {
-        await assert.rejects(
-            () => running.client.query({
-                tesseraId: randomUUID(), versionId: randomUUID(),
-                path: "/", provenance: false, expandChildren: false, expandChildrenRecursive: false,
-            }),
-            (error: unknown) => {
-                assert.ok(error instanceof ApiError);
-                assert.equal(error.status, 501);
-                return true;
-            },
-        );
+        await assert.rejects(() => running.client.sparqlQuery({ ...ids, query: "ASK { ?s ?p ?o }" }), notWritten);
+        await assert.rejects(() => running.client.sparqlQueryPost({ ...ids, body: "ASK { ?s ?p ?o }" }), notWritten);
     } finally {
         await stopped(running);
     }
+});
+
+test("the SPARQL client sends a query the way the protocol says to", async () => {
+    const sent: Array<{ url: URL; init: RequestInit }> = [];
+    const fetch = (async (url: string, init: RequestInit) => {
+        sent.push({ url: new URL(url), init });
+        return new Response("{\"head\":{},\"boolean\":true}", {
+            status: 200, headers: { "content-type": "application/sparql-results+json" },
+        });
+    }) as typeof globalThis.fetch;
+    const client = new MosaicApiClient("http://example.invalid", { fetch });
+    const ids = { tesseraId: "t", versionId: "v" };
+    const graphs = { defaultGraphUri: ["urn:a", "urn:b"], namedGraphUri: ["urn:c"] };
+
+    const answer = await client.sparqlQuery({ ...ids, ...graphs, query: "ASK { ?s ?p ?o }", accept: "application/sparql-results+json" });
+    await client.sparqlQueryPost({ ...ids, ...graphs, body: "SELECT * { ?s ?p ?o }" });
+
+    const [get, post] = sent;
+    assert.equal(get!.url.pathname, "/mosaic-api/tesserae/t/versions/v/sparql");
+    assert.equal(get!.url.searchParams.get("query"), "ASK { ?s ?p ?o }");
+    // Repeated, not comma-joined: a graph IRI may itself hold a comma.
+    assert.deepEqual(get!.url.searchParams.getAll("default-graph-uri"), ["urn:a", "urn:b"]);
+    assert.deepEqual(get!.url.searchParams.getAll("named-graph-uri"), ["urn:c"]);
+    assert.deepEqual(get!.init.headers, { accept: "application/sparql-results+json" });
+
+    assert.equal(post!.init.method, "POST");
+    assert.equal(post!.init.body, "SELECT * { ?s ?p ?o }");
+    assert.deepEqual(post!.init.headers, { "content-type": "application/sparql-query" });
+    assert.equal(post!.url.searchParams.has("query"), false);
+    assert.deepEqual(post!.url.searchParams.getAll("default-graph-uri"), ["urn:a", "urn:b"]);
+
+    // Which format came back is part of the answer.
+    assert.equal(answer.contentType, "application/sparql-results+json");
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(answer.bytes)), { head: {}, boolean: true });
 });
 
 test("a client pointed at nothing fails to connect rather than hanging", async () => {
@@ -473,7 +505,7 @@ test("the server says how many nodes it built, and which were not there", async 
 
         // The headers carry it, so the answer itself stays a plain stream of bytes.
         const response = await fetch(
-            `${running.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
+            `${running.server.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=glb`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -507,7 +539,7 @@ test("an empty request and an unknown format are refused with a reason", async (
         );
 
         const response = await fetch(
-            `${running.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=obj`,
+            `${running.server.url}/mosaic-api/tesserae/${tesseraId}/versions/${versionId}/nodes?format=obj`,
             { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ nodes: [WALL_FRONT] }) });
 
         assert.equal(response.status, 400);

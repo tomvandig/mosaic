@@ -90,6 +90,21 @@ fs.writeFileSync(path.join(outputDir, "MosaicApiTypes.ts"), types);
 
 // --- routes ----------------------------------------------------------------
 const METHODS = ["get", "put", "post", "delete", "patch"];
+
+/**
+ * An operation's parameters, with the ones its path declares first. A parameter that a model
+ * spreads into several operations is emitted once under components/parameters and referenced,
+ * so references are followed here.
+ */
+function parametersOf(operations, operation) {
+    return [...(operations.parameters ?? []), ...(operation.parameters ?? [])].map(parameter => {
+        if (!parameter.$ref) return parameter;
+        const name = parameter.$ref.replace("#/components/parameters/", "");
+        const resolved = document.components?.parameters?.[name];
+        if (!resolved) throw new Error(`Unresolved parameter reference ${parameter.$ref}`);
+        return resolved;
+    });
+}
 const routes = [];
 
 for (const [template, operations] of Object.entries(document.paths ?? {})) {
@@ -97,7 +112,7 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
         const operation = operations[method];
         if (!operation) continue;
 
-        const parameters = [...(operations.parameters ?? []), ...(operation.parameters ?? [])];
+        const parameters = parametersOf(operations, operation);
         routes.push({
             operationId: operation.operationId,
             method: method.toUpperCase(),
@@ -148,6 +163,11 @@ function methodName(operationId) {
     return withoutNamespace.replace(/_(\w)/g, (_, letter) => letter.toUpperCase());
 }
 
+/** A wire name as a TypeScript field: `default-graph-uri` -> `defaultGraphUri`. */
+function fieldName(name) {
+    return name.replace(/-(\w)/g, (_, letter) => letter.toUpperCase());
+}
+
 /** The TypeScript type for a schema the spec points at. */
 function typeOf(schema) {
     if (!schema) return "void";
@@ -167,10 +187,11 @@ function typeOf(schema) {
 function bodyOf(operation) {
     const content = operation.requestBody?.content ?? {};
     const json = content["application/json"];
-    if (json) return { type: typeOf(json.schema), binary: false };
+    if (json) return { type: typeOf(json.schema), binary: false, contentType: "application/json" };
 
-    const any = Object.values(content)[0];
-    return any ? { type: typeOf(any.schema), binary: true } : undefined;
+    const [contentType, any] = Object.entries(content)[0] ?? [];
+    // "*/*" is what a plain File body emits: any bytes, so no content type is claimed for them.
+    return any ? { type: typeOf(any.schema), binary: true, contentType: contentType === "*/*" ? undefined : contentType } : undefined;
 }
 
 function responseOf(operation) {
@@ -178,6 +199,10 @@ function responseOf(operation) {
     const content = ok?.content ?? {};
     const json = content["application/json"];
     if (json) return { type: typeOf(json.schema), binary: false };
+
+    // Several media types for one answer is content negotiation: which one came back is part
+    // of the answer, so it is returned alongside the bytes.
+    if (Object.keys(content).length > 1) return { type: "NegotiatedResponse", binary: true, negotiated: true };
 
     const any = Object.values(content)[0];
     if (any) return { type: typeOf(any.schema), binary: true };
@@ -196,15 +221,17 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
         if (usedNames.has(name)) throw new Error(`Two operations both generate the method "${name}"`);
         usedNames.add(name);
 
-        const parameters = [...(operations.parameters ?? []), ...(operation.parameters ?? [])];
+        const parameters = parametersOf(operations, operation);
         const pathParameters = parameters.filter(parameter => parameter.in === "path");
         const queryParameters = parameters.filter(parameter => parameter.in === "query");
+        const headerParameters = parameters.filter(parameter => parameter.in === "header");
         const body = bodyOf(operation);
         const response = responseOf(operation);
 
         const fields = [
             ...pathParameters.map(parameter => `${parameter.name}: ${typeOf(parameter.schema)}`),
-            ...queryParameters.map(parameter => `${parameter.name}${parameter.required ? "" : "?"}: ${typeOf(parameter.schema)}`),
+            ...[...queryParameters, ...headerParameters].map(parameter =>
+                `${fieldName(parameter.name)}${parameter.required ? "" : "?"}: ${typeOf(parameter.schema)}`),
             ...(body ? [`body: ${body.type}`] : []),
         ];
 
@@ -215,7 +242,10 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
             template,
             fields,
             pathParameters: pathParameters.map(parameter => parameter.name),
-            queryParameters: queryParameters.map(parameter => ({ name: parameter.name, required: !!parameter.required })),
+            queryParameters: queryParameters.map(parameter => ({
+                name: parameter.name, field: fieldName(parameter.name), required: !!parameter.required, array: parameter.schema?.type === "array",
+            })),
+            headerParameters: headerParameters.map(parameter => ({ name: parameter.name, field: fieldName(parameter.name), required: !!parameter.required })),
             body,
             response,
         });
@@ -239,21 +269,33 @@ function methodSource(method) {
         ? `
         const query = new URLSearchParams();
 ` +
-          method.queryParameters.map(parameter => parameter.required
-              ? `        query.set("${parameter.name}", String(params.${parameter.name}));`
-              : `        if (params.${parameter.name} !== undefined) query.set("${parameter.name}", String(params.${parameter.name}));`).join("\n") +
+          method.queryParameters.map(parameter => {
+              // An array is sent as the parameter repeated, which is what explode means.
+              const set = parameter.array
+                  ? `for (const value of params.${parameter.field}) query.append("${parameter.name}", String(value));`
+                  : `query.set("${parameter.name}", String(params.${parameter.field}));`;
+              return parameter.required
+                  ? `        ${set}`
+                  : `        if (params.${parameter.field} !== undefined) ${set}`;
+          }).join("\n") +
           `
         const search = query.size > 0 ? \`?\${query}\` : "";`
         : `
         const search = "";`;
 
-    const init = method.body
-        ? (method.body.binary
-            ? `, body: params.body`
-            : `, body: JSON.stringify(params.body), headers: { "content-type": "application/json" }`)
-        : "";
+    const headers = [
+        ...(method.body?.contentType ? [`"content-type": "${method.body.contentType}"`] : []),
+        ...method.headerParameters.map(parameter => parameter.required
+            ? `"${parameter.name}": params.${parameter.field}`
+            : `...(params.${parameter.field} !== undefined ? { "${parameter.name}": params.${parameter.field} } : {})`),
+    ];
+    const init =
+        (method.body ? (method.body.binary ? `, body: params.body` : `, body: JSON.stringify(params.body)`) : "") +
+        (headers.length > 0 ? `, headers: { ${headers.join(", ")} }` : "");
 
-    const read = method.response.binary
+    const read = method.response.negotiated
+        ? `return { contentType: response.headers.get("content-type") ?? "", bytes: new Uint8Array(await response.arrayBuffer()) };`
+        : method.response.binary
         ? "return new Uint8Array(await response.arrayBuffer()) as " + method.response.type + ";"
         : method.response.type === "void"
             ? "await response.text();"
@@ -294,6 +336,12 @@ async function failOnError(response: Response): Promise<void> {
     }
 
     throw new ApiError(response.status, message || \`\${response.status} from the server\`);
+}
+
+/** An answer whose media type was negotiated, with the type the server chose. */
+export interface NegotiatedResponse {
+    contentType: string;
+    bytes: Uint8Array;
 }
 
 async function readJson<T>(response: Response): Promise<T> {

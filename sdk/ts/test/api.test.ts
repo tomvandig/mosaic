@@ -54,10 +54,10 @@ async function archiveBytes(name: string): Promise<Buffer> {
 /** Creates a tessera and uploads an archive into a blob for it. */
 async function tesseraWithBlob(api: Awaited<ReturnType<typeof withServer>>, example = "house-v1") {
     const tesseraId = randomUUID();
-    await api.send("POST", "/Mosaic-api/tesserae", { id: tesseraId, name: "House" });
+    await api.send("POST", "/mosaic-api/tesserae", { id: tesseraId, name: "House" });
 
-    const reserved = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/upload-Mosaic-blob-url`);
-    await api.put(`/Mosaic-api/upload/${reserved.body.blobId}`, await archiveBytes(example));
+    const reserved = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/upload-mosaic-blob-url`);
+    await api.put(`/mosaic-api/upload/${reserved.body.blobId}`, await archiveBytes(example));
 
     return { tesseraId, blobId: reserved.body.blobId as string, putURL: reserved.body.putURL as string };
 }
@@ -67,27 +67,47 @@ async function tesseraWithBlob(api: Awaited<ReturnType<typeof withServer>>, exam
 // ---------------------------------------------------------------------------
 
 test("every operation in the spec has a handler", () => {
-    // The query API is the one the spec has and this does not answer.
+    // The SPARQL and types operations have handlers too; they answer 501 until written.
     assert.deepEqual(unimplementedOperations(), []);
-    assert.equal(API_ROUTES.length, 12);
+    assert.equal(API_ROUTES.length, 14);
     assert.ok(API_ROUTES.some(route => route.operationId === "TesseraVersionRoutes_fetchNodes"));
 });
 
 test("the routes come from the spec, braces and all", () => {
     const byId = Object.fromEntries(API_ROUTES.map(route => [route.operationId, route]));
 
-    assert.equal(byId.Tesserae_tesserae!.path, "/Mosaic-api/tesserae");
+    assert.equal(byId.Tesserae_tesserae!.path, "/mosaic-api/tesserae");
     assert.equal(byId.Tesserae_tesserae!.method, "GET");
     assert.deepEqual(byId.TesseraVersionRoutes_get_tessera_version!.pathParameters, ["tesseraId", "versionId"]);
     assert.deepEqual(byId.TesseraVersionRoutes_tessera_Mosaic!.queryParameters, [{ name: "downloadType", required: true }]);
     assert.equal(byId.Tesserae_createTessera!.hasBody, true);
 });
 
+test("the SPARQL operations follow the protocol's shape", () => {
+    const byId = Object.fromEntries(API_ROUTES.map(route => [route.operationId, route]));
+    const get = byId.TesseraVersionRoutes_sparqlQuery!;
+    const post = byId.TesseraVersionRoutes_sparqlQueryPost!;
+
+    assert.equal(get.path, "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql");
+    assert.equal(post.path, get.path);
+    assert.equal(get.method, "GET");
+    assert.equal(post.method, "POST");
+    // The dataset parameters are shared, and come through the reference they are emitted as.
+    assert.deepEqual(get.queryParameters, [
+        { name: "default-graph-uri", required: false },
+        { name: "named-graph-uri", required: false },
+        { name: "query", required: true },
+    ]);
+    assert.deepEqual(post.queryParameters, get.queryParameters.slice(0, 2));
+    assert.equal(get.hasBody, false);
+    assert.equal(post.hasBody, true);
+});
+
 test("an unknown path is a 404 and a wrong method is a 405", async () => {
     const api = await withServer();
     try {
-        assert.equal((await api.get("/Mosaic-api/nope")).status, 404);
-        assert.equal((await api.send("DELETE", "/Mosaic-api/tesserae")).status, 405);
+        assert.equal((await api.get("/mosaic-api/nope")).status, 404);
+        assert.equal((await api.send("DELETE", "/mosaic-api/tesserae")).status, 405);
     } finally {
         await api.server.close();
         fs.rmSync(api.dir, { recursive: true, force: true });
@@ -101,19 +121,19 @@ test("an unknown path is a 404 and a wrong method is a 405", async () => {
 test("a tessera can be created, listed, fetched and deleted", async () => {
     const api = await withServer();
     try {
-        assert.deepEqual((await api.get("/Mosaic-api/tesserae")).body, []);
+        assert.deepEqual((await api.get("/mosaic-api/tesserae")).body, []);
 
         const id = randomUUID();
-        assert.equal((await api.send("POST", "/Mosaic-api/tesserae", { id, name: "House" })).status, 200);
+        assert.equal((await api.send("POST", "/mosaic-api/tesserae", { id, name: "House" })).status, 200);
 
-        const listed = await api.get("/Mosaic-api/tesserae");
+        const listed = await api.get("/mosaic-api/tesserae");
         assert.deepEqual(listed.body, [{ id, name: "House", latestVersion: "" }]);
 
-        const details = await api.get(`/Mosaic-api/tesserae/${id}`);
+        const details = await api.get(`/mosaic-api/tesserae/${id}`);
         assert.deepEqual(details.body, { id, name: "House", history: [] });
 
-        assert.equal((await api.send("DELETE", `/Mosaic-api/tesserae/${id}`)).status, 200);
-        assert.deepEqual((await api.get("/Mosaic-api/tesserae")).body, []);
+        assert.equal((await api.send("DELETE", `/mosaic-api/tesserae/${id}`)).status, 200);
+        assert.deepEqual((await api.get("/mosaic-api/tesserae")).body, []);
     } finally {
         await api.server.close();
         fs.rmSync(api.dir, { recursive: true, force: true });
@@ -123,13 +143,13 @@ test("a tessera can be created, listed, fetched and deleted", async () => {
 test("a tessera that is not there is a 404, and a duplicate is a 400", async () => {
     const api = await withServer();
     try {
-        const missing = await api.get(`/Mosaic-api/tesserae/${randomUUID()}`);
+        const missing = await api.get(`/mosaic-api/tesserae/${randomUUID()}`);
         assert.equal(missing.status, 404);
         assert.match(missing.body.error, /No tessera/);
 
         const id = randomUUID();
-        await api.send("POST", "/Mosaic-api/tesserae", { id, name: "One" });
-        const again = await api.send("POST", "/Mosaic-api/tesserae", { id, name: "Two" });
+        await api.send("POST", "/mosaic-api/tesserae", { id, name: "One" });
+        const again = await api.send("POST", "/mosaic-api/tesserae", { id, name: "Two" });
         assert.equal(again.status, 400);
         assert.match(again.body.error, /already exists/);
     } finally {
@@ -146,10 +166,10 @@ test("a blob url is handed out, uploaded to, and read back byte for byte", async
     const api = await withServer();
     try {
         const { blobId, putURL } = await tesseraWithBlob(api);
-        assert.equal(putURL, `${api.server.url}/Mosaic-api/upload/${blobId}`);
+        assert.equal(putURL, `${api.server.url}/mosaic-api/upload/${blobId}`);
 
         const uploaded = await archiveBytes("house-v1");
-        const downloaded = await api.bytes(`/Mosaic-api/download/${blobId}`);
+        const downloaded = await api.bytes(`/mosaic-api/download/${blobId}`);
 
         assert.equal(downloaded.status, 200);
         assert.deepEqual([...downloaded.buffer], [...uploaded], "what came back is what went up");
@@ -166,7 +186,7 @@ test("a blob url is handed out, uploaded to, and read back byte for byte", async
 test("a blob nobody uploaded is a 404", async () => {
     const api = await withServer();
     try {
-        assert.equal((await api.bytes(`/Mosaic-api/download/${randomUUID()}`)).status, 404);
+        assert.equal((await api.bytes(`/mosaic-api/download/${randomUUID()}`)).status, 404);
     } finally {
         await api.server.close();
         fs.rmSync(api.dir, { recursive: true, force: true });
@@ -183,7 +203,7 @@ test("a version is created from an uploaded blob, and shows up in the tessera's 
         const { tesseraId, blobId } = await tesseraWithBlob(api);
         const versionId = randomUUID();
 
-        const created = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const created = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: versionId, previousTesseraVersionId: "", blobId,
         });
 
@@ -192,15 +212,15 @@ test("a version is created from an uploaded blob, and shows up in the tessera's 
         assert.deepEqual(created.body.validationErrors, []);
 
         // The provenance came off the archive's newest section.
-        const version = await api.get(`/Mosaic-api/tesserae/${tesseraId}/versions/${versionId}`);
+        const version = await api.get(`/mosaic-api/tesserae/${tesseraId}/versions/${versionId}`);
         assert.equal(version.body.tesseraId, tesseraId);
         assert.equal(version.body.provenance.author, "ada@example.com");
         assert.equal(version.body.provenance.message, "Initial two walls");
 
-        const details = await api.get(`/Mosaic-api/tesserae/${tesseraId}`);
+        const details = await api.get(`/mosaic-api/tesserae/${tesseraId}`);
         assert.equal(details.body.history.length, 1);
 
-        const listed = await api.get("/Mosaic-api/tesserae");
+        const listed = await api.get("/mosaic-api/tesserae");
         assert.equal(listed.body[0].latestVersion, versionId);
     } finally {
         await api.server.close();
@@ -213,10 +233,10 @@ test("a version that does not follow the latest one is OUT_OF_DATE", async () =>
     try {
         const { tesseraId, blobId } = await tesseraWithBlob(api);
         const first = randomUUID();
-        await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, { id: first, previousTesseraVersionId: "", blobId });
+        await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, { id: first, previousTesseraVersionId: "", blobId });
 
         // Claiming to follow nothing, when the tessera is already on a version.
-        const stale = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const stale = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: randomUUID(), previousTesseraVersionId: "", blobId,
         });
 
@@ -224,7 +244,7 @@ test("a version that does not follow the latest one is OUT_OF_DATE", async () =>
         assert.match(stale.body.validationErrors[0], new RegExp(`on version ${first}`));
 
         // Following the one it is actually on works.
-        const good = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const good = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: randomUUID(), previousTesseraVersionId: first, blobId,
         });
         assert.equal(good.body.state, CreateTesseraVersionResponseState.Ok);
@@ -238,12 +258,12 @@ test("a blob that is not an archive is a VALIDATION_ERROR, not a crash", async (
     const api = await withServer();
     try {
         const tesseraId = randomUUID();
-        await api.send("POST", "/Mosaic-api/tesserae", { id: tesseraId, name: "House" });
+        await api.send("POST", "/mosaic-api/tesserae", { id: tesseraId, name: "House" });
 
-        const reserved = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/upload-Mosaic-blob-url`);
-        await api.put(`/Mosaic-api/upload/${reserved.body.blobId}`, Buffer.from("not an archive"));
+        const reserved = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/upload-mosaic-blob-url`);
+        await api.put(`/mosaic-api/upload/${reserved.body.blobId}`, Buffer.from("not an archive"));
 
-        const created = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const created = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: randomUUID(), previousTesseraVersionId: "", blobId: reserved.body.blobId,
         });
 
@@ -259,9 +279,9 @@ test("a version naming a blob nobody uploaded is a VALIDATION_ERROR", async () =
     const api = await withServer();
     try {
         const tesseraId = randomUUID();
-        await api.send("POST", "/Mosaic-api/tesserae", { id: tesseraId, name: "House" });
+        await api.send("POST", "/mosaic-api/tesserae", { id: tesseraId, name: "House" });
 
-        const created = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const created = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: randomUUID(), previousTesseraVersionId: "", blobId: randomUUID(),
         });
 
@@ -280,17 +300,17 @@ test("a version naming a blob nobody uploaded is a VALIDATION_ERROR", async () =
 /** A tessera with two versions: house-v1, then house-v2 on top of it. */
 async function tesseraWithHistory(api: Awaited<ReturnType<typeof withServer>>) {
     const tesseraId = randomUUID();
-    await api.send("POST", "/Mosaic-api/tesserae", { id: tesseraId, name: "House" });
+    await api.send("POST", "/mosaic-api/tesserae", { id: tesseraId, name: "House" });
 
     const versions: string[] = [];
     let previous = "";
 
     for (const example of ["house-v1", "house-v2"]) {
-        const reserved = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/upload-Mosaic-blob-url`);
-        await api.put(`/Mosaic-api/upload/${reserved.body.blobId}`, await archiveBytes(example));
+        const reserved = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/upload-mosaic-blob-url`);
+        await api.put(`/mosaic-api/upload/${reserved.body.blobId}`, await archiveBytes(example));
 
         const versionId = randomUUID();
-        const created = await api.send("POST", `/Mosaic-api/tesserae/${tesseraId}/versions`, {
+        const created = await api.send("POST", `/mosaic-api/tesserae/${tesseraId}/versions`, {
             id: versionId, previousTesseraVersionId: previous, blobId: reserved.body.blobId,
         });
         assert.equal(created.body.state, CreateTesseraVersionResponseState.Ok, JSON.stringify(created.body));
@@ -308,9 +328,9 @@ test("downloading just this version rebuilds what was published, out of the data
         const { tesseraId, versions } = await tesseraWithHistory(api);
 
         const asked = await api.send("PUT",
-            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/download-Mosaic?downloadType=${MosaicFileDownloadType.JustThisVersion}`);
+            `/mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/download-mosaic?downloadType=${MosaicFileDownloadType.JustThisVersion}`);
         assert.equal(asked.status, 200);
-        assert.match(asked.body.blobUrl, /\/Mosaic-api\/download\//);
+        assert.match(asked.body.blobUrl, /\/mosaic-api\/download\//);
 
         // The answer is built from what the database holds, not handed back from the blob
         // the version arrived in, so it matches in content rather than byte for byte.
@@ -360,7 +380,7 @@ test("a version is still readable once its blob is gone", async () => {
         await api.server.store.forgetBlobs();
 
         const asked = await api.send("PUT",
-            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-Mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryIntact}`);
+            `/mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryIntact}`);
         assert.equal(asked.status, 200);
 
         const file = await LoadMosaicFile((await api.bytes(asked.body.blobUrl.replace(api.server.url, ""))).buffer);
@@ -378,7 +398,7 @@ test("nodes can be fetched once the blobs are gone", async () => {
         await api.server.store.forgetBlobs();
 
         const response = await fetch(
-            `${api.server.url}/Mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/nodes?format=tsr`,
+            `${api.server.url}/mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/nodes?format=tsr`,
             {
                 method: "POST",
                 headers: { "content-type": "application/json" },
@@ -400,7 +420,7 @@ test("downloading the whole history intact keeps every section", async () => {
         const { tesseraId, versions } = await tesseraWithHistory(api);
 
         const asked = await api.send("PUT",
-            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-Mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryIntact}`);
+            `/mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryIntact}`);
         const file = await LoadMosaicFile((await api.bytes(asked.body.blobUrl.replace(api.server.url, ""))).buffer);
 
         // house-v1 has one section and house-v2 has two, all kept.
@@ -417,7 +437,7 @@ test("downloading the whole history condensed drops what is no longer leading", 
         const { tesseraId, versions } = await tesseraWithHistory(api);
 
         const asked = await api.send("PUT",
-            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-Mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryCondensed}`);
+            `/mosaic-api/tesserae/${tesseraId}/versions/${versions[1]}/download-mosaic?downloadType=${MosaicFileDownloadType.WholeTesseraHistoryCondensed}`);
         const file = await LoadMosaicFile((await api.bytes(asked.body.blobUrl.replace(api.server.url, ""))).buffer);
 
         const walls = file.serializedComponents.get("acme::geometry::wall") ?? [];
@@ -434,7 +454,7 @@ test("an unknown downloadType is a 400 that says what is allowed", async () => {
         const { tesseraId, versions } = await tesseraWithHistory(api);
 
         const asked = await api.send("PUT",
-            `/Mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/download-Mosaic?downloadType=sideways`);
+            `/mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/download-mosaic?downloadType=sideways`);
 
         assert.equal(asked.status, 400);
         assert.match(asked.body.error, /Unknown downloadType "sideways"/);
@@ -469,14 +489,21 @@ test("a version's archive is queryable in the same database it is served from", 
     }
 });
 
-test("the query API answers 501 until it is written", async () => {
+test("the SPARQL endpoint answers 501 until it is written, both ways a query can come", async () => {
     const api = await withServer();
     try {
         const { tesseraId, versions } = await tesseraWithHistory(api);
-        const asked = await api.get(`/Mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/query?path=/&provenance=false&expandChildren=false&expandChildrenRecursive=false`);
+        const endpoint = `/mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/sparql`;
 
+        const asked = await api.get(`${endpoint}?query=${encodeURIComponent("ASK { ?s ?p ?o }")}`);
         assert.equal(asked.status, 501);
         assert.match(asked.body.error, /not implemented/);
+
+        const posted = await fetch(`${api.server.url}${endpoint}`, {
+            method: "POST", headers: { "content-type": "application/sparql-query" }, body: "ASK { ?s ?p ?o }",
+        });
+        assert.equal(posted.status, 501);
+        assert.match((await posted.json() as { error: string }).error, /not implemented/);
     } finally {
         await api.server.close();
         fs.rmSync(api.dir, { recursive: true, force: true });

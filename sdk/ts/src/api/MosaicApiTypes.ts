@@ -45,20 +45,6 @@ export interface MosaicProvenanceData {
     timestamp:   string;
 }
 
-export interface MosaicQueryApiNodeComponent {
-    name:  string;
-    type:  string;
-    value: any;
-}
-
-export interface MosaicQueryApiNodeResponse {
-    components: MosaicQueryApiNodeComponent[];
-}
-
-export interface MosaicQueryApiResponse {
-    nodes: MosaicQueryApiNodeResponse[];
-}
-
 export enum NodeFetchFormat {
     Glb = "glb",
     Tsr = "tsr",
@@ -69,6 +55,13 @@ export interface NodeFetchRequest {
     compose?:         boolean;
     includeChildren?: boolean;
     nodes:            string[];
+}
+
+/**
+ * The query could not be parsed, or the request was not a valid protocol request.
+ */
+export interface SparqlQueryError {
+    error: string;
 }
 
 export interface TesseraDetails {

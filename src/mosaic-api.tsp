@@ -160,8 +160,25 @@ namespace MosaicApi {
             @body request: NodeFetchRequest
           ): File;
 
-          @route("/query")
-          op query is MosaicQueryApi.query;
+          // A SPARQL 1.1 Protocol query service over this version: one URL, the query sent
+          // either way the protocol allows, the results negotiated through Accept.
+          // https://www.w3.org/TR/sparql11-protocol/#query-operation
+          @route("/sparql")
+          @get op sparqlQuery(
+            @path tesseraId: uuid,
+            @path versionId: uuid,
+            ...SparqlQueryParameters,
+            @query query: string,
+          ): SparqlQueryResult | SparqlQueryError;
+
+          @route("/sparql")
+          @post op sparqlQueryPost(
+            @path tesseraId: uuid,
+            @path versionId: uuid,
+            ...SparqlQueryParameters,
+            @header contentType: "application/sparql-query",
+            @body query: string,
+          ): SparqlQueryResult | SparqlQueryError;
 
           @route("/types")
           @get op get_types(@path tesseraId: uuid, @path versionId: uuid): unknown[];
@@ -171,30 +188,43 @@ namespace MosaicApi {
   }
 }
 
-model MosaicQueryApiNodeComponent
+// --- SPARQL 1.1 Protocol ---------------------------------------------------
+
+/** What both ways of sending a query share: the dataset it runs against, and the results asked for. */
+model SparqlQueryParameters
 {
-  name: string;
-  type: string;
-  value: unknown;
+  /** The graphs that make up the default graph. Overrides FROM in the query. */
+  @query(#{ explode: true }) `default-graph-uri`?: string[];
+  /** The named graphs the query can see. Overrides FROM NAMED in the query. */
+  @query(#{ explode: true }) `named-graph-uri`?: string[];
+  /** Which result format to answer with, as media types with optional q-values. */
+  @header accept?: string;
 }
 
-model MosaicQueryApiNodeResponse
+/**
+ * SELECT and ASK answer with SPARQL results, CONSTRUCT and DESCRIBE with RDF.
+ * Which of these a reply is in follows from the query and the Accept header.
+ */
+alias SparqlResultMediaType =
+  | "application/sparql-results+json"
+  | "application/sparql-results+xml"
+  | "text/csv"
+  | "text/tab-separated-values"
+  | "text/turtle"
+  | "application/n-triples"
+  | "application/ld+json"
+  | "application/rdf+xml";
+
+model SparqlQueryResult
 {
-  components: MosaicQueryApiNodeComponent[];
+  @header contentType: SparqlResultMediaType;
+  @body results: bytes;
 }
 
-model MosaicQueryApiResponse
+/** The query could not be parsed, or the request was not a valid protocol request. */
+@error
+model SparqlQueryError
 {
-  nodes: MosaicQueryApiNodeResponse[];
-}
-
-interface MosaicQueryApi {
-  @get op query(
-    @path tesseraId: uuid,
-    @path versionId: uuid,
-    @query path: string;
-    @query provenance: boolean;
-    @query expandChildren: boolean;
-    @query expandChildrenRecursive: boolean;
-  ): MosaicQueryApiResponse;
+  @statusCode _: 400;
+  error: string;
 }
