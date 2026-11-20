@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { API_ROUTES, type ApiRoute } from "./MosaicApiRoutes.ts";
 import {
-    MosaicFileDownloadType, NodeFetchFormat,
+    MosaicFileDownloadType, NodeFetchFormat, NodePathFormat,
     type CreateTesseraCommand, type CreateTesseraVersionCommand, type NodeFetchRequest,
 } from "./MosaicApiTypes.ts";
 import { ApiStore, BadRequest, NotFound, blobResponse } from "./Store.ts";
@@ -168,6 +168,22 @@ const HANDLERS: Record<string, Handler> = {
     async TesseraVersionRoutes_get_types() {
         return json({ error: "Listing a version's types is not implemented yet" }, 501);
     },
+
+    async TesseraVersionRoutes_nodeAtPath({ params }) {
+        // The format is checked already, so a client learns a bad extension for what it is
+        // rather than from the 501 that any path gets for now.
+        const supported = Object.values(NodePathFormat) as string[];
+        const extension = /\.([^./]+)$/.exec(params.path!)?.[1];
+        if (extension === undefined || !supported.includes(extension)) {
+            return json({
+                error: extension === undefined
+                    ? `A node path ends in the format to answer in, one of ${supported.map(format => `.${format}`).join(", ")}`
+                    : `".${extension}" is not a format this server answers in`,
+                supported,
+            }, 400);
+        }
+        return json({ error: "Fetching a node by path is not implemented yet" }, 501);
+    },
 };
 
 /** The operations in the spec that nothing here answers. */
@@ -175,12 +191,16 @@ export function unimplementedOperations(): string[] {
     return API_ROUTES.filter(route => HANDLERS[route.operationId] === undefined).map(route => route.operationId);
 }
 
-/** Turns a path template into something that can be matched, keeping the parameter names. */
+/**
+ * Turns a path template into something that can be matched, keeping the parameter names. A
+ * reserved parameter ({+name} in the spec) spans "/", so it takes the rest of the path.
+ */
 function matcher(route: ApiRoute): { pattern: RegExp; names: string[] } {
     const names: string[] = [];
+    const reserved: readonly string[] = route.reservedPathParameters;
     const pattern = route.path.replace(/\{(\w+)\}/g, (_, name: string) => {
         names.push(name);
-        return "([^/]+)";
+        return reserved.includes(name) ? "(.+)" : "([^/]+)";
     });
 
     return { pattern: new RegExp(`^${pattern}$`), names };

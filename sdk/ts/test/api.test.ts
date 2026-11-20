@@ -67,9 +67,9 @@ async function tesseraWithBlob(api: Awaited<ReturnType<typeof withServer>>, exam
 // ---------------------------------------------------------------------------
 
 test("every operation in the spec has a handler", () => {
-    // The SPARQL and types operations have handlers too; they answer 501 until written.
+    // The SPARQL, types and node-by-path operations have handlers too; they answer 501 until written.
     assert.deepEqual(unimplementedOperations(), []);
-    assert.equal(API_ROUTES.length, 14);
+    assert.equal(API_ROUTES.length, 15);
     assert.ok(API_ROUTES.some(route => route.operationId === "TesseraVersionRoutes_fetchNodes"));
 });
 
@@ -101,6 +101,47 @@ test("the SPARQL operations follow the protocol's shape", () => {
     assert.deepEqual(post.queryParameters, get.queryParameters.slice(0, 2));
     assert.equal(get.hasBody, false);
     assert.equal(post.hasBody, true);
+});
+
+test("the node route takes a path of any number of segments", () => {
+    const route = API_ROUTES.find(entry => entry.operationId === "TesseraVersionRoutes_nodeAtPath")!;
+
+    assert.equal(route.path, "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/{path}");
+    assert.equal(route.method, "GET");
+    assert.deepEqual(route.pathParameters, ["tesseraId", "versionId", "path"]);
+    assert.deepEqual(route.reservedPathParameters, ["path"]);
+});
+
+test("a node path of several segments reaches its handler, which reads the format off the extension", async () => {
+    const api = await withServer();
+    try {
+        const { tesseraId, versions } = await tesseraWithHistory(api);
+        const node = `/mosaic-api/tesserae/${tesseraId}/versions/${versions[0]}/node`;
+
+        // The shape a 3D Tiles content template produces, extension and all.
+        for (const route of [`${node}/content/3_5_2.glb`, `${node}/root/parent/child.gltf`, `${node}/root.glb`]) {
+            const asked = await api.get(route);
+            assert.equal(asked.status, 501, route);
+            assert.match(asked.body.error, /not implemented/);
+        }
+
+        // The extension is the format, so leaving it out or naming another is the client's mistake.
+        for (const [route, said] of [[`${node}/root/parent`, /ends in the format/], [`${node}/root.obj`, /"\.obj" is not a format/]] as const) {
+            const asked = await api.get(route);
+            assert.equal(asked.status, 400, route);
+            assert.match(asked.body.error, said);
+            assert.deepEqual([...asked.body.supported].sort(), ["glb", "gltf"]);
+        }
+
+        // A dot in an earlier segment is part of a name, not an extension.
+        assert.equal((await api.get(`${node}/v1.2/child`)).status, 400);
+
+        // Nothing after /node is not a path.
+        assert.equal((await api.get(`${node}/`)).status, 404);
+    } finally {
+        await api.server.close();
+        fs.rmSync(api.dir, { recursive: true, force: true });
+    }
 });
 
 test("an unknown path is a 404 and a wrong method is a 405", async () => {

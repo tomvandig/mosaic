@@ -371,6 +371,7 @@ PUT    /mosaic-api/download/{blobId}
 POST   /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes
 GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql     (501)
 POST   /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql     (501)
+GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/{+path} (501)
 GET    /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/types      (501)
 ```
 
@@ -512,8 +513,8 @@ it. Compression is at the fastest level deliberately; on a body this size the sl
 hundreds of milliseconds to find another few percent, which is the wrong trade for something a
 browser is waiting on.
 
-Two things to know. **The SPARQL endpoint and `types` are not implemented** — they answer 501,
-deliberately, and are the only operations with no real handler. And DuckDB takes an exclusive lock on the database file, so
+Two things to know. **The SPARQL endpoint, `types`, and nodes by path are not implemented**
+— they answer 501, deliberately, and are the only operations with no real handler. And DuckDB takes an exclusive lock on the database file, so
 `mosaic compose scene.duckdb` will not run while a server is holding it; stop the server first.
 
 ## Edges

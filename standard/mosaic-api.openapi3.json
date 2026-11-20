@@ -262,6 +262,71 @@
         }
       }
     },
+    "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/{path}": {
+      "get": {
+        "operationId": "TesseraVersionRoutes_nodeAtPath",
+        "parameters": [
+          {
+            "name": "tesseraId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "name": "versionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/uuid"
+            }
+          },
+          {
+            "$ref": "#/components/parameters/NodePathParameter"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The node the path names and everything beneath it, as a glTF document (\".gltf\").",
+            "content": {
+              "model/gltf+json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "model/gltf-binary": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The path has no extension, or one that is not a NodePathFormat this server answers in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodePathFormatUnknown"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No node in the version answers to the path.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodePathNotFound"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/nodes": {
       "post": {
         "operationId": "TesseraVersionRoutes_fetchNodes",
@@ -598,6 +663,16 @@
   },
   "components": {
     "parameters": {
+      "NodePathParameter": {
+        "name": "path",
+        "in": "path",
+        "required": true,
+        "description": "One or more segments separated by \"/\", each naming a node beneath the one before, from a\nroot of the version, and ending in the format to answer in: \"root/parent/child.glb\".\nA segment matches a node by id or by name. The extension is not part of the last name,\nand is required: it is a NodePathFormat.",
+        "schema": {
+          "type": "string"
+        },
+        "x-mosaic-reserved-expansion": true
+      },
       "SparqlQueryParameters.accept": {
         "name": "accept",
         "in": "header",
@@ -775,6 +850,46 @@
             "type": "boolean"
           }
         }
+      },
+      "NodePathFormat": {
+        "type": "string",
+        "enum": [
+          "gltf",
+          "glb"
+        ],
+        "description": "The extensions a node path can end in, each the format it answers with. More can be added;\none the server does not know is answered with NodePathFormatUnknown."
+      },
+      "NodePathFormatUnknown": {
+        "type": "object",
+        "required": [
+          "error",
+          "supported"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "supported": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NodePathFormat"
+            },
+            "description": "The extensions this server does answer in."
+          }
+        },
+        "description": "The path has no extension, or one that is not a NodePathFormat this server answers in."
+      },
+      "NodePathNotFound": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "description": "No node in the version answers to the path."
       },
       "SparqlQueryError": {
         "type": "object",

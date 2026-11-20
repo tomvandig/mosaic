@@ -8,6 +8,11 @@ export interface ApiRoute {
     /** The path template, with {braces} around each path parameter. */
     path: string;
     pathParameters: string[];
+    /**
+     * The path parameters that take reserved expansion ({+name} in TypeSpec): they span "/"
+     * and so match more than one segment.
+     */
+    reservedPathParameters: string[];
     queryParameters: Array<{ name: string; required: boolean }>;
     hasBody: boolean;
 }
@@ -21,6 +26,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "blobId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -29,6 +35,7 @@ export const API_ROUTES = [
         "method": "POST",
         "path": "/mosaic-api/tesserae",
         "pathParameters": [],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": true
     },
@@ -37,6 +44,7 @@ export const API_ROUTES = [
         "method": "GET",
         "path": "/mosaic-api/tesserae",
         "pathParameters": [],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -47,6 +55,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "tesseraId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -57,6 +66,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "tesseraId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -67,6 +77,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "tesseraId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -78,6 +89,7 @@ export const API_ROUTES = [
             "tesseraId",
             "versionId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [
             {
                 "name": "format",
@@ -94,6 +106,7 @@ export const API_ROUTES = [
             "tesseraId",
             "versionId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": false
     },
@@ -104,6 +117,22 @@ export const API_ROUTES = [
         "pathParameters": [
             "tesseraId",
             "versionId"
+        ],
+        "reservedPathParameters": [],
+        "queryParameters": [],
+        "hasBody": false
+    },
+    {
+        "operationId": "TesseraVersionRoutes_nodeAtPath",
+        "method": "GET",
+        "path": "/mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/{path}",
+        "pathParameters": [
+            "tesseraId",
+            "versionId",
+            "path"
+        ],
+        "reservedPathParameters": [
+            "path"
         ],
         "queryParameters": [],
         "hasBody": false
@@ -116,6 +145,7 @@ export const API_ROUTES = [
             "tesseraId",
             "versionId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [
             {
                 "name": "default-graph-uri",
@@ -140,6 +170,7 @@ export const API_ROUTES = [
             "tesseraId",
             "versionId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [
             {
                 "name": "default-graph-uri",
@@ -160,6 +191,7 @@ export const API_ROUTES = [
             "tesseraId",
             "versionId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [
             {
                 "name": "downloadType",
@@ -175,6 +207,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "blobId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": true
     },
@@ -185,6 +218,7 @@ export const API_ROUTES = [
         "pathParameters": [
             "tesseraId"
         ],
+        "reservedPathParameters": [],
         "queryParameters": [],
         "hasBody": true
     }

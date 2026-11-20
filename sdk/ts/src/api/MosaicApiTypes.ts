@@ -58,6 +58,34 @@ export interface NodeFetchRequest {
 }
 
 /**
+ * The extensions a node path can end in, each the format it answers with. More can be
+ * added;
+ * one the server does not know is answered with NodePathFormatUnknown.
+ */
+export enum NodePathFormat {
+    Glb = "glb",
+    Gltf = "gltf",
+}
+
+/**
+ * The path has no extension, or one that is not a NodePathFormat this server answers in.
+ */
+export interface NodePathFormatUnknown {
+    error: string;
+    /**
+     * The extensions this server does answer in.
+     */
+    supported: NodePathFormat[];
+}
+
+/**
+ * No node in the version answers to the path.
+ */
+export interface NodePathNotFound {
+    error: string;
+}
+
+/**
  * The query could not be parsed, or the request was not a valid protocol request.
  */
 export interface SparqlQueryError {

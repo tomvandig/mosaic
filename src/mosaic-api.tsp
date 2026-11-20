@@ -1,8 +1,10 @@
 
 import "@typespec/openapi3";
+import "@typespec/openapi";
 import "@typespec/http";
 
 using Http;
+using OpenAPI;
 
 @pattern("</(\\{{0,1}([0-9a-fA-F]){8}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){4}-([0-9a-fA-F]){12}\\}{0,1})[0-9a-zA-Z\\/]+>")
 scalar path extends string;
@@ -180,12 +182,82 @@ namespace MosaicApi {
             @body query: string,
           ): SparqlQueryResult | SparqlQueryError;
 
+          // The part of the version a path names, addressed by the URL alone, so a client that
+          // builds URLs from a template -- a 3D Tiles content template, say -- can reach it.
+          // The extension on the path says which format to answer in.
+          @route("/node/{+path}")
+          @get op nodeAtPath(
+            @path tesseraId: uuid,
+            @path versionId: uuid,
+            ...NodePathParameter,
+          ): NodeAsGltf | NodeAsGlb | NodePathFormatUnknown | NodePathNotFound;
+
           @route("/types")
           @get op get_types(@path tesseraId: uuid, @path versionId: uuid): unknown[];
         }
       }
     }
   }
+}
+
+// --- nodes by path ---------------------------------------------------------
+
+/**
+ * The extensions a node path can end in, each the format it answers with. More can be added;
+ * one the server does not know is answered with NodePathFormatUnknown.
+ */
+enum NodePathFormat
+{
+  gltf,  // model/gltf+json
+  glb,   // model/gltf-binary
+}
+
+model NodePathParameter
+{
+  /**
+   * One or more segments separated by "/", each naming a node beneath the one before, from a
+   * root of the version, and ending in the format to answer in: "root/parent/child.glb".
+   * A segment matches a node by id or by name. The extension is not part of the last name,
+   * and is required: it is a NodePathFormat.
+   */
+  // Reserved expansion, {+path} in the route, so the "/" between segments is sent as it is.
+  // OpenAPI 3 cannot say that of a path parameter, so the extension says it for the
+  // generated client and server, and for anyone else reading the OpenAPI.
+  #suppress "@typespec/openapi3/path-reserved-expansion" "Carried by x-mosaic-reserved-expansion instead"
+  @extension("x-mosaic-reserved-expansion", true)
+  @path path: string;
+}
+
+/** The node the path names and everything beneath it, as a glTF document (".gltf"). */
+model NodeAsGltf
+{
+  @header contentType: "model/gltf+json";
+  @body gltf: bytes;
+}
+
+/** The node the path names and everything beneath it, as a binary glTF (".glb"). */
+model NodeAsGlb
+{
+  @header contentType: "model/gltf-binary";
+  @body glb: bytes;
+}
+
+/** The path has no extension, or one that is not a NodePathFormat this server answers in. */
+@error
+model NodePathFormatUnknown
+{
+  @statusCode _: 400;
+  error: string;
+  /** The extensions this server does answer in. */
+  supported: NodePathFormat[];
+}
+
+/** No node in the version answers to the path. */
+@error
+model NodePathNotFound
+{
+  @statusCode _: 404;
+  error: string;
 }
 
 // --- SPARQL 1.1 Protocol ---------------------------------------------------

@@ -126,7 +126,7 @@ test("the client has a method for every operation in the spec", () => {
     assert.equal(methods.length, API_ROUTES.length);
     for (const name of ["tesserae", "createTessera", "getTessera", "deleteTessera", "uploadMosaicBlobUrl",
         "createTesseraVersion", "getTesseraVersion", "tesseraMosaic", "upload", "download", "fetchNodes",
-        "sparqlQuery", "sparqlQueryPost", "getTypes"]) {
+        "sparqlQuery", "sparqlQueryPost", "getTypes", "nodeAtPath"]) {
         assert.ok(methods.includes(name), `no client method ${name}`);
     }
 });
@@ -352,6 +352,24 @@ test("the SPARQL client sends a query the way the protocol says to", async () =>
     // Which format came back is part of the answer.
     assert.equal(answer.contentType, "application/sparql-results+json");
     assert.deepEqual(JSON.parse(new TextDecoder().decode(answer.bytes)), { head: {}, boolean: true });
+});
+
+test("the node client keeps the slashes of a path and encodes what is between them", async () => {
+    const asked: URL[] = [];
+    const fetch = (async (url: string) => {
+        asked.push(new URL(url));
+        return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "model/gltf-binary" } });
+    }) as typeof globalThis.fetch;
+    const client = new MosaicApiClient("http://example.invalid", { fetch });
+
+    const glb = await client.nodeAtPath({ tesseraId: "t", versionId: "v", path: "content/3_5_2.glb" });
+    await client.nodeAtPath({ tesseraId: "t", versionId: "v", path: "North wing/Wall #1.gltf" });
+
+    // The format is in the answer as well as the URL, since the extension chose it.
+    assert.equal(glb.contentType, "model/gltf-binary");
+    assert.deepEqual([...glb.bytes], [1, 2, 3]);
+    assert.equal(asked[0]!.pathname, "/mosaic-api/tesserae/t/versions/v/node/content/3_5_2.glb");
+    assert.equal(asked[1]!.pathname, "/mosaic-api/tesserae/t/versions/v/node/North%20wing/Wall%20%231.gltf");
 });
 
 test("a client pointed at nothing fails to connect rather than hanging", async () => {

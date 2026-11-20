@@ -47,7 +47,7 @@ these, check the code first:
 | --- | --- |
 | `ComponentTableReference.type` may be `PARQUET` | Archives are read and written as NDJSON only. Parquet is recorded, not read |
 | `ImportNode.integrity` pins an import by hash | Stored and carried through, but not verified when an import is resolved |
-| The SPARQL endpoint and the `types` operation of the API | Answer `501 Not Implemented` |
+| The SPARQL endpoint, the `types` operation, and nodes by path | Answer `501 Not Implemented` |
 
 ## In this section
 

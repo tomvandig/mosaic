@@ -48,6 +48,7 @@ Every route is under `/mosaic-api`.
 | `POST` | `/tesserae/{tesseraId}/versions/{versionId}/nodes` | `fetchNodes` | A subset of nodes, as `.glb` or `.tsr` |
 | `GET` | `/tesserae/{tesseraId}/versions/{versionId}/sparql` | `sparqlQuery` | A SPARQL query, in the URL |
 | `POST` | `/tesserae/{tesseraId}/versions/{versionId}/sparql` | `sparqlQueryPost` | A SPARQL query, as the body |
+| `GET` | `/tesserae/{tesseraId}/versions/{versionId}/node/{+path}` | `nodeAtPath` | The node a path names, in the format its extension names |
 | `GET` | `/tesserae/{tesseraId}/versions/{versionId}/types` | `get_types` | The component types in a version |
 
 ## Publishing a version
@@ -181,6 +182,44 @@ The SPARQL endpoint is specified but not implemented by the reference server, wh
 get — is not decided yet, and is what an implementation needs first.
 :::
 
+## Nodes by path
+
+`fetchNodes` names its nodes in a JSON body. `node` names one in the URL instead, so a client that
+builds URLs from a template can reach it with a plain `GET`. A 3D Tiles content template such as
+`content/{level}_{longitude}_{latitude}.glb` is one:
+
+```http
+GET /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/content/3_5_2.glb
+
+→ 200  Content-Type: model/gltf-binary
+```
+
+The path is one or more segments separated by `/`, each naming a node beneath the one before it,
+from a root of the version, and it ends in the format to answer in: `root/parent/child.glb`. A
+segment matches a node by its id or by its name. The extension is not part of the last name, and it
+is required. The answer is that node and everything beneath it:
+
+| Extension (`NodePathFormat`) | Answers with |
+| --- | --- |
+| `.gltf` | `model/gltf+json` |
+| `.glb` | `model/gltf-binary` |
+
+More formats can be added to `NodePathFormat` without a new route. A path with no extension, or with
+one the server does not answer in, is a `400` with a `NodePathFormatUnknown`, which lists what is
+`supported`. A path no node answers to is a `404` with a `NodePathNotFound`. Only the last segment
+has an extension: a dot anywhere earlier is part of a name.
+
+The parameter is `{+path}`, an [RFC 6570](https://www.rfc-editor.org/rfc/rfc6570#section-3.2.3)
+reserved expansion, which may hold `/`. OpenAPI 3 cannot express that of a path parameter, so
+`mosaic-api.openapi3.json` shows `{path}` and marks the parameter with
+`"x-mosaic-reserved-expansion": true`. A client should encode each segment and keep the slashes
+between them; a server should match the rest of the URL.
+
+::: warning
+The node route is specified but not implemented by the reference server. It checks the extension,
+answering `400` as above, and otherwise answers `501 Not Implemented`.
+:::
+
 ## Models
 
 | Model | Fields |
@@ -197,6 +236,8 @@ get — is not decided yet, and is what an implementation needs first.
 | `TesseraVersionMosaicFile` | `blobUrl` |
 | `NodeFetchRequest` | `nodes`, `componentTypes?`, `includeChildren?`, `compose?` |
 | `SparqlQueryError` | `error` |
+| `NodePathFormatUnknown` | `error`, `supported: NodePathFormat[]` |
+| `NodePathNotFound` | `error` |
 
 All ids are UUIDs.
 

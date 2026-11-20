@@ -128,6 +128,14 @@ export class MosaicApiClient {
         return await readJson<unknown[]>(response);
     }
 
+    /** GET /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/node/{path} (TesseraVersionRoutes_nodeAtPath) */
+    async nodeAtPath(params: { tesseraId: string; versionId: string; path: string }): Promise<NegotiatedResponse> {
+        const search = "";
+        const response = await this.fetch(`${this.baseUrl}/mosaic-api/tesserae/${encodeURIComponent(String(params.tesseraId))}/versions/${encodeURIComponent(String(params.versionId))}/node/${String(params.path).split("/").map(encodeURIComponent).join("/")}${search}`, { method: "GET" });
+        await failOnError(response);
+        return { contentType: response.headers.get("content-type") ?? "", bytes: new Uint8Array(await response.arrayBuffer()) };
+    }
+
     /** GET /mosaic-api/tesserae/{tesseraId}/versions/{versionId}/sparql (TesseraVersionRoutes_sparqlQuery) */
     async sparqlQuery(params: { tesseraId: string; versionId: string; defaultGraphUri?: string[]; namedGraphUri?: string[]; query: string; accept?: string }): Promise<NegotiatedResponse> {
         const query = new URLSearchParams();

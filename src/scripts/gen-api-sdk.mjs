@@ -118,6 +118,7 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
             method: method.toUpperCase(),
             path: template,
             pathParameters: parameters.filter(p => p.in === "path").map(p => p.name),
+            reservedPathParameters: parameters.filter(p => p.in === "path" && isReserved(p)).map(p => p.name),
             queryParameters: parameters.filter(p => p.in === "query").map(p => ({ name: p.name, required: !!p.required })),
             hasBody: !!operation.requestBody,
         });
@@ -136,6 +137,11 @@ export interface ApiRoute {
     /** The path template, with {braces} around each path parameter. */
     path: string;
     pathParameters: string[];
+    /**
+     * The path parameters that take reserved expansion ({+name} in TypeSpec): they span "/"
+     * and so match more than one segment.
+     */
+    reservedPathParameters: string[];
     queryParameters: Array<{ name: string; required: boolean }>;
     hasBody: boolean;
 }
@@ -161,6 +167,14 @@ fs.writeFileSync(path.join(outputDir, "MosaicApiRoutes.ts"), routesFile);
 function methodName(operationId) {
     const withoutNamespace = operationId.includes("_") ? operationId.slice(operationId.indexOf("_") + 1) : operationId;
     return withoutNamespace.replace(/_(\w)/g, (_, letter) => letter.toUpperCase());
+}
+
+/**
+ * Whether a path parameter takes reserved expansion, {+name}, and so may hold "/". OpenAPI 3
+ * cannot say that, so the spec marks the parameter with an extension.
+ */
+function isReserved(parameter) {
+    return parameter["x-mosaic-reserved-expansion"] === true;
 }
 
 /** A wire name as a TypeScript field: `default-graph-uri` -> `defaultGraphUri`. */
@@ -242,6 +256,7 @@ for (const [template, operations] of Object.entries(document.paths ?? {})) {
             template,
             fields,
             pathParameters: pathParameters.map(parameter => parameter.name),
+            reservedPathParameters: pathParameters.filter(isReserved).map(parameter => parameter.name),
             queryParameters: queryParameters.map(parameter => ({
                 name: parameter.name, field: fieldName(parameter.name), required: !!parameter.required, array: parameter.schema?.type === "array",
             })),
@@ -263,7 +278,10 @@ const modelImports = [...new Set(methods.flatMap(m => [
 
 function methodSource(method) {
     const argument = method.fields.length > 0 ? `params: { ${method.fields.join("; ")} }` : "";
-    const url = method.template.replace(/\{(\w+)\}/g, (_, name) => `\${encodeURIComponent(String(params.${name}))}`);
+    // A reserved parameter keeps its "/" and has each segment between them encoded.
+    const url = method.template.replace(/\{(\w+)\}/g, (_, name) => method.reservedPathParameters.includes(name)
+        ? `\${String(params.${name}).split("/").map(encodeURIComponent).join("/")}`
+        : `\${encodeURIComponent(String(params.${name}))}`);
 
     const query = method.queryParameters.length > 0
         ? `
